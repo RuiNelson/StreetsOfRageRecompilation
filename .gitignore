@@ -1,0 +1,8 @@
+.cache
+build
+output/
+generated/
+
+vdp_*.png
+.DS_Store
+/*.png

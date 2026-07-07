@@ -1,0 +1,22 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "SoR (Debug)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/sor",
+            "args": [
+                "-testFontSDL",
+                "--testVDP",
+                "-configControls",
+                "-testControllers",
+                "../../rom/SOR.bin"
+            ],
+            "cwd": "${workspaceFolder}/build",
+            "stopAtEntry": true,
+            "preLaunchTask": "cmake build",
+            "MIMode": "lldb"
+        }
+    ]
+}
