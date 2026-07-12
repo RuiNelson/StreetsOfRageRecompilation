@@ -124,7 +124,8 @@ if [ "$FULL" = 1 ]; then
     fi
     # shellcheck disable=SC2086
     export PYTHONPATH="$RAGE_DECOMPILER_DIR${PYTHONPATH:+:$PYTHONPATH}"
-    if ! "$PYTHON_BIN" -m tools recompile "$ROM" -o "generated" $SPEC_ARG; then
+    if ! "$PYTHON_BIN" -m tools recompile "$ROM" -o "generated" \
+        --manual-functions code-analysis/manual_functions.txt $SPEC_ARG; then
         echo "Recompile failed." >&2
         exit 1
     fi
