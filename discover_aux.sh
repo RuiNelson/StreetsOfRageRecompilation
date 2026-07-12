@@ -56,7 +56,7 @@ for ((i = 1; i <= MAX_ITERS; i++)); do
     fi
 
     echo "==> [discover $i] run"
-    "$BIN" --runSor --fast --auxAddrFile "$AUX" --rom "$ROM"
+    "$BIN" --runSor --auxAddrFile "$AUX" --rom "$ROM"
     code=$?
     sort_aux_addresses
 
