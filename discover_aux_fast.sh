@@ -41,6 +41,20 @@ SCAN_ASM="$(mktemp -t sor_fast_disasm.XXXXXX)"
 SCAN_MAP="$(mktemp -t sor_fast_map.XXXXXX)"
 trap 'rm -f "$SCAN_ASM" "$SCAN_MAP"' EXIT
 
+sort_aux_addresses() {
+    local sorted
+    sorted="$(mktemp -t aux_addresses.XXXXXX)"
+    {
+        # Preserve the descriptive header (and any future comments), then
+        # normalize the fixed-width hexadecimal addresses deterministically.
+        grep -Ev '^[[:space:]]*[[:xdigit:]]{6}[[:space:]]*$' "$AUX" || true
+        (grep -E '^[[:space:]]*[[:xdigit:]]{6}[[:space:]]*$' "$AUX" || true) | LC_ALL=C sort -u
+    } >"$sorted"
+    chmod 0644 "$sorted"
+    mv "$sorted" "$AUX"
+}
+
+sort_aux_addresses
 start_count=$(grep -cE '^[0-9a-fA-F]+' "$AUX" 2>/dev/null || echo 0)
 
 echo "==> [fast] Refreshing coverage map from current aux addresses..."
@@ -75,6 +89,7 @@ for ((i = 1; i <= MAX_ITERS; i++)); do
     "$BIN" --runSor --fast --rom "$ROM" \
         --auxAddrFile "$AUX" 2>&1 | grep -E '\[speculative\]|\[aux\]|unknown address'
     code=${PIPESTATUS[0]}
+    sort_aux_addresses
 
     case "$code" in
         42)
