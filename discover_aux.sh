@@ -49,16 +49,15 @@ for ((i = 1; i <= MAX_ITERS; i++)); do
     pkill -9 -f "$BIN" 2>/dev/null
 
     echo "==> [discover $i] regenerate + build (--full)"
-    if ! ./build.sh --full >"$BUILD_LOG" 2>&1; then
+    if ! ./build.sh --full 2>&1 | tee "$BUILD_LOG"; then
         echo "Build failed:" >&2
         tail -25 "$BUILD_LOG" >&2
         exit 1
     fi
 
     echo "==> [discover $i] run"
-    "$BIN" --runSor --fast \
-        --auxAddrFile "$AUX" --rom "$ROM" 2>&1 | grep -E '\[aux\]|unknown address'
-    code=${PIPESTATUS[0]}
+    "$BIN" --runSor --fast --auxAddrFile "$AUX" --rom "$ROM"
+    code=$?
     sort_aux_addresses
 
     case "$code" in

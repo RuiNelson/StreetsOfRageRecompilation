@@ -1,4 +1,4 @@
-#include "Sor.hpp"
+#include "SorRuntime.hpp"
 #include "config/controls/ControlsConfigUI.hpp"
 #include "runtime_tests/controllers/TestControllers.hpp"
 #include <CLI/CLI.hpp>
@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
         tester.boot();
     }
     if (runSorFlag) {
-        Sor sor(sorRomPath, static_cast<VDP::Synchronization>(sorVSyncMode));
+        SorRuntime sor(sorRomPath, static_cast<VDP::Synchronization>(sorVSyncMode));
         configureEnvironment(sor);
         sor.setDebugLog(sorDebugFlag);
         sor.setFastMode(sorFastFlag);

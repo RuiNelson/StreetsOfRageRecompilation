@@ -86,9 +86,8 @@ for ((i = 1; i <= MAX_ITERS; i++)); do
     pkill -9 -f "$BIN" 2>/dev/null
 
     echo "==> [fast $i] run"
-    "$BIN" --runSor --fast --rom "$ROM" \
-        --auxAddrFile "$AUX" 2>&1 | grep -E '\[speculative\]|\[aux\]|unknown address'
-    code=${PIPESTATUS[0]}
+    "$BIN" --runSor --fast --rom "$ROM" --auxAddrFile "$AUX"
+    code=$?
     sort_aux_addresses
 
     case "$code" in
