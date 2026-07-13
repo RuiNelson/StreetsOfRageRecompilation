@@ -1,0 +1,28 @@
+player1:
+  enabled: true
+  device: 0
+  gamepad_guid: ""
+  gamepad_name: ""
+  bindings:
+    - Up@Up
+    - Down@Down
+    - Left@Left
+    - Right@Right
+    - A@Z
+    - B@X
+    - C@C
+    - Start@V
+player2:
+  enabled: true
+  device: 0
+  gamepad_guid: ""
+  gamepad_name: ""
+  bindings:
+    - Up@W
+    - Down@S
+    - Left@A
+    - Right@D
+    - A@J
+    - B@K
+    - C@L
+    - Start@Ç

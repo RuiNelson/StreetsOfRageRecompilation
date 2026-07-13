@@ -106,3 +106,6 @@
 000104B2, vdp_copy_long_24, "100% - Cascade entry: 2 longs (a1)+ → (a2) no dest inc; falls through to vdp_copy_long_22"
 000104B6, vdp_copy_long_22, "100% - Cascade entry: 14 longs (a1)+ → (a2) no dest inc; falls through to vdp_copy_long_8"
 000104C6, vdp_copy_long_8,  "100% - Cascade entry: 8 longs (a1)+ → (a2) no dest inc; ends with rts"
+
+# Gameplay
+00002550, players_beating_each_other, "100% - P1 beating P2 or versa"
