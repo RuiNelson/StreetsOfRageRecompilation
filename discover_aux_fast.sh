@@ -86,7 +86,7 @@ for ((i = 1; i <= MAX_ITERS; i++)); do
     pkill -9 -f "$BIN" 2>/dev/null
 
     echo "==> [fast $i] run"
-    "$BIN" --runSor --rom "$ROM" --auxAddrFile "$AUX"
+    "$BIN" --lang en --runSor --rom "$ROM" --auxAddrFile "$AUX"
     code=$?
     sort_aux_addresses
 
