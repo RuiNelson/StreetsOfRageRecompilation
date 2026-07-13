@@ -2,3 +2,4 @@
 # are provided by hand-written C++ in SorManualFunctions.cpp.
 010502 # sync_z80_1
 010514 # sync_z80_2
+0041EA # calculate player attack strength (P1 punch-power cheat hook)

@@ -1,16 +1,17 @@
 #include "SorRuntime.hpp"
+#include "SorCheats.hpp"
 
 #include <cstdio>
 
 namespace {
 
-constexpr m_long kGameState       = 0xFFFFFF00u;
-constexpr m_long kLevel           = 0xFFFFFF02u;
-constexpr m_long kWave            = 0xFFFFFF04u;
-constexpr m_long kP1Lives         = 0xFFFFFF20u;
+constexpr m_long kGameState        = 0xFFFFFF00u;
+constexpr m_long kLevel            = 0xFFFFFF02u;
+constexpr m_long kWave             = 0xFFFFFF04u;
+constexpr m_long kP1Lives          = 0xFFFFFF20u;
 constexpr m_long kP1SpecialAttacks = 0xFFFFFF21u;
-constexpr m_word kLevelIntroState = 0x0028u;
-constexpr int    kLevelCount      = 8;
+constexpr m_word kLevelIntroState  = 0x0028u;
+constexpr int    kLevelCount       = 8;
 
 int levelFromTopRowNumber(SDL_Keycode key) {
     switch (key) {
@@ -56,6 +57,16 @@ void SorRuntime::handleOptionHotkey(OptionHotkeyCode keyCode) {
         case SDLK_S:
             incrementByte(memory(), kP1SpecialAttacks, "P1 special attacks");
             return;
+        case SDLK_P: {
+            const bool enabled = !SorCheats::p1PunchPowerEnabled();
+            SorCheats::setP1PunchPowerEnabled(enabled);
+            std::fprintf(stderr,
+                         "[cheat] P1 punch power x%u: %s\n",
+                         static_cast<unsigned>(SorCheats::kPunchPowerMultiplier),
+                         enabled ? "on" : "off");
+            std::fflush(stderr);
+            return;
+        }
         default:
             break;
     }
