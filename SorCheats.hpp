@@ -5,7 +5,7 @@
 namespace SorCheats {
 
 constexpr m_long kP1Object             = 0x00FFB800u;
-constexpr m_byte kPunchPowerMultiplier = 4u;
+constexpr m_byte kPunchPowerMultiplier = 12u;
 constexpr m_byte kMaximumAttackDamage  = 0x0Fu;
 
 void setP1PunchPowerEnabled(bool enabled);

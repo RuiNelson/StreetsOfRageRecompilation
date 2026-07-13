@@ -7,8 +7,8 @@ namespace {
 
 std::atomic_bool p1PunchPowerEnabled_{false};
 
-static_assert(adjustP1PunchDamage(kP1Object, 2u, true) == 8u);
-static_assert(adjustP1PunchDamage(kP1Object, 4u, true) == kMaximumAttackDamage);
+static_assert(adjustP1PunchDamage(kP1Object, 1u, true) == 12u);
+static_assert(adjustP1PunchDamage(kP1Object, 2u, true) == kMaximumAttackDamage);
 static_assert(adjustP1PunchDamage(0x00FFB880u, 2u, true) == 2u);
 static_assert(adjustP1PunchDamage(kP1Object, 2u, false) == 2u);
 
