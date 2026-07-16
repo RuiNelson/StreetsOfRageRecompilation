@@ -11,6 +11,11 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
+# MegaDriveEnvironment is a shared library by default. Do not re-link `sor`
+# merely because that dylib was rebuilt (implementation-only edits). Header
+# changes still recompile translation units that include them.
+set(CMAKE_LINK_DEPENDS_NO_SHARED ON)
+
 include(FetchContent)
 
 FetchContent_Declare(
