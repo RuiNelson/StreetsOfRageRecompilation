@@ -5,6 +5,7 @@ Native C++ recompilation of Streets of Rage.
 This repository contains the game-specific code and analysis data:
 
 - `generated/Sor.hpp` and `generated/Sor.cpp`
+- `CPU68K.hpp` / `RecompilationEnvironment` — 68000 register file for recompiled code
 - `code-analysis/`
 - `rom/`
 - build and discovery scripts

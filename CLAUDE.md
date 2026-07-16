@@ -19,6 +19,8 @@ owned by this project.
 - `main.cpp` - CLI entry point and runtime/test mode selection.
 - `CMakeLists.txt` - builds the `sor` executable and links
   `MegaDriveEnvironment`.
+- `CPU68K.hpp` - 68000 register file for recompiled cartridge code.
+- `RecompilationEnvironment.hpp` - MegaDriveEnvironment plus CPU68K ownership.
 - `build.sh` - preferred build wrapper.
 - `generated/` - generated C++ recompilation output.
 - `code-analysis/aux_addresses.txt` - extra entry points for static
