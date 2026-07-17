@@ -142,16 +142,18 @@ Examples:
 ## Cheats
 
 Host-side cheats are wired through keyboard **option hotkeys** in
-`SorRuntime` (not the in-game pad bindings). They only react to the keyboard
-source, so they do not fire from a gamepad. Each activation logs a short
-`[cheat] …` line on stderr.
+`SorRuntime` (not the in-game pad bindings). Hold **Alt** (Windows/Linux) or
+**Option** (macOS) and press the key — the bare key alone does nothing, so
+cheats do not clash with typing or with pad-mapped letters. Only the keyboard
+source is handled here; gamepad option chords are ignored. Each activation
+logs a short `[cheat] …` line on stderr.
 
-| Key | Effect |
-|-----|--------|
-| `L` | +1 P1 life (`$FFFFFF20`) |
-| `S` | +1 P1 special attack (`$FFFFFF21`) |
-| `P` | Toggle P1 punch power ×12 |
-| `1`–`8` | Jump to level 1–8 (sets level/wave and forces the level-intro game state) |
+| Chord | Effect |
+|-------|--------|
+| Alt/Option + `L` | +1 P1 life (`$FFFFFF20`) |
+| Alt/Option + `S` | +1 P1 special attack (`$FFFFFF21`) |
+| Alt/Option + `P` | Toggle P1 punch power ×12 |
+| Alt/Option + `1`–`8` | Jump to level 1–8 (sets level/wave and forces the level-intro game state) |
 
 Lives and specials simply increment a RAM byte (capped at `0xFF`). Level warp
 writes the selected stage, clears the wave counter, and switches game state to
@@ -161,7 +163,7 @@ Punch power is implemented in `SorCheats` and hooked from the hand-written
 attack-strength routine (`$0041EA`). When enabled, only the player-1 object
 (`$FFB800`) has its damage nibble multiplied by 12 and clamped to `0x0F`; other
 objects and the upper nibble that drives hit reaction are left alone. Toggle
-it off again with `P` when you want normal combat.
+it off again with Alt/Option + `P` when you want normal combat.
 
 ## Disassembly and discovery
 
