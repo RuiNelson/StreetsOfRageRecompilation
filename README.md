@@ -77,30 +77,91 @@ speculative discovery loop; that build includes temporary stubs.
 
 ## Run
 
+Build and launch the recompiled cartridge in one step:
+
 ```bash
 ./build.sh -r -- --runSor --debug --fast --rom rom/SOR.bin
 ```
 
-`--runSor` boots the recompiled cartridge. `--rom` defaults to `rom/SOR.bin`.
-`--debug` logs CPU/VDP state once per second; `--fast` disables CPU pacing.
-`--vsync` chooses frame sync (`0` = internal timer from `--hz`, `1`–`3` =
-display VSync). Console pins are `--lang jp|en` and `--hz 50|60`; `--silent`
-drops all audio chip writes. For jump-table discovery, `--auxAddrFile` appends
-unknown dispatch targets and exits 42 instead of aborting.
+Everything after `-r` / `--run` is passed to the `sor` binary. You can also
+invoke `build/sor` directly once it exists. Default controls live in
+`controls.yaml` (P1: arrows + Z/X/C/V; P2: WASD + J/K/L/O). Rebind them with
+`--configControls` or by editing that file.
 
-The same binary also hosts environment tests that do not need a recompiled
+## Command-line arguments
+
+The `sor` executable is both the game host and a small test harness for
+MegaDriveEnvironment. Flags are processed by CLI11; `-V` / `--version` prints
+`0.1.0`.
+
+### Cartridge (`--runSor`)
+
+| Flag | Meaning |
+|------|---------|
+| `--runSor` | Boot the recompiled Streets of Rage cartridge |
+| `--rom PATH` | ROM image (default: `rom/SOR.bin`) |
+| `--debug` | Log CPU/VDP state once per second |
+| `--fast` | Disable CPU pacing (useful during bring-up) |
+| `--vsync N` | Frame sync: `0` = internal timer from `--hz` (default); `1` = display VSync; `2` / `3` = half / third rate |
+| `--auxAddrFile PATH` | Discovery mode: on an unknown indirect dispatch, append the address and exit **42** instead of aborting |
+
+### Console pins (shared by the game and several tests)
+
+| Flag | Meaning |
+|------|---------|
+| `--lang jp\|en` | Language pin (default `jp` = Japanese / domestic; `en` = overseas) |
+| `--hz 50\|60` | Video standard pin (default `60` = NTSC; `50` = PAL) |
+| `--silent` | Drop all audio chip writes (no sound output) |
+
+### Host tests and utilities
+
+These exercise the environment without needing a full recompilation of the
 cartridge:
+
+| Flag | Meaning |
+|------|---------|
+| `--testVDP` | VDP suite (exports PNGs) |
+| `--testControllers` | Interactive controller readout on the VDP |
+| `--testSound` | YM2612 / PSG output + Z80 CPU test |
+| `--testAudioHeadless` | Headless YM2612 / PSG / Z80 regression tests |
+| `--writeAudioWav PATH` | With headless audio: write a 48 kHz stereo diagnostic WAV |
+| `--testFontSDL` | Font demo (3D rotating cube with glyphs) |
+| `--testFontPNG` | Font PNG export with artistic effects |
+| `--configControls` | Open the controller configuration UI |
+
+Examples:
 
 ```bash
 ./build.sh -r -- --testVDP
 ./build.sh -r -- --testControllers
 ./build.sh -r -- --testSound
 ./build.sh -r -- --configControls
+./build.sh -r -- --runSor --lang en --hz 60 --vsync 1
 ```
 
-Default controls are in `controls.yaml` (P1: arrows + Z/X/C/V). While playing,
-keyboard hotkeys add a P1 life (`L`), special (`S`), toggle punch power ×12
-(`P`), or jump to levels 1–8 (`1`–`8`).
+## Cheats
+
+Host-side cheats are wired through keyboard **option hotkeys** in
+`SorRuntime` (not the in-game pad bindings). They only react to the keyboard
+source, so they do not fire from a gamepad. Each activation logs a short
+`[cheat] …` line on stderr.
+
+| Key | Effect |
+|-----|--------|
+| `L` | +1 P1 life (`$FFFFFF20`) |
+| `S` | +1 P1 special attack (`$FFFFFF21`) |
+| `P` | Toggle P1 punch power ×12 |
+| `1`–`8` | Jump to level 1–8 (sets level/wave and forces the level-intro game state) |
+
+Lives and specials simply increment a RAM byte (capped at `0xFF`). Level warp
+writes the selected stage, clears the wave counter, and switches game state to
+the level intro so the cart reloads that stage.
+
+Punch power is implemented in `SorCheats` and hooked from the hand-written
+attack-strength routine (`$0041EA`). When enabled, only the player-1 object
+(`$FFB800`) has its damage nibble multiplied by 12 and clamped to `0x0F`; other
+objects and the upper nibble that drives hit reaction are left alone. Toggle
+it off again with `P` when you want normal combat.
 
 ## Disassembly and discovery
 
