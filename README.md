@@ -13,9 +13,50 @@ RageDecompiler/
 StreetsOfRageRecompilation/   ← this repo
 ```
 
-You need CMake ≥ 3.24, a C++23 compiler, and Python 3. The original ROM is not
-versioned — put a local copy at `rom/SOR.bin`, or set `SOR_ROM` to override the
-path.
+You need CMake ≥ 3.24, a C++23 compiler, and Python 3.
+
+## ROM
+
+The original cartridge image is **not** shipped with this repository. You must
+supply your own dump before a full recompile or a `--runSor` session.
+
+Place it at:
+
+```text
+rom/SOR.bin
+```
+
+That path is what `build.sh`, the disassembly scripts, and the default
+`--rom` flag expect. To use another location, set `SOR_ROM` (for the scripts)
+or pass `--rom PATH` when running the binary.
+
+The dump this project is developed against is the 512 KiB *Streets of Rage*
+Mega Drive / Genesis cartridge (*Bare Knuckle* / serial `MK 00001019-01`,
+region `JUE`). Verify yours matches:
+
+| | |
+|---|---|
+| **Size** | 524 288 bytes |
+| **MD5** | `59a3b22a1899461dceba50d1ade88d3a` |
+| **SHA-256** | `95d7efb98e97f4ffffe68257aef9a855034a36a41b86cf9d332d129f30cb2d4b` |
+
+On macOS / Linux:
+
+```bash
+md5 rom/SOR.bin          # or: md5sum rom/SOR.bin
+shasum -a 256 rom/SOR.bin
+```
+
+### Legal considerations
+
+*Streets of Rage* / *Bare Knuckle* is copyrighted by Sega (and related
+rightsholders). This project does **not** distribute the ROM, and it does not
+grant any licence to obtain or use one.
+
+Only use a ROM image you are legally entitled to — for example a personal dump
+of a cartridge you own, where that is allowed under local law. Do not download
+or share commercial ROM dumps unless you have a clear right to do so. Nothing
+here is legal advice; if you are unsure, do not use a ROM with this software.
 
 ## Build
 
