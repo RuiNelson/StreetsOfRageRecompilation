@@ -142,3 +142,10 @@ address metadata. Disassembler output goes to `output/` (local).
 Three cartridge functions are currently manual: `$0041EA` (attack strength, also
 the punch-power hook) and `$010502` / `$010514` (Z80 sync via the VBlank
 mailbox, using host-friendly waits instead of a busy loop).
+
+## License
+
+This project’s own source and documentation are released under the [MIT
+License](LICENSE) — Copyright (c) 2026 Rui Nelson. That does not cover the game
+ROM or any Sega intellectual property; see [Legal considerations](#legal-considerations)
+above.
