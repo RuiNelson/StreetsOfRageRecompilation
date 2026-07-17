@@ -105,20 +105,77 @@ keyboard hotkeys add a P1 life (`L`), special (`S`), toggle punch power ×12
 ## Disassembly and discovery
 
 All scripts assume the ROM at `rom/SOR.bin` (or `SOR_ROM`) and put
-RageDecompiler on `PYTHONPATH` themselves:
+RageDecompiler on `PYTHONPATH` themselves.
+
+### Disassembly
 
 ```bash
 ./disassemble.sh              # labels + addresses/blocks CSVs → output/
 ./disassemble_nolabels.sh     # same without labels CSV
 ./disassemble_iterative.sh    # iterative pass vs reference map
-./discover_aux_smart.sh           # preferred: speculative stubs + runtime loop
-./discover_aux_conservative.sh    # rebuild on every new address
 ```
 
-The discovery scripts record missing jump-table entry points in
-`code-analysis/aux_addresses.txt`. Exit **42** means a new address was written;
-**43** means a seeded address still has no handler — usually a state bug, not a
-missing entry.
+These produce `output/sor.asm` and a coverage map. The static tools follow known
+control flow from the vector table and from every address listed in
+`code-analysis/aux_addresses.txt`.
+
+### Discovery
+
+A large part of Streets of Rage is reached only through **indirect** control
+flow: jump tables, function pointers in object state, and similar patterns that
+a pure recursive-descent pass cannot resolve. Without those targets, the
+recompiler never emits handlers for the code that actually runs, and the
+binary aborts on the first unknown dispatch.
+
+The goal of discovery is to collect **every live entry point** the game
+reaches in practice — the full set of code that executes during real play —
+and feed it into `aux_addresses.txt` so the next recompile includes it. It is
+**not** the goal to treat the whole ROM as code: graphics, sound banks, maps,
+and other data blobs can byte-for-byte look like 68000 opcodes. Blindly
+recompiling those regions produces false functions, bloated output, and
+misleading coverage. Dead code that is never called is equally uninteresting;
+we only want what the running game can touch.
+
+That is why discovery is **runtime-driven**, not a full-ROM scan that trusts
+instruction-shaped bytes:
+
+1. Build and run the recompiled cartridge with `--auxAddrFile` pointing at
+   `code-analysis/aux_addresses.txt`.
+2. When the game performs an indirect jump or call to an address that has no
+   generated handler, the runtime appends that address to the aux file and
+   exits **42** (or, for addresses already seeded as speculative stubs,
+   records the confirmation without restarting).
+3. Regenerate and rebuild with the new entry points, then run again.
+4. Exit **43** means a seeded address still has no handler — usually a bad
+   jump-table index or state bug, not “another missing function.” Any other
+   exit stops the loop (clean quit, crash, Ctrl+C).
+
+Two scripts automate that loop:
+
+```bash
+./discover_aux_smart.sh           # preferred
+./discover_aux_conservative.sh    # slower, no speculation
+```
+
+**Smart** first refreshes the coverage map, runs a speculative scan over
+regions still unmarked after the static fixpoint, and builds once with
+`--full --discover` so candidate stubs are compiled in. Confirmed speculative
+hits are appended to `aux_addresses.txt` on the fly; only truly unexpected
+addresses force a rebuild. That cuts many iterations while still requiring a
+**live hit** before an address becomes a permanent entry point — candidates
+alone never define “code” for a normal build.
+
+**Conservative** never uses speculation. Every new unknown dispatch is one
+rebuild cycle (`build.sh --full` without `--discover`). It is slower but
+records only addresses the game has actually jumped to, with no intermediate
+stubs.
+
+Normal day-to-day builds should use `./build.sh` or `./build.sh --full`
+**without** `--discover`, so `generated/` contains only handlers for the
+vector table plus confirmed aux addresses — live entry points, not speculative
+guesses or data misread as instructions. Play (or script) enough of the game
+during discovery that every mode, enemy, weapon, and cutscene path you care
+about has been exercised; coverage is only as complete as the runs you make.
 
 ## Layout
 
