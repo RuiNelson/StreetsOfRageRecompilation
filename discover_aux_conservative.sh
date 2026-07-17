@@ -14,7 +14,7 @@
 #   * the user kills the process (Ctrl+C / SIGTERM)               -> stops.
 #
 # Usage:
-#   ./discover_aux.sh                 Run the loop with the defaults below.
+#   ./discover_aux_conservative.sh    Run the loop with the defaults below.
 # Env overrides:
 #   MAX_ITERS=500    safety cap on iterations
 #   SOR_ROM=rom/SOR.bin

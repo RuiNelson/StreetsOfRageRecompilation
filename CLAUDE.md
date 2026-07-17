@@ -89,7 +89,7 @@ Use the checked-in scripts from this repository:
 ./disassemble.sh
 ./disassemble_nolabels.sh
 ./disassemble_iterative.sh
-./discover_aux_fast.sh
+./discover_aux_smart.sh
 ```
 
 Equivalent direct tool calls use the sibling `RageDecompiler` on `PYTHONPATH`:

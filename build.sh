@@ -12,7 +12,7 @@
 #   ./build.sh -f | --full         Recompile the ROM to C++ (run RageDecompiler)
 #                                  before building. ROM: $SOR_ROM or rom/SOR.bin.
 #   ./build.sh -d | --discover     With --full: also pass speculative_addresses.txt
-#                                  to the recompiler (for discover_aux_fast.sh runs).
+#                                  to the recompiler (for discover_aux_smart.sh runs).
 #                                  Omit for normal builds — no speculative stubs.
 #   ./build.sh -c | --clean        Wipe the build dir and reconfigure from scratch.
 #   ./build.sh -t Release          Set the CMake build type (default: Debug).

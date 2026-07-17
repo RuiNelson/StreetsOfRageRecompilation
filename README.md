@@ -111,8 +111,8 @@ RageDecompiler on `PYTHONPATH` themselves:
 ./disassemble.sh              # labels + addresses/blocks CSVs → output/
 ./disassemble_nolabels.sh     # same without labels CSV
 ./disassemble_iterative.sh    # iterative pass vs reference map
-./discover_aux_fast.sh        # preferred: speculative stubs + runtime loop
-./discover_aux.sh             # conservative: rebuild on every new address
+./discover_aux_smart.sh           # preferred: speculative stubs + runtime loop
+./discover_aux_conservative.sh    # rebuild on every new address
 ```
 
 The discovery scripts record missing jump-table entry points in

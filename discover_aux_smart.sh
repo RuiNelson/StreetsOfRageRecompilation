@@ -1,5 +1,5 @@
 #!/bin/bash
-# Fast aux discovery: speculate → build → loop.
+# Smart aux discovery: speculate → build → loop.
 #
 # 1. Scan ROM regions still unknown after the recompiler's static table-discovery
 #    fixpoint for 68000 entry point candidates (speculative_scan.py), and write
@@ -12,11 +12,12 @@
 #      - exit 43 (stuck address): genuine state bug, stop.
 #      - Ctrl+C or any other exit: stop.
 #
-# Compared to discover_aux.sh: fewer rebuild iterations because speculative stubs
-# cover many jump-table targets that would otherwise each require a rebuild.
+# Compared to discover_aux_conservative.sh: fewer rebuild iterations because
+# speculative stubs cover many jump-table targets that would otherwise each
+# require a rebuild.
 #
 # Usage:
-#   ./discover_aux_fast.sh
+#   ./discover_aux_smart.sh
 # Env overrides:
 #   SOR_ROM=rom/SOR.bin
 #   MAX_ITERS=500
@@ -37,8 +38,8 @@ else
     PYTHON_BIN="${PYTHON:-python3}"
 fi
 MAX_ITERS="${MAX_ITERS:-500}"
-SCAN_ASM="$(mktemp -t sor_fast_disasm.XXXXXX)"
-SCAN_MAP="$(mktemp -t sor_fast_map.XXXXXX)"
+SCAN_ASM="$(mktemp -t sor_smart_disasm.XXXXXX)"
+SCAN_MAP="$(mktemp -t sor_smart_map.XXXXXX)"
 trap 'rm -f "$SCAN_ASM" "$SCAN_MAP"' EXIT
 
 sort_aux_addresses() {
@@ -57,14 +58,14 @@ sort_aux_addresses() {
 sort_aux_addresses
 start_count=$(grep -cE '^[0-9a-fA-F]+' "$AUX" 2>/dev/null || echo 0)
 
-echo "==> [fast] Refreshing coverage map from current aux addresses..."
+echo "==> [smart] Refreshing coverage map from current aux addresses..."
 export PYTHONPATH="$RAGE_DECOMPILER_DIR${PYTHONPATH:+:$PYTHONPATH}"
 if ! "$PYTHON_BIN" -m tools disassemble "$ROM" -o "$SCAN_ASM" -a "$AUX" --map "$SCAN_MAP"; then
     echo "Coverage-map refresh failed." >&2
     exit 1
 fi
 
-echo "==> [fast] Scanning for speculative entry points (after static fixpoint)..."
+echo "==> [smart] Scanning for speculative entry points (after static fixpoint)..."
 if ! "$PYTHON_BIN" -m tools speculative-scan "$SCAN_MAP" "$ROM" "$AUX" -o "$SPEC"; then
     echo "Speculative scan failed." >&2
     exit 1
