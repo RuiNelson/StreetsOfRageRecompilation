@@ -1,30 +1,26 @@
 # Streets of Rage Recompilation
 
-C++ recompilation of *Streets of Rage* for the Sega Mega Drive. Cartridge code is
+C++ recompilation of *Streets of Rage* for the Sega Mega Drive. The cartridge is
 translated from the ROM into C++; the host runtime lives in the sibling
-[MegaDriveEnvironment](../MegaDriveEnvironment) repository. Disassembly and
-recompile tooling live in [RageDecompiler](../RageDecompiler).
+[MegaDriveEnvironment](../MegaDriveEnvironment) repository, and disassembly /
+recompile tooling in [RageDecompiler](../RageDecompiler).
 
-## Prerequisites
+This project expects those two repositories as siblings:
 
-- CMake ≥ 3.24, a C++23 compiler, Python 3
-- Sibling checkouts:
+```text
+MegaDriveEnvironment/
+RageDecompiler/
+StreetsOfRageRecompilation/   ← this repo
+```
 
-  ```
-  MegaDriveEnvironment/
-  RageDecompiler/
-  StreetsOfRageRecompilation/   ← this repo
-  ```
-
-- Original ROM (not versioned). Place it at:
-
-  ```
-  rom/SOR.bin
-  ```
-
-  Or set `SOR_ROM` to override the path.
+You need CMake ≥ 3.24, a C++23 compiler, and Python 3. The original ROM is not
+versioned — put a local copy at `rom/SOR.bin`, or set `SOR_ROM` to override the
+path.
 
 ## Build
+
+`./build.sh` configures when needed and builds the `sor` binary (Debug by
+default). Useful variants:
 
 ```bash
 ./build.sh                 # configure if needed, build Debug
@@ -33,15 +29,10 @@ recompile tooling live in [RageDecompiler](../RageDecompiler).
 ./build.sh --full          # recompile ROM → generated/, then build
 ```
 
-`--full` runs:
-
-```text
-python -m tools recompile <ROM> -o generated \
-  --manual-functions code-analysis/manual_functions.txt
-```
-
-with `PYTHONPATH=../RageDecompiler`. Use `--full --discover` only when running
-the speculative discovery loop (includes temporary stubs).
+`--full` regenerates `generated/` from the ROM via RageDecompiler
+(`python -m tools recompile`, with `PYTHONPATH=../RageDecompiler` and
+`code-analysis/manual_functions.txt`). Use `--full --discover` only for the
+speculative discovery loop; that build includes temporary stubs.
 
 ## Run
 
@@ -49,21 +40,15 @@ the speculative discovery loop (includes temporary stubs).
 ./build.sh -r -- --runSor --debug --fast --rom rom/SOR.bin
 ```
 
-Useful flags:
+`--runSor` boots the recompiled cartridge. `--rom` defaults to `rom/SOR.bin`.
+`--debug` logs CPU/VDP state once per second; `--fast` disables CPU pacing.
+`--vsync` chooses frame sync (`0` = internal timer from `--hz`, `1`–`3` =
+display VSync). Console pins are `--lang jp|en` and `--hz 50|60`; `--silent`
+drops all audio chip writes. For jump-table discovery, `--auxAddrFile` appends
+unknown dispatch targets and exits 42 instead of aborting.
 
-| Flag | Meaning |
-|------|---------|
-| `--runSor` | Boot the recompiled cartridge |
-| `--rom PATH` | ROM path (default `rom/SOR.bin`) |
-| `--debug` | Log CPU/VDP state once per second |
-| `--fast` | Disable CPU pacing |
-| `--vsync 0..3` | 0 = internal timer from `--hz` (default); 1–3 = display VSync |
-| `--lang jp\|en` | Console language pin |
-| `--hz 50\|60` | Video standard |
-| `--silent` | Drop all audio chip writes |
-| `--auxAddrFile PATH` | Discovery mode: unknown dispatch → append address and exit 42 |
-
-Environment / host tests (no ROM recompilation needed):
+The same binary also hosts environment tests that do not need a recompiled
+cartridge:
 
 ```bash
 ./build.sh -r -- --testVDP
@@ -72,23 +57,14 @@ Environment / host tests (no ROM recompilation needed):
 ./build.sh -r -- --configControls
 ```
 
-After a run, confirm no `build/sor` process is left behind.
+Default controls are in `controls.yaml` (P1: arrows + Z/X/C/V). While playing,
+keyboard hotkeys add a P1 life (`L`), special (`S`), toggle punch power ×12
+(`P`), or jump to levels 1–8 (`1`–`8`).
 
-### In-game hotkeys (keyboard)
+## Disassembly and discovery
 
-| Key | Effect |
-|-----|--------|
-| `L` | +1 P1 life |
-| `S` | +1 P1 special |
-| `P` | Toggle P1 punch power ×12 |
-| `1`–`8` | Jump to level 1–8 |
-
-Controls default is `controls.yaml` (P1: arrows + Z/X/C/V).
-
-## Disassembly & discovery
-
-Scripts assume the ROM at `rom/SOR.bin` (or `SOR_ROM`) and
-`RageDecompiler` on `PYTHONPATH`.
+All scripts assume the ROM at `rom/SOR.bin` (or `SOR_ROM`) and put
+RageDecompiler on `PYTHONPATH` themselves:
 
 ```bash
 ./disassemble.sh              # labels + addresses/blocks CSVs → output/
@@ -98,29 +74,30 @@ Scripts assume the ROM at `rom/SOR.bin` (or `SOR_ROM`) and
 ./discover_aux.sh             # conservative: rebuild on every new address
 ```
 
-`discover_aux*.sh` write missing jump-table entry points into
-`code-analysis/aux_addresses.txt` (exit **42** = new address recorded;
-**43** = seeded address still has no handler — investigate as a state bug).
+The discovery scripts record missing jump-table entry points in
+`code-analysis/aux_addresses.txt`. Exit **42** means a new address was written;
+**43** means a seeded address still has no handler — usually a state bug, not a
+missing entry.
 
 ## Layout
 
-| Path | Role |
-|------|------|
-| `main.cpp` | CLI entry (tests + `--runSor`) |
-| `CPU68K.hpp` | 68000 register file for recompiled code |
-| `RecompilationEnvironment.*` | Host environment + CPU registers |
-| `SorRuntime.*` | Hand-written runtime hooks (hotkeys); survives `--full` |
-| `SorManualFunctions.cpp` | Manual bodies listed in `manual_functions.txt` |
-| `SorCheats.*` | P1 punch-power cheat |
-| `generated/` | Output of the recompiler (`Sor.cpp` / `Sor.hpp`) |
-| `code-analysis/aux_addresses.txt` | Extra entry points for indirect jumps |
-| `code-analysis/manual_functions.txt` | Functions with hand-written C++ bodies |
-| `code-analysis/*.csv` | Labels / blocks / address metadata for disassembly |
-| `output/` | Disassembler asm + map (local) |
-| `build.sh` | Configure, build, optional `--full` recompile and run |
+Most of the recompiled game lives under `generated/` (`Sor.cpp` / `Sor.hpp`),
+produced by the recompiler. Hand-written host integration stays outside that
+tree so `--full` does not wipe it:
 
-Hand-written cartridge hooks stay outside `generated/` so regeneration does not
-wipe them. Three functions are currently manual:
+- `main.cpp` — CLI for tests and `--runSor`
+- `CPU68K.hpp` / `RecompilationEnvironment.*` — 68000 register file and host
+  environment that owns it
+- `SorRuntime.*` — runtime hooks (hotkeys)
+- `SorManualFunctions.cpp` — bodies listed in `manual_functions.txt`
+- `SorCheats.*` — P1 punch-power cheat
+- `build.sh` — configure, build, optional full recompile and run
 
-- `$0041EA` — attack strength (also hosts the punch-power cheat)
-- `$010502` / `$010514` — Z80 sync via VBlank mailbox (host-friendly waits)
+Analysis data sits in `code-analysis/`: `aux_addresses.txt` feeds extra entry
+points the static disassembler cannot resolve; `manual_functions.txt` names the
+functions with hand-written C++ bodies; the CSV files hold labels, blocks, and
+address metadata. Disassembler output goes to `output/` (local).
+
+Three cartridge functions are currently manual: `$0041EA` (attack strength, also
+the punch-power hook) and `$010502` / `$010514` (Z80 sync via the VBlank
+mailbox, using host-friendly waits instead of a busy loop).
