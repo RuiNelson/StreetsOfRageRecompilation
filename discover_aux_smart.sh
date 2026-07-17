@@ -74,7 +74,7 @@ spec_count=$(grep -cE '^[0-9a-fA-F]+' "$SPEC" 2>/dev/null || echo 0)
 echo "    $spec_count speculative candidates written to $SPEC"
 
 do_build() {
-    echo "==> [fast $1] build (--full --discover)"
+    echo "==> [smart $1] build (--full --discover)"
     if ! ./build.sh --full --discover; then
         echo "Build failed." >&2
         exit 1
@@ -86,24 +86,24 @@ do_build "init"
 for ((i = 1; i <= MAX_ITERS; i++)); do
     pkill -9 -f "$BIN" 2>/dev/null
 
-    echo "==> [fast $i] run"
+    echo "==> [smart $i] run"
     "$BIN" --lang en --runSor --rom "$ROM" --auxAddrFile "$AUX"
     code=$?
     sort_aux_addresses
 
     case "$code" in
         42)
-            echo "==> [fast $i] new unknown address recorded; rebuilding"
+            echo "==> [smart $i] new unknown address recorded; rebuilding"
             do_build "$i"
             ;;
         43)
-            echo "==> [fast $i] STUCK: a seeded address still has no handler —" >&2
+            echo "==> [smart $i] STUCK: a seeded address still has no handler —" >&2
             echo "    likely a bad jump-table index (state bug), not a missing entry." >&2
             exit 1
             ;;
         *)
             now=$(grep -cE '^[0-9a-fA-F]+' "$AUX" 2>/dev/null || echo 0)
-            echo "==> [fast $i] exited $code. Added $((now - start_count)) address(es) over $i iteration(s)."
+            echo "==> [smart $i] exited $code. Added $((now - start_count)) address(es) over $i iteration(s)."
             exit 0
             ;;
     esac
