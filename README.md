@@ -153,8 +153,8 @@ instruction-shaped bytes:
 Two scripts automate that loop:
 
 ```bash
-./discover_aux_smart.sh           # preferred
-./discover_aux_conservative.sh    # slower, no speculation
+./discover_aux_smart.sh           # fewer rebuilds; heavier compiles
+./discover_aux_conservative.sh    # more rebuilds; each compile stays lean
 ```
 
 **Smart** first refreshes the coverage map, runs a speculative scan over
@@ -163,12 +163,13 @@ regions still unmarked after the static fixpoint, and builds once with
 hits are appended to `aux_addresses.txt` on the fly; only truly unexpected
 addresses force a rebuild. That cuts many iterations while still requiring a
 **live hit** before an address becomes a permanent entry point — candidates
-alone never define “code” for a normal build.
+alone never define “code” for a normal build. The trade-off is a bulkier
+`generated/` tree while discovery is running, so each compile is heavier.
 
 **Conservative** never uses speculation. Every new unknown dispatch is one
-rebuild cycle (`build.sh --full` without `--discover`). It is slower but
-records only addresses the game has actually jumped to, with no intermediate
-stubs.
+rebuild cycle (`build.sh --full` without `--discover`). You pay for more
+iterations, but each compile stays lean: only confirmed entry points are
+recompiled, with no intermediate stubs — so individual builds are faster.
 
 Normal day-to-day builds should use `./build.sh` or `./build.sh --full`
 **without** `--discover`, so `generated/` contains only handlers for the
