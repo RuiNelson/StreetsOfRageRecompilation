@@ -32,6 +32,22 @@ struct CPU68K {
     m_long pc{};   ///< Program counter (24-bit effective, stored in 32)
     m_word sr{};   ///< Status register (system byte + CCR)
 
+    // Sub-register accessors for generated code: hide the merge-on-write masks
+    // that 68000 byte/word ops on Dn require, so recompiled sources stay
+    // readable while preserving high bits exactly.
+    m_byte db(int n) const {
+        return static_cast<m_byte>(d[n] & 0xFFu);
+    }
+    m_word dw(int n) const {
+        return static_cast<m_word>(d[n] & 0xFFFFu);
+    }
+    void setDb(int n, m_byte value) {
+        d[n] = (d[n] & 0xFFFFFF00u) | static_cast<m_long>(value);
+    }
+    void setDw(int n, m_word value) {
+        d[n] = (d[n] & 0xFFFF0000u) | static_cast<m_long>(value);
+    }
+
     m_word status() const {
         return sr;
     }
