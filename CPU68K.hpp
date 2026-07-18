@@ -185,4 +185,54 @@ struct CPU68K {
                 return flagZ() || flagN() != flagV(); // LE
         }
     }
+
+    // Named 68000 condition helpers for readable recompiled branches (Bcc/DBcc/Scc).
+    bool ccTrue() const {
+        return condition(0);
+    }
+    bool ccFalse() const {
+        return condition(1);
+    }
+    bool hi() const {
+        return condition(2);
+    }
+    bool ls() const {
+        return condition(3);
+    }
+    bool cc() const {
+        return condition(4);
+    } // carry clear
+    bool cs() const {
+        return condition(5);
+    }
+    bool ne() const {
+        return condition(6);
+    }
+    bool eq() const {
+        return condition(7);
+    }
+    bool vc() const {
+        return condition(8);
+    }
+    bool vs() const {
+        return condition(9);
+    }
+    bool pl() const {
+        return condition(10);
+    }
+    bool mi() const {
+        return condition(11);
+    }
+    bool ge() const {
+        return condition(12);
+    }
+    bool lt() const {
+        return condition(13);
+    }
+    bool gt() const {
+        return condition(14);
+    }
+    bool le() const {
+        return condition(15);
+    }
 };
