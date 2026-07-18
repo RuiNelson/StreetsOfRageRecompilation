@@ -245,7 +245,7 @@ about has been exercised; coverage is only as complete as the runs you make.
 
 ## Layout
 
-Most of the recompiled game lives under `generated/` (`Sor.cpp` / `Sor.hpp`),
+Most of the recompiled game lives under `generated/` (`Sor.hpp` + multi-TU `Sor_*.cpp`),
 produced by the recompiler. Hand-written host integration stays outside that
 tree so `--full` does not wipe it:
 

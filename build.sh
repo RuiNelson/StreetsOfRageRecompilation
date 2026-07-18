@@ -105,8 +105,8 @@ if [ -z "$JOBS" ]; then
 fi
 
 # ── Full: recompile the ROM to C++ ──────────────────────────────────────────────
-# Runs the recursive-descent recompiler to regenerate generated/Sor.{hpp,cpp}
-# from the ROM. Normal --full builds use only
+# Runs the recursive-descent recompiler to regenerate generated/ (Sor.hpp +
+# multi-TU Sor_*.cpp packs) from the ROM. Normal --full builds use only
 # aux_addresses.txt; --full --discover additionally compiles speculative
 # candidates as temporary discovery hooks. The regenerated sources are then
 # built below.

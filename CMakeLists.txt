@@ -40,10 +40,17 @@ list(FILTER SOR_SOURCES EXCLUDE REGEX ".*/build/.*")
 
 add_executable(sor ${SOR_SOURCES})
 
-set_source_files_properties(
-    "${CMAKE_CURRENT_SOURCE_DIR}/generated/Sor.cpp"
-    PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Debug>:-O2>"
+# Recompiled ROM units are huge; give them -O2 even in Debug so link/runtime
+# stay usable. CONFIGURE_DEPENDS re-globs when --full regenerates the tree.
+file(GLOB SOR_GENERATED_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/generated/*.cpp"
 )
+if(SOR_GENERATED_SOURCES)
+    set_source_files_properties(
+        ${SOR_GENERATED_SOURCES}
+        PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Debug>:-O2>"
+    )
+endif()
 
 target_include_directories(sor PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
