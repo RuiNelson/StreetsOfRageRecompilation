@@ -7,3 +7,4 @@ vdp_*.png
 .DS_Store
 /*.png
 code-analysis/speculative_addresses.txt
+.vscode/settings.json
