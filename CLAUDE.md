@@ -19,7 +19,9 @@ owned by this project.
 - `main.cpp` - CLI entry point and runtime/test mode selection.
 - `CMakeLists.txt` - builds the `sor` executable and links shared
   `MegaDriveEnvironment` (`CMAKE_LINK_DEPENDS_NO_SHARED` skips re-link when only
-  the dylib changes).
+  the dylib changes). Sets `MEGADRIVE_ENVIRONMENT_SHARED_DEPS=ON` so
+  yaml-cpp/zlib/libpng are built and linked as shared libraries for this
+  consumer only.
 - `CPU68K.hpp` - 68000 register file for recompiled cartridge code.
 - `RecompilationEnvironment.hpp` - MegaDriveEnvironment plus CPU68K ownership.
 - `build.sh` - preferred build wrapper.

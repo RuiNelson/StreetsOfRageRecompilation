@@ -16,6 +16,11 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 # changes still recompile translation units that include them.
 set(CMAKE_LINK_DEPENDS_NO_SHARED ON)
 
+# Build/link MegaDriveEnvironment's FetchContent deps (yaml-cpp, zlib, libpng)
+# as shared libraries for this consumer only.
+set(MEGADRIVE_ENVIRONMENT_SHARED_DEPS ON CACHE BOOL
+    "Build and link yaml-cpp/zlib/libpng as shared libraries" FORCE)
+
 include(FetchContent)
 
 FetchContent_Declare(
