@@ -22,13 +22,9 @@ template <typename T> constexpr m_long LONG(T value) {
 } // namespace
 
 void Sor::sub_0041ea(m_long entry_) {
+    // Manual reimplementation of the punch-damage path. IRQs may wait until
+    // the whole routine finishes; no per-instruction service/pace.
     traceEnter(0x41EAu);
-
-    auto beforeInstruction = [this] {
-        if (irqLevel() > cpu().interruptMask())
-            serviceIRQ();
-        pace();
-    };
 
     auto addByteToD0 = [this](m_byte source) {
         const m_byte destination = BYTE(cpu().d[0] & 0xFFu);
@@ -92,13 +88,11 @@ void Sor::sub_0041ea(m_long entry_) {
     }
 
     // $0041EA lea.l $00423C, a1
-    beforeInstruction();
     cpu().a[1] = LONG(0x423Cu);
 
 L0041ee:
     // $0041EE move.w $8(a0), d0
     {
-        beforeInstruction();
         const m_word value = memory().readWord(cpu().a[0] + 8);
         cpu().d[0]         = LONG((cpu().d[0] & 0xFFFF0000u) | LONG(value));
         cpu().setNZClearVC(value, 0x8000u);
@@ -107,7 +101,6 @@ L0041ee:
 L0041f2:
     // $0041F2 lsr.w #$1, d0
     {
-        beforeInstruction();
         m_long     value = LONG(WORD(cpu().d[0] & 0xFFFFu));
         const bool carry = (value & 1u) != 0;
         value >>= 1;
@@ -119,7 +112,6 @@ L0041f2:
 L0041f4:
     // $0041F4 andi.b #$00FE, d0
     {
-        beforeInstruction();
         const m_byte value = BYTE(cpu().d[0] & 0xFFu) & 0xFEu;
         cpu().setNZClearVC(value, 0x80u);
         cpu().d[0] = LONG((cpu().d[0] & 0xFFFFFF00u) | LONG(value));
@@ -128,7 +120,6 @@ L0041f4:
 L0041f8:
     // $0041F8 adda.w $0(a1,d0.w), a1
     {
-        beforeInstruction();
         const auto   index  = static_cast<int32_t>(static_cast<int16_t>(WORD(cpu().d[0] & 0xFFFFu)));
         const m_word offset = memory().readWord(cpu().a[1] + LONG(index));
         cpu().a[1]          = LONG(cpu().a[1] + LONG(static_cast<int32_t>(static_cast<int16_t>(offset))));
@@ -137,7 +128,6 @@ L0041f8:
 L0041fc:
     // $0041FC move.b $50(a0), d0
     {
-        beforeInstruction();
         const m_byte value = memory().readByte(cpu().a[0] + 80);
         cpu().d[0]         = LONG((cpu().d[0] & 0xFFFFFF00u) | LONG(value));
         cpu().setNZClearVC(value, 0x80u);
@@ -146,7 +136,6 @@ L0041fc:
 L004200:
     // $004200 move.b $0(a1,d0.w), d0
     {
-        beforeInstruction();
         const auto   index = static_cast<int32_t>(static_cast<int16_t>(WORD(cpu().d[0] & 0xFFFFu)));
         const m_byte value = memory().readByte(cpu().a[1] + LONG(index));
         cpu().d[0]         = LONG((cpu().d[0] & 0xFFFFFF00u) | LONG(value));
@@ -155,13 +144,11 @@ L004200:
 
 L004204:
     // $004204 add.b $A(a0), d0
-    beforeInstruction();
     addByteToD0(memory().readByte(cpu().a[0] + 10));
 
 L004208:
     // $004208 move.b $3(a1,d0.w), d0
     {
-        beforeInstruction();
         const auto   index = static_cast<int32_t>(static_cast<int16_t>(WORD(cpu().d[0] & 0xFFFFu)));
         const m_byte value = memory().readByte(cpu().a[1] + 3 + LONG(index));
         cpu().d[0]         = LONG((cpu().d[0] & 0xFFFFFF00u) | LONG(value));
@@ -171,21 +158,18 @@ L004208:
 L00420c:
     // $00420C tst.b $00FA43
     {
-        beforeInstruction();
         const m_byte value = memory().readByte(0xFFFFFA43u);
         cpu().setNZClearVC(value, 0x80u);
     }
 
 L004210:
     // $004210 beq.s $004224
-    beforeInstruction();
     if (cpu().condition(7))
         goto L004224;
 
 L004212:
     // $004212 move.b d0, d1
     {
-        beforeInstruction();
         const m_byte value = BYTE(cpu().d[0] & 0xFFu);
         cpu().d[1]         = LONG((cpu().d[1] & 0xFFFFFF00u) | LONG(value));
         cpu().setNZClearVC(value, 0x80u);
@@ -194,7 +178,6 @@ L004212:
 L004214:
     // $004214 andi.b #$00F0, d1
     {
-        beforeInstruction();
         const m_byte value = BYTE(cpu().d[1] & 0xFFu) & 0xF0u;
         cpu().setNZClearVC(value, 0x80u);
         cpu().d[1] = LONG((cpu().d[1] & 0xFFFFFF00u) | LONG(value));
@@ -203,7 +186,6 @@ L004214:
 L004218:
     // $004218 andi.b #$000F, d0
     {
-        beforeInstruction();
         const m_byte value = BYTE(cpu().d[0] & 0xFFu) & 0x0Fu;
         cpu().setNZClearVC(value, 0x80u);
         cpu().d[0] = LONG((cpu().d[0] & 0xFFFFFF00u) | LONG(value));
@@ -212,7 +194,6 @@ L004218:
 L00421c:
     // $00421C move.b d0, d2
     {
-        beforeInstruction();
         const m_byte value = BYTE(cpu().d[0] & 0xFFu);
         cpu().d[2]         = LONG((cpu().d[2] & 0xFFFFFF00u) | LONG(value));
         cpu().setNZClearVC(value, 0x80u);
@@ -220,23 +201,19 @@ L00421c:
 
 L00421e:
     // $00421E add.b d0, d0
-    beforeInstruction();
     addByteToD0(BYTE(cpu().d[0] & 0xFFu));
 
 L004220:
     // $004220 add.b d2, d0
-    beforeInstruction();
     addByteToD0(BYTE(cpu().d[2] & 0xFFu));
 
 L004222:
     // $004222 add.b d1, d0
-    beforeInstruction();
     addByteToD0(BYTE(cpu().d[1] & 0xFFu));
 
 L004224:
     // $004224 move.b d0, $34(a0)
     {
-        beforeInstruction();
         const m_byte value = BYTE(cpu().d[0] & 0xFFu);
         memory().writeByte(cpu().a[0] + 52, value);
         cpu().setNZClearVC(value, 0x80u);
@@ -245,7 +222,6 @@ L004224:
 L004228:
     // $004228 andi.b #$000F, $34(a0)
     {
-        beforeInstruction();
         const m_long damageAddress = cpu().a[0] + 52;
         const m_byte baseDamage    = memory().readByte(damageAddress) & 0x0Fu;
         cpu().setNZClearVC(baseDamage, 0x80u);
@@ -262,7 +238,6 @@ L004228:
 L00422e:
     // $00422E lsr.b #$4, d0
     {
-        beforeInstruction();
         m_long value = LONG(BYTE(cpu().d[0] & 0xFFu));
         bool   carry = false;
         for (int i = 0; i < 4; ++i) {
@@ -277,7 +252,6 @@ L00422e:
 L004230:
     // $004230 andi.b #$00FE, $42(a0)
     {
-        beforeInstruction();
         const m_long address = cpu().a[0] + 66;
         const m_byte value   = memory().readByte(address) & 0xFEu;
         cpu().setNZClearVC(value, 0x80u);
@@ -287,7 +261,6 @@ L004230:
 L004236:
     // $004236 or.b d0, $42(a0)
     {
-        beforeInstruction();
         const m_long address = cpu().a[0] + 66;
         const m_byte value   = memory().readByte(address) | BYTE(cpu().d[0] & 0xFFu);
         cpu().setNZClearVC(value, 0x80u);
@@ -296,7 +269,6 @@ L004236:
 
 L00423a:
     // $00423A rts
-    beforeInstruction();
     cpu().ssp += 4;
     if ((cpu().ssp & 0x00FFFFFFu) > 0x00FFFF00u) {
         std::fprintf(stderr,
@@ -307,19 +279,14 @@ L00423a:
 }
 
 void Sor::sync_z80_1(m_long entry_) {
+    // Wait for VBlank via $FFFA00. IRQs only need servicing inside the wait
+    // loop; they can lag slightly around the setup/teardown.
     traceEnter(0x00010502u);
     (void)entry_;
 
-    if (irqLevel() > cpu().interruptMask())
-        serviceIRQ();
-    pace();
     constexpr m_byte command = 1;
     memory().writeByte(kVBlankMailbox, command);
     cpu().setNZClearVC(command, 0x80u);
-
-    if (irqLevel() > cpu().interruptMask())
-        serviceIRQ();
-    pace();
     cpu().setStatus(0x2500u);
 
     const m_byte finalValue = memory().waitForByteValue(kVBlankMailbox, 0, [this] {
@@ -330,9 +297,6 @@ void Sor::sync_z80_1(m_long entry_) {
     });
     cpu().setNZClearVC(finalValue, 0x80u);
 
-    if (irqLevel() > cpu().interruptMask())
-        serviceIRQ();
-    pace();
     cpu().ssp += 4;
     if ((cpu().ssp & 0x00FFFFFFu) > 0x00FFFF00u) {
         std::fprintf(stderr,
@@ -343,19 +307,14 @@ void Sor::sync_z80_1(m_long entry_) {
 }
 
 void Sor::sync_z80_2(m_long entry_) {
+    // Wait for VBlank via $FFFA00. IRQs only need servicing inside the wait
+    // loop; they can lag slightly around the setup/teardown.
     traceEnter(0x00010514u);
     (void)entry_;
 
-    if (irqLevel() > cpu().interruptMask())
-        serviceIRQ();
-    pace();
     constexpr m_byte command = 2;
     memory().writeByte(kVBlankMailbox, command);
     cpu().setNZClearVC(command, 0x80u);
-
-    if (irqLevel() > cpu().interruptMask())
-        serviceIRQ();
-    pace();
     cpu().setStatus(0x2500u);
 
     const m_byte finalValue = memory().waitForByteValue(kVBlankMailbox, 0, [this] {
@@ -366,9 +325,6 @@ void Sor::sync_z80_2(m_long entry_) {
     });
     cpu().setNZClearVC(finalValue, 0x80u);
 
-    if (irqLevel() > cpu().interruptMask())
-        serviceIRQ();
-    pace();
     cpu().ssp += 4;
     if ((cpu().ssp & 0x00FFFFFFu) > 0x00FFFF00u) {
         std::fprintf(stderr,
