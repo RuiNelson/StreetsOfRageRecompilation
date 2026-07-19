@@ -128,7 +128,8 @@ The global byte currently named `$FFFA43 (half_damage)` is enabled for the force
 
 ### Player-versus-player contact
 
-`$4478 (resolve_player_vs_player_collision)` runs only when:
+The gameplay object pass calls `$4478 (resolve_player_vs_player_collision)` once
+per frame even in a one-player game. The routine immediately returns unless:
 
 - both player-mode bits are set (`player_mode == 3`);
 - neither player is in excluded spawn/invulnerability states;
@@ -276,7 +277,10 @@ The bytes at `$FFFF22 (p1_out_or_continue_flag)` and `$FFFF25 (p2_out_or_continu
 
 ### Activation gate
 
-`$3FCC (try_activate_police_special)` tests logical face-button bit 6 and rejects activation when any of the following is true:
+The active-player update calls `$3FCC (try_activate_police_special)` every frame;
+the call itself does not mean that a special was requested. Its first test is
+logical face-button bit 6, and it immediately rejects activation when that bit
+is clear or any of the following is true:
 
 - player health is zero;
 - the round-intro sequence is active;
@@ -360,9 +364,9 @@ adjust_player_health: health = clamp(health - damage, 0, 80), redraw bar
 | `$322A (player_attack_jump_chord)` | Attack+jump chord / rear attack. |
 | `$333E (resolve_player_hit_or_ko)` | Player hit/KO reaction gate. |
 | `$351E (apply_player_damage)` | Apply pending incoming damage. |
-| `$3FCC (try_activate_police_special)` | Validate and start police special. |
+| `$3FCC (try_activate_police_special)` | Per-player-frame gate; validate input and conditions, then start a police special only on success. |
 | `$41EA (compute_player_attack_descriptor)` | Compute per-frame outgoing attack descriptor. |
-| `$4478 (resolve_player_vs_player_collision)` | P1/P2 collision and friendly-fire resolution. |
+| `$4478 (resolve_player_vs_player_collision)` | Per-gameplay-frame 2P gate; return in 1P, otherwise resolve collision and friendly fire. |
 | `$4D60 (update_score_hud_and_check_extra_life)` | Redraw score digits, check the next threshold, and conditionally award an extra life. |
 | `$4E14 (draw_player_lives_and_specials)` | Draw player lives and specials counters. |
 | `$4E6C (adjust_player_health)` | Saturating health adjustment and health-bar draw. |

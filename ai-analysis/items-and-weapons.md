@@ -11,9 +11,10 @@ The code makes a useful distinction that is easy to lose in a visual description
 - a **breakable prop** receives ordinary attack collisions and emits debris; telephone booths, crates, and similar props can visibly contain pickups or weapons, although the local prop object does not carry a universal reward-type field.
 
 Gameplay observation confirms the five carried weapon classes as knife, bottle,
-steel pipe, baseball bat, and pepper spray. The only remaining visual ambiguity is
-which of object types `$0A` and `$0B` is the pipe and which is the bat; their code
-is nearly identical and the assembly does not name the art.
+steel pipe, baseball bat, and pepper spray. It also resolves the two visually
+anonymous long-weapon handlers: type `$0A` is the baseball bat and type `$0B` is
+the steel pipe. Their code is nearly identical; the distinction comes from the
+rendered art observed during play.
 
 ## Object-type map
 
@@ -23,10 +24,10 @@ The global object dispatcher at `$B236` indexes a word table by object type. The
 |---:|---:|---|
 | `$08` | `$5C1E (knife_weapon_dispatcher)` | Knife; damage 5, limited use count, and a straight-line attack-button throw. |
 | `$09` | `$6114 (bottle_weapon_dispatcher)` | Bottle; damage 3, breaks and emits three shard objects. |
-| `$0A` | `$61F6 (long_weapon_type0A_dispatcher)` | Long melee weapon A (bat/pipe); damage 4. |
-| `$0B` | `$6226 (long_weapon_type0B_dispatcher)` | Long melee weapon B (pipe/bat); damage 4. |
+| `$0A` | `$61F6 (baseball_bat_weapon_dispatcher)` | Baseball bat; damage 4. |
+| `$0B` | `$6226 (steel_pipe_weapon_dispatcher)` | Steel pipe; damage 4. |
 | `$0C` | `$6256 (pepper_spray_weapon_dispatcher)` | Thrown pepper spray; damage 2, immobilizing reaction, and smoke/effect-emission states. |
-| `$11` | `$6AF4 (breakable_type11_dispatcher)` | Breakable prop/container family; emits ten debris objects of the same type with fragment subtypes. |
+| `$11` | `$6AF4 (phone_booth_dispatcher)` | Telephone booth; shatters into up to ten type-$11 glass/booth fragments. |
 | `$19` | `$6C84 (breakable_type19_dispatcher)` | Second breakable prop family; launches/bounces when struck, then despawns. |
 | `$1E` | `$61BE (bottle_shard_dispatcher)` | Bottle-shard/debris projectile emitted by type `$09`. |
 | `$3F` | `$68E2` | 3,000-point pickup. |
@@ -44,8 +45,8 @@ The following player-visible behavior is confirmed and resolves several points
 that static code alone leaves visually anonymous:
 
 - pressing attack with the knife throws it horizontally in a straight line;
-- the steel pipe and baseball bat are distinct weapons backed by the two almost
-  identical long-weapon handlers `$61F6/$6226`;
+- the baseball bat is type `$0A`; the steel pipe is type `$0B`; both use almost
+  identical long-weapon handlers at `$61F6/$6226`;
 - pepper spray is thrown, produces smoke/powder objects, and leaves the struck
   enemy locked in a reaction state for a short period;
 - enemies can carry weapon objects; knocking an armed enemy down detaches the
@@ -239,9 +240,9 @@ The type `$1E` children use the small debris handler at `$61BE (bottle_shard_dis
 
 ### Types `$0A` and `$0B`: long melee weapons
 
-The two handlers at `$61F6 (long_weapon_type0A_dispatcher)` and `$6226 (long_weapon_type0B_dispatcher)` differ mainly in art data (`$6FA9A` versus `$6FB5A`) and both initialize damage 4. They are the steel pipe and baseball bat. They reuse the common ownership, attachment, drop, throw, collision, and landing paths rather than carrying the knife's explicit three-use counter or the bottle's shatter flag.
+The two handlers at `$61F6 (baseball_bat_weapon_dispatcher)` and `$6226 (steel_pipe_weapon_dispatcher)` differ mainly in art data (`$6FA9A` versus `$6FB5A`) and both initialize damage 4. Type `$0A` is the baseball bat and type `$0B` is the steel pipe. They reuse the common ownership, attachment, drop, throw, collision, and landing paths rather than carrying the knife's explicit three-use counter or the bottle's shatter flag.
 
-Assigning `$0A` to one visible weapon and `$0B` to the other remains medium confidence without rendering the two art streams. Mechanically the distinction is small: both provide the same outgoing damage, can be dropped and collected again while durability remains, and wear through closely related impact/landing state transitions.
+The visual mapping was confirmed during gameplay. Mechanically the distinction is small: both provide the same outgoing damage, can be dropped and collected again while durability remains, and wear through closely related impact/landing state transitions.
 
 ### Type `$0C`: pepper spray and smoke
 
@@ -267,11 +268,11 @@ The weapon remains an object rather than becoming a player damage bonus. This is
 
 ## Breakable props, debris, and drops
 
-### Type `$11` breakable family
+### Type `$11`: telephone booth
 
-`$6AF4/$6B0A` initializes a collision-enabled breakable prop. Its `+$31` byte selects fragment variants: zero is the intact object; a nonzero value chooses an already broken/debris animation and begins in a later state.
+`$6AF4 (phone_booth_dispatcher)` / `$6B0A` initializes the collision-enabled telephone booth. Its `+$31` byte selects fragment variants: zero is the intact booth; a nonzero value chooses an already shattered glass/booth fragment animation and begins in a later state.
 
-On an accepted damaging collision (`$6B34 (break_type11_prop)`) the intact object:
+On an accepted damaging collision (`$6B34 (shatter_phone_booth)`) the intact booth:
 
 1. disables its intact collision bit;
 2. plays the break sound;
@@ -290,7 +291,8 @@ On an accepted damaging collision (`$6B34 (break_type11_prop)`) the intact objec
 Telephone booths, crates, and similar breakable props visibly contain items or
 weapons. The important code-level qualification is that neither local breakable
 handler contains a generic item-type field, reward-table lookup, or call to one
-of the six pickup constructors. Type `$11` emits its debris and type `$19`
+of the six pickup constructors. The type `$11` telephone booth emits its glass
+and booth debris, while type `$19`
 changes its own physics.
 
 The container/reward relationship is therefore implemented outside the local
@@ -363,8 +365,8 @@ void apply_pickup_effect(Player *p, unsigned effect) {
 | `$6114 (bottle_weapon_dispatcher)` | Type-$09 bottle dispatcher. |
 | `$614E (break_bottle_into_shards)` | Bottle break and three-shard spawn. |
 | `$61BE (bottle_shard_dispatcher)` | Type-$1E bottle-shard/debris dispatcher. |
-| `$61F6 (long_weapon_type0A_dispatcher)` | Type-$0A long melee weapon dispatcher. |
-| `$6226 (long_weapon_type0B_dispatcher)` | Type-$0B long melee weapon dispatcher. |
+| `$61F6 (baseball_bat_weapon_dispatcher)` | Type-$0A baseball-bat dispatcher. |
+| `$6226 (steel_pipe_weapon_dispatcher)` | Type-$0B steel-pipe dispatcher. |
 | `$6256 (pepper_spray_weapon_dispatcher)` | Type-$0C thrown pepper-spray and smoke/effect dispatcher. |
 | `$62DA (throw_pepper_spray)` | Applies the pepper-spray throw position and X/Z velocity. |
 | `$6328 (begin_pepper_smoke_emission)` | Converts an impact into the first smoke/effect object. |
@@ -376,16 +378,15 @@ void apply_pickup_effect(Player *p, unsigned effect) {
 | `$6A2A (apply_extra_special_pickup)` | Extra-special pickup effect. |
 | `$6A46 (apply_score_pickup)` | 3,000/10,000 score pickup effects. |
 | `$6A70 (delete_pickup_behind_camera)` | Camera-relative off-screen cleanup shared by pickups. |
-| `$6AF4 (breakable_type11_dispatcher)` | Type-$11 breakable prop dispatcher. |
-| `$6B34 (break_type11_prop)` | Break type-$11 prop and emit ten debris objects. |
+| `$6AF4 (phone_booth_dispatcher)` | Type-$11 intact telephone-booth and fragment dispatcher. |
+| `$6B34 (shatter_phone_booth)` | Shatter the telephone booth and emit up to ten glass/booth fragments. |
 | `$6C84 (breakable_type19_dispatcher)` | Type-$19 breakable/bouncing prop dispatcher. |
 | `$10DA6 (sub_00010DA6)` | Add three-byte packed-BCD score value. |
 | `$10DCA (add_bcd_resource_value)` | Add one-byte packed-BCD life/special value using predecrement. |
 
 ## Uncertainties and recommended traces
 
-1. Render art streams `$6FA9A` and `$6FB5A` to assign object types `$0A/$0B` definitively to baseball bat versus steel pipe.
-2. Trace the pipe and bat landing states to count their exact remaining-use rules after each floor impact.
-3. Map every type-`$0C` animation selector to the thrown canister, smoke/powder cloud, and lingering immobilization frames.
-4. Pair each hidden reward with its telephone booth, crate, or other container in the decoded ELC streams.
-5. Name weapon interaction values `+$51 = 0..3` only after a per-frame trace across player pickup, enemy pickup, knockdown drop, and throw; the high-level phases are clear, but some values are momentary commands rather than durable states.
+1. Trace the pipe and bat landing states to count their exact remaining-use rules after each floor impact.
+2. Map every type-`$0C` animation selector to the thrown canister, smoke/powder cloud, and lingering immobilization frames.
+3. Pair each hidden reward with its telephone booth, crate, or other container in the decoded ELC streams.
+4. Name weapon interaction values `+$51 = 0..3` only after a per-frame trace across player pickup, enemy pickup, knockdown drop, and throw; the high-level phases are clear, but some values are momentary commands rather than durable states.
