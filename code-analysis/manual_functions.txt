@@ -4,21 +4,7 @@
 010514 # sync_z80_2
 0041EA # calculate player attack strength (P1 punch-power cheat hook)
 
-# Sound / music (68000 sequencer + Z80 DAC)
-01061C # load_z80_dac_driver
+# Sound — only small, side-effect-light helpers for now.
+# The full engine/channel ticks stay generated until the native port is solid.
 01069E # queue_sound_id
 011B12 # play_level_music
-072914 # sound_engine
-072A4E # sound_update_dac_channel
-072B08 # sound_update_fm_channel
-072D08 # sound_process_queue
-072F8A # sound_reset_all
-073066 # sound_fade_music
-0731A2 # sound_psg_silence
-0731FA # sound_ym2612_write_channel
-073206 # sound_ym2612_write
-07323E # sound_ym2612_write_part1
-073286 # sound_ym2612_write_bus
-073298 # sound_ym2612_acquire
-0732EA # sound_seq_command
-07388C # sound_update_psg_channel
