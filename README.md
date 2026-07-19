@@ -257,6 +257,8 @@ tree so `--full` does not wipe it:
   environment that owns it
 - `SorRuntime.*` — runtime hooks (hotkeys)
 - `SorManualFunctions.cpp` — bodies listed in `manual_functions.txt`
+- `SoRMainMenus.cpp` — native mode-select, OPTIONS, and character-select flow
+- `SoRSound.cpp` — small native sound helpers
 - `SorCheats.*` — P1 punch-power cheat
 - `build.sh` — configure, build, optional full recompile and run
 
@@ -265,10 +267,10 @@ points the static disassembler cannot resolve; `manual_functions.txt` names the
 functions with hand-written C++ bodies; the CSV files hold labels, blocks, and
 address metadata. Disassembler output goes to `output/` (local).
 
-Four cartridge functions are currently manual: `$0003A2` (`game_infinite_loop`,
-state dispatch + VBlank sync without per-opcode IRQ checks), `$0041EA` (attack
-strength, also the punch-power hook), and `$010502` / `$010514` (Z80 sync via
-the VBlank mailbox, using host-friendly waits instead of a busy loop).
+Thirty-three cartridge functions are currently manual. Four provide the core
+frame loop, attack-strength hook, and host-friendly VBlank waits; two are small
+sound helpers; and the other twenty-seven implement the mode-select, OPTIONS,
+and character-select flow in `SoRMainMenus.cpp`.
 
 ## License
 

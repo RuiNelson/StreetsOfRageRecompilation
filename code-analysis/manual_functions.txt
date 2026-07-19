@@ -1,9 +1,39 @@
 # Functions whose declarations/call sites remain generated, but whose bodies
-# are provided by hand-written C++ in SorManualFunctions.cpp / SoRSound.cpp.
+# are provided by hand-written C++ in SorManualFunctions.cpp,
+# SoRMainMenus.cpp, or SoRSound.cpp.
 0003A2 # game_infinite_loop
+0041EA # calculate player attack strength (P1 punch-power cheat hook)
 010502 # sync_z80_1
 010514 # sync_z80_2
-0041EA # calculate player attack strength (P1 punch-power cheat hook)
+
+# Mode-select, OPTIONS, and character-select flow.
+000FE8 # init_game_start_screen
+00108E # game_start_screen_update
+0010F2 # select_menu_wait_fade_in
+001104 # select_menu_input
+00114A # select_menu_resolve_choice
+00117C # options_menu_build
+001218 # options_input_sound_test
+00131A # options_input_difficulty
+001390 # options_input_controls
+001404 # options_input_lives
+001476 # options_input_level
+0014CA # options_input_exit
+0014EA # options_menu_return
+0014F2 # options_row_nav
+001546 # select_menu_sync_pad_count
+001564 # player_state_dispatcher
+001634 # init_character_select_screen
+00170A # screen_state_dispatcher
+001726 # char_select_play_music
+00175A # char_select_interactive
+0017A2 # initialize_player_continues
+001916 # char_select_player_input
+009170 # init_selectscreenmode
+00919A # game_mode_selectscreenmode
+00927C # init_characterselectscreen
+0092A8 # game_mode_characterselectscreen
+00AD8E # update_select_objects
 
 # Sound — only small, side-effect-light helpers for now.
 # The full engine/channel ticks stay generated until the native port is solid.
