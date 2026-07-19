@@ -1,7 +1,6 @@
 #include "SorRuntime.hpp"
 #include "SorCheats.hpp"
-
-#include <cstdio>
+#include "Logger.hpp"
 
 namespace {
 
@@ -40,8 +39,7 @@ void incrementByte(SystemMemory &memory, m_long address, const char *label) {
     const m_byte before = memory.readByte(address);
     const m_byte after  = before == 0xFFu ? before : static_cast<m_byte>(before + 1u);
     memory.writeByte(address, after);
-    std::fprintf(stderr, "[cheat] %s: %u -> %u\n", label, static_cast<unsigned>(before), static_cast<unsigned>(after));
-    std::fflush(stderr);
+    Logger::log( "[cheat] %s: %u -> %u\n", label, static_cast<unsigned>(before), static_cast<unsigned>(after));
 }
 
 } // namespace
@@ -60,12 +58,11 @@ void SorRuntime::handleOptionHotkey(OptionHotkeyCode keyCode) {
         case SDLK_P: {
             const bool enabled = !SorCheats::p1PunchPowerEnabled();
             SorCheats::setP1PunchPowerEnabled(enabled);
-            std::fprintf(stderr,
+            Logger::log(
                          "[cheat] P1 punch power x%u: %s\n",
                          static_cast<unsigned>(SorCheats::kPunchPowerMultiplier),
                          enabled ? "on" : "off");
-            std::fflush(stderr);
-            return;
+return;
         }
         default:
             break;
@@ -78,6 +75,5 @@ void SorRuntime::handleOptionHotkey(OptionHotkeyCode keyCode) {
     memory().writeWord(kLevel, static_cast<m_word>(level));
     memory().writeWord(kWave, 0);
     memory().writeWord(kGameState, kLevelIntroState);
-    std::fprintf(stderr, "[cheat] loading level %d of %d\n", level + 1, kLevelCount);
-    std::fflush(stderr);
+    Logger::log( "[cheat] loading level %d of %d\n", level + 1, kLevelCount);
 }
