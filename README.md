@@ -200,6 +200,24 @@ automatically. Known references use the canonical `` `$ADDRESS (label)` ``
 form. The synchronizer also combines Address/Symbol table columns where both
 refer to the same address and leaves fenced assembly or pseudocode unchanged.
 
+### Offline asset decompression
+
+`tools/decompress.py` extracts Nemesis, Enigma, and Kosinski blobs directly
+from the ROM without starting the game or an emulator. Pass the format, ROM
+offset, and destination file:
+
+```bash
+python3 tools/decompress.py nemesis 0x1B046 /tmp/enemy-cues.bin
+python3 tools/decompress.py kosinski 0x71C6C /tmp/character-select.bin
+python3 tools/decompress.py enigma 0x7228E /tmp/ui-map.bin \
+  --plane-header --base-tile 0x0001
+```
+
+The default input is `rom/SOR.bin`; select another dump with `--rom PATH`.
+Offsets and tile bases accept decimal, `0x...`, or `$...` notation. The command
+reports compressed bytes consumed and decoded bytes written; `--json` provides
+the same metadata for scripts.
+
 ### Discovery
 
 A large part of Streets of Rage is reached only through **indirect** control
