@@ -100,7 +100,7 @@ void Sor::game_infinite_loop(m_long entry_) {
 // half_damage is set (P1-vs-P2). Stores damage in object+$34 and packs the
 // original high nibble into object+$42. Host cheat may boost P1 damage only.
 // ---------------------------------------------------------------------------
-void Sor::sub_0041ea(m_long /*entry_*/) {
+void Sor::compute_player_attack_descriptor(m_long /*entry_*/) {
     traceEnter(0x41EAu);
 
     const m_long object = cpu().a[0];

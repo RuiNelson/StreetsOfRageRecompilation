@@ -104,7 +104,7 @@ void Sor::init_game_start_screen(m_long entry_) {
     memory().writeWord(0xFFFFFF06u, 1);
     memory().writeWord(0xFFFFE000u, 3);
     cpu().d[0] = 2;
-    SOR_CALL_68K(sub_00a63a(), 0x1000u);
+    SOR_CALL_68K(load_nemesis_art_bundle(), 0x1000u);
 
     memory().writeWord(kSelectScreenSubstate, 0);
     cpu().d[1] = 0;
@@ -523,7 +523,7 @@ void Sor::init_character_select_screen(m_long /*entry_*/) {
     memory().writeByte(kObjectTable + 0x150, 2);
 
     cpu().d[0] = 0x00352003u;
-    SOR_CALL_68K(sub_00a63a(), 0x16D2u);
+    SOR_CALL_68K(load_nemesis_art_bundle(), 0x16D2u);
     cpu().a[0] = 0x00071C6Cu;
     cpu().a[1] = 0x00FF8000u;
     SOR_CALL_68K(kosinskidec(), 0x16E4u);
@@ -745,7 +745,7 @@ void Sor::update_select_objects(m_long entry_) {
 
         const m_word state = memory().readWord(kGameState);
         if (state == 0x14 || state == 0x16) {
-            SOR_CALL_68K(sub_004478(), 0xADD6u);
+            SOR_CALL_68K(resolve_player_vs_player_collision(), 0xADD6u);
             SOR_CALL_68K(sub_018af8(), 0xADDCu);
         }
         SOR_CALL_68K(sub_0051cc(), 0xADE0u);

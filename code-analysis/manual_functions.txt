@@ -2,7 +2,7 @@
 # are provided by hand-written C++ in SorManualFunctions.cpp,
 # SoRMainMenus.cpp, or SoRSound.cpp.
 0003A2 # game_infinite_loop
-0041EA # calculate player attack strength (P1 punch-power cheat hook)
+0041EA # compute_player_attack_descriptor (P1 punch-power cheat hook)
 010502 # sync_z80_1
 010514 # sync_z80_2
 
