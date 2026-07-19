@@ -146,7 +146,7 @@ Host-side cheats are wired through keyboard **option hotkeys** in
 **Option** (macOS) and press the key — the bare key alone does nothing, so
 cheats do not clash with typing or with pad-mapped letters. Only the keyboard
 source is handled here; gamepad option chords are ignored. Each activation
-logs a short `[cheat] …` line on stderr.
+logs a short `[cheat] …` line via the async host `Logger`.
 
 | Chord | Effect |
 |-------|--------|
@@ -154,10 +154,13 @@ logs a short `[cheat] …` line on stderr.
 | Alt/Option + `S` | +1 P1 special attack (`$FFFFFF21`) |
 | Alt/Option + `P` | Toggle P1 punch power ×12 |
 | Alt/Option + `1`–`8` | Jump to level 1–8 (sets level/wave and forces the level-intro game state) |
+| Alt/Option + `G` | Start good ending (`game_state` → `$0024` / `init_ending_good`) |
+| Alt/Option + `B` | Start bad ending (`game_state` → `$001C` / `init_ending_bad`) |
 
 Lives and specials simply increment a RAM byte (capped at `0xFF`). Level warp
 writes the selected stage, clears the wave counter, and switches game state to
-the level intro so the cart reloads that stage.
+the level intro so the cart reloads that stage. Ending warps set the
+corresponding init game-state word so the main loop runs `init_ending_*`.
 
 Punch power is implemented in `SorCheats` and hooked from the hand-written
 attack-strength routine (`$0041EA`). When enabled, only the player-1 object

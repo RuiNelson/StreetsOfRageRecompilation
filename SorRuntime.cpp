@@ -10,6 +10,9 @@ constexpr m_long kWave             = 0xFFFFFF04u;
 constexpr m_long kP1Lives          = 0xFFFFFF20u;
 constexpr m_long kP1SpecialAttacks = 0xFFFFFF21u;
 constexpr m_word kLevelIntroState  = 0x0028u;
+// Even values are init states; the loop then advances to the update mode (+2).
+constexpr m_word kEndingBadInit    = 0x001Cu; // init_ending_bad
+constexpr m_word kEndingGoodInit   = 0x0024u; // init_ending_good
 constexpr int    kLevelCount       = 8;
 
 int levelFromTopRowNumber(SDL_Keycode key) {
@@ -63,6 +66,18 @@ void SorRuntime::handleOptionHotkey(OptionHotkeyCode keyCode) {
                         enabled ? "on" : "off");
             return;
         }
+        case SDLK_G:
+            // Alt+G — jump to good ending init (game_state $24).
+            memory().writeWord(kGameState, kEndingGoodInit);
+            Logger::log("[cheat] starting good ending (game_state=$%04X)",
+                        static_cast<unsigned>(kEndingGoodInit));
+            return;
+        case SDLK_B:
+            // Alt+B — jump to bad ending init (game_state $1C).
+            memory().writeWord(kGameState, kEndingBadInit);
+            Logger::log("[cheat] starting bad ending (game_state=$%04X)",
+                        static_cast<unsigned>(kEndingBadInit));
+            return;
         default:
             break;
     }

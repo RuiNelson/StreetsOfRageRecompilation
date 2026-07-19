@@ -163,7 +163,7 @@ FFFC06, p1_joypad_present_negated, "100% - B - 0 if the P1 joypad is present, 1 
 FFFC08, p2_button_held, "100% - W"
 FFFC09, p2_button_press, "100% - B"
 FFFC0A, p2_joypad_present_negated, "100% - B - 0 if the P2 joypad is present, 1 if not"
-FFFF00, game_state, "100% - W - Main state of the game, known states: 0x02 - sega logo, 0x06 - story, 0x0A - title screen, 0x0E - hi-scores display, 0x12 - menu, 0x22 - player character select screen, 0x16 - attract mode/playing, 0x2A - level intro, 0x1A - end of level score"
+FFFF00, game_state, "100% - W - Main state of the game; even values are init, +2 is update. Known: 0x00/02 sega, 0x04/06 story, 0x08/0A title, 0x0C/0E hi-scores, 0x10/12 menu, 0x14/16 attract/playing, 0x18/1A round clear, 0x1C/1E bad ending, 0x20/22 character select, 0x24/26 good ending, 0x28/2A level intro"
 FFFF02, level, "100% - W - Level of the game, 0 is the 1st level"
 FFFF04, wave, "100% - W - During a level, the player(s) face waves of enemies"
 FFFF1A, p1_continues, "100% - W"
