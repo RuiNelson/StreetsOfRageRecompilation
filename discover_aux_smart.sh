@@ -21,6 +21,7 @@
 # Env overrides:
 #   SOR_ROM=rom/SOR.bin
 #   MAX_ITERS=500
+# Runtime stdout/stderr is streamed through this script's stdout.
 
 set -uo pipefail
 cd "$(dirname "$0")"
@@ -55,6 +56,15 @@ sort_aux_addresses() {
     mv "$sorted" "$AUX"
 }
 
+run_sor_with_output() {
+    # The runtime writes diagnostics to both stdout and stderr.  Merge them and
+    # stream everything through this script's stdout while preserving sor's
+    # exit code (42/43 drive the discovery protocol).
+    "$BIN" "$@" 2>&1 | tee
+    local sor_code=${PIPESTATUS[0]}
+    return "$sor_code"
+}
+
 sort_aux_addresses
 start_count=$(grep -cE '^[0-9a-fA-F]+' "$AUX" 2>/dev/null || echo 0)
 
@@ -87,7 +97,7 @@ for ((i = 1; i <= MAX_ITERS; i++)); do
     pkill -9 -f "$BIN" 2>/dev/null
 
     echo "==> [smart $i] run"
-    "$BIN" --lang en --runSor --rom "$ROM" --auxAddrFile "$AUX"
+    run_sor_with_output --lang en --runSor --rom "$ROM" --auxAddrFile "$AUX"
     code=$?
     sort_aux_addresses
 
