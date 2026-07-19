@@ -15,7 +15,7 @@ After the Sega logo, story intro, title, and optional hi-score screens, the game
 | `game_state` | Init handler | Update handler | Role |
 |--------------|--------------|----------------|------|
 | `$10` / `$12` | `init_selectscreenmode` → `init_game_start_screen` | `game_mode_selectscreenmode` → `game_start_screen_update` | Mode menu + OPTIONS |
-| `$20` / `$22` | `init_characterselectscreen` → `init_character_select_screen` | `game_mode_characterselectscreen` → `screen_state_dispatcher` | Pick Axel / Adam / Blaze |
+| `$20` / `$22` | `init_characterselectscreen` → `init_character_select_screen` | `game_mode_characterselectscreen` → `screen_state_dispatcher` | Pick character (L→R: Adam, Axel, Blaze) |
 | `$28` / `$2A` | `init_levelstart` | `game_mode_levelstart` | Level intro → in-game |
 
 High-level path:
@@ -305,18 +305,20 @@ Left/Right adjust the global `level` word (0 = first round). That value is what 
 3. Fade setup; palette `$71F30`  
 4. Spawn **player cursors** (object type **6**):
 
-| Object | Base | Type | Char slot (`+$58`) | X (`+$10`) |
-|--------|------|------|--------------------|------------|
-| P1 | `p1_object` `$B800` | 6 | **0** (left) | `$20` |
-| P2 (if `player_mode == 3`) | `p2_object` `$B880` | 6 | **2** (right) | `$E0` |
+| Object | Base | Type | Char slot (`+$58`) | X (`+$10`) | Default character |
+|--------|------|------|--------------------|------------|-------------------|
+| P1 | `p1_object` `$B800` | 6 | **0** (left) | `$20` | Adam |
+| P2 (if `player_mode == 3`) | `p2_object` `$B880` | 6 | **2** (right) | `$E0` | Blaze |
 
-5. Spawn **portraits** (object type **7**):
+5. Spawn **portraits** (object type **7**), left → right on screen:
 
-| Slot | Base | Type | ID at `+$50` | Character |
-|------|------|------|--------------|-----------|
-| Left | `$B900` | 7 | **1** | Adam |
-| Center | `$B980` | 7 | **0** | Axel |
-| Right | `$BA00` | 7 | **2** | Blaze |
+| Screen order | Slot | Base | Type | ID at `+$50` | Character |
+|--------------|------|------|------|--------------|-----------|
+| 1st (left) | 0 | `$B900` | 7 | **1** | **Adam** |
+| 2nd (center) | 1 | `$B980` | 7 | **0** | **Axel** |
+| 3rd (right) | 2 | `$BA00` | 7 | **2** | **Blaze** |
+
+Confirmed layout: **Adam · Axel · Blaze** (left to right). Note that the stored **character ID** is not the same as the screen slot index (Axel is ID `0` but stands in the middle).
 
 6. Load character art (`sub_A63A`, Kosinski `$71C6C`, UI tilemaps via `sub_A8B8`).
 
@@ -378,13 +380,15 @@ addq.w  #1, char_select_confirm_count  ; $F908
 move.b  char_id_from_slot($1A0E)[slot], (a2)
 ```
 
-Slot → ID table `$1A0E`:
+Slot → ID table `$1A0E` (`char_id_from_slot`):
 
-| Slot (screen position) | ID | Character |
-|------------------------|----|-----------|
-| 0 left (`X=$20`) | **1** | Adam |
-| 1 center (`X=$80`) | **0** | Axel |
-| 2 right (`X=$E0`) | **2** | Blaze |
+| Screen (L→R) | Slot | Cursor X | Character ID | Character |
+|--------------|------|----------|--------------|-----------|
+| 1st | 0 | `$20` | **1** | **Adam** |
+| 2nd | 1 | `$80` | **0** | **Axel** |
+| 3rd | 2 | `$E0` | **2** | **Blaze** |
+
+Defaults: P1 starts on slot 0 (**Adam**); P2 starts on slot 2 (**Blaze**).
 
 After lock, movement input is ignored for that player.
 
@@ -434,7 +438,7 @@ Downstream consumers:
 | `$FF00` | `game_state` | W | Global mode |
 | `$FF02` | `level` | W | Starting / current level; OPTIONS cheat editable |
 | `$FF18` | `player_mode` | B | `1` = 1P, `3` = 2P |
-| `$FF1E` | `p1_character_id` | B | 0=Axel, 1=Adam, 2=Blaze |
+| `$FF1E` | `p1_character_id` | B | ID: 0=Axel, 1=Adam, 2=Blaze (screen L→R is Adam, Axel, Blaze) |
 | `$FF1F` | `p2_character_id` | B | Same encoding |
 | `$FFC4` | `sound_test_index` | W | OPTIONS sound browser only |
 | `$FFC6` | `difficulty` | W | 0…3 |
@@ -469,7 +473,7 @@ Downstream consumers:
 | `$171A` | `char_select_jt` | Character-select sub-state table |
 | `$19E4` / `$19EA` | `char_select_nav_right` / `_left` | Slot wrap tables |
 | `$19FC` | `char_select_cursor_x` | X = `$20/$80/$E0` |
-| `$1A0E` | `char_id_from_slot` | Slot → character ID |
+| `$1A0E` | `char_id_from_slot` | Slot → ID: 0→Adam(1), 1→Axel(0), 2→Blaze(2) |
 | `$1A02` | `char_portrait_object_ptrs` | → `$B900/$B980/$BA00` |
 | `$1C684` | `options_sound_name_table` | 12-byte name rows for sound test |
 | `$1C9FC` | `options_control_strings` | Control-scheme descriptions |
@@ -547,7 +551,7 @@ Downstream consumers:
 - Prefer the CSV symbols above when renaming generated `sub_*` helpers that match these entry points.  
 - `game_start_screen_*` names are historical; behaviour is the **mode-select** screen under `game_state` `$10`/`$12`.  
 - OPTIONS sound rows must not be confused with `level` (`$FF02`).  
-- Character IDs are **not** the same as screen slot indices (slot 0 → Adam ID 1, slot 1 → Axel ID 0, slot 2 → Blaze ID 2).  
+- Screen order is **Adam, Axel, Blaze** (left → right). Character IDs are **not** the same as slot indices (slot 0 → Adam ID 1, slot 1 → Axel ID 0, slot 2 → Blaze ID 2).  
 - 2P anti-collision on character slots is easy to break if a native reimplementation allows double-picks.  
 - Lives formula is `2 * lives_setting + 1`, not a fixed “9 lives”.
 
