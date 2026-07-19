@@ -63,9 +63,50 @@ FFDE00, mr_x_offer_flag, "100% - B - When set, triggers Mr X's offer-to-join cut
 FFE002, cam_x, "100% - W - Camera X position"
 FFE01A, scene_length, "100% - W - Area size of the current scene (scroll boundary)"
 
-; --- Audio ---
-FFF002, stop_music, "100% - B - When set to 1, stops the currently playing music"
-FFF00A, play_se, "100% - B - Sound effect trigger; write SE ID here to play it"
+; --- Audio (68000 sequencer workspace + Z80 DAC mailboxes) ---
+; See also ai-analysis/sound-system.md
+FFF000, sound_active_priority, "100% - B - Highest priority of the sound ID accepted this frame from play_se (from table $72824)"
+FFF002, stop_music, "100% - B - BGM fade counter; non-zero starts/continues fade-out (command $E0 sets $10); 0 when idle"
+FFF003, stop_music_timer, "100% - B - Sub-frame timer for stop_music fade (reloaded to 4; every 4 frames decrements stop_music and raises FM attenuation)"
+FFF006, sound_update_phase, "100% - B - Engine phase while ticking channels (0=music section, $80=SFX section, 1=after SFX)"
+FFF007, sound_engine_gate, "100% - B - When non-zero, sound_engine takes the pause/special path (bit7 sticky); see $72914"
+FFF008, sound_dac_busy_mirror, "100% - B - Flag set/cleared around DAC/sample channel updates"
+FFF009, sound_pending_id, "100% - B - Winning sound ID selected from the play_se queue this frame (bit7 set while pending)"
+FFF00A, play_se, "100% - B - Sound command queue slot 0; write ID with bit7 set (music $81–$9F, SFX $A0–$CF, PCM $D0–$DF, $E0 fade). Cleared after sound_process_queue"
+FFF00B, play_se_1, "100% - B - Sound command queue slot 1 (same encoding as play_se)"
+FFF00C, play_se_2, "100% - B - Sound command queue slot 2 (same encoding as play_se)"
+FFF014, sound_music_voice_bank, "100% - L - Absolute pointer to current music FM instrument/voice bank"
+FFF018, sound_sfx_header_ptr, "100% - L - Absolute pointer scratch used when starting an SFX header"
+FFF040, sound_music_fm0, "100% - Channel block ($30 bytes) music FM slot 0; bit7 of +0 = active; +4 = seq ptr; +$E = duration"
+FFF070, sound_music_fm1, "100% - Channel block ($30 bytes) music FM slot 1"
+FFF0A0, sound_music_fm2, "100% - Channel block ($30 bytes) music FM slot 2"
+FFF0D0, sound_music_fm3, "100% - Channel block ($30 bytes) music FM slot 3"
+FFF100, sound_music_fm4, "100% - Channel block ($30 bytes) music FM slot 4"
+FFF130, sound_music_dac, "100% - Channel block ($30 bytes) music DAC/sample lane; posts commands to Z80 $1FFF"
+FFF160, sound_music_psg0, "100% - Channel block ($30 bytes) music PSG slot 0"
+FFF190, sound_music_psg1, "100% - Channel block ($30 bytes) music PSG slot 1"
+FFF1C0, sound_music_psg2, "100% - Channel block ($30 bytes) music PSG slot 2"
+FFF1F0, sound_sfx_fm0, "100% - Channel block ($30 bytes) SFX FM slot 0 (may steal music FM)"
+FFF220, sound_sfx_fm1, "100% - Channel block ($30 bytes) SFX FM slot 1"
+FFF250, sound_sfx_fm2, "100% - Channel block ($30 bytes) SFX FM/extra routing slot"
+FFF2B0, sound_sfx_psg0, "100% - Channel block ($30 bytes) SFX PSG slot 0"
+FFF2E0, sound_sfx_psg1, "100% - Channel block ($30 bytes) SFX PSG slot 1"
+FFF340, sound_sfx_fm_extra, "100% - Channel block ($30 bytes) extra FM SFX slot ticked after main SFX pass"
+
+; Z80 DAC driver mailboxes (68000 view of Z80 RAM $1Fxx)
+A01FF6, z80_dac_status, "100% - B - Z80 DAC status flag polled by sound_update_dac_channel before posting a sample"
+A01FF8, z80_sample_bank_lo, "100% - B - Sample bank/pointer bytes seeded to 00 80 07 80 at driver load ($1FF8–$1FFB)"
+A01FFD, z80_dac_busy, "100% - B - Bit7 set while Z80 owns YM2612 DAC setup/stream; 68000 sound_ym2612_acquire waits for clear"
+A01FFF, z80_dac_command, "100% - B - DAC command mailbox; 68000 writes sample/command (>=$81 plays); Z80 main loop reads this"
+
+; Audio ROM tables / driver blob
+011B44, level_music_table, "100% - B - Per-level BGM sound IDs for levels 0–7 ($81,$8B,$84,$8C,$85,$89,$86,$88); used by play_level_music"
+072824, sound_priority_table, "100% - B - Priority for sound IDs starting at $81 (index = ID-$81); higher value wins in sound_process_queue"
+07288C, music_pointer_table, "100% - L - Absolute pointers to music headers for IDs $81+ (track count, seq ptrs, voice bank)"
+0732D2, fm_note_period_table, "100% - W - 12 YM2612 semitone period words used when decoding FM note pitch"
+073A64, psg_note_period_table, "100% - W - PSG period words used when decoding PSG note pitch"
+073B56, sfx_pointer_table, "100% - L - Absolute pointers to SFX headers for IDs $A0–$CF"
+0795A2, z80_dac_driver_kosinski, "100% - Kosinski-compressed Z80 DAC/PCM driver; load_z80_dac_driver expands to Z80 RAM $0000"
 
 ; --- Palette ---
 FFF400, palette, "100% - Palette data buffer"
