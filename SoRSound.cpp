@@ -1,6 +1,8 @@
 #include "Sor.hpp"
 
 #include <cstdint>
+#include <cstdio>
+#include <print>
 
 // Small sound-side helpers reimplemented as native C++.
 // The per-VBlank engine, YM bus protocol, and channel sequencers remain in
@@ -29,6 +31,7 @@ void Sor::queue_sound_id(m_long entry_) {
     }
 
     const m_byte id = cpu().db(7);
+    std::printf("[sound] queue_sound_id $%02X\n", static_cast<unsigned>(id));
 
     for (int i = 0; i < 3; ++i) {
         if (mem.readByte(kPlaySe0 + i) == id) {
