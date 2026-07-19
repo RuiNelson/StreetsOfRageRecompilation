@@ -1,51 +1,53 @@
-# Modo história e progressão da campanha em Streets of Rage
+# Streets of Rage Story Mode and Campaign Flow
 
-**Manuscrito:** análise estática do ROM original e da recompilação C++  
-**Âmbito:** abertura narrativa, attract mode, início de campanha, progressão dos oito rounds, ecrã de round clear, oferta de Mr. X e seleção do final  
-**Fontes primárias:** `output/sor.asm`, `generated/Sor.cpp`, `SorManualFunctions.cpp`, `code-analysis/addresses.csv`, `code-analysis/labels.csv` e `rom/SOR.bin`
+**Manuscript:** static analysis of the original ROM and the C++ recompilation
 
-Os nomes usados abaixo correspondem aos símbolos acrescentados aos CSVs. Quando um significado é uma inferência e não uma consequência direta de uma leitura/escrita inequívoca, isso é assinalado.
+**Scope:** story opening, attract mode, campaign start, progression through all eight rounds, round-clear screen, Mr. X's offer, and ending selection
+
+**Primary sources:** `output/sor.asm`, `generated/Sor.cpp`, `SorManualFunctions.cpp`, `code-analysis/addresses.csv`, `code-analysis/labels.csv`, and `rom/SOR.bin`
+
+The names used below match the symbols added to the analysis CSVs. Meanings inferred from context rather than proved by unambiguous reads and writes are explicitly identified as such.
 
 ---
 
-## 1. Resultado principal
+## 1. Main result
 
-O jogo não possui uma classe, estrutura ou função única chamada “story mode”. A campanha é uma composição de máquinas de estados que comunicam quase exclusivamente através da RAM do Mega Drive:
+The game has no single class, structure, or function representing “story mode.” The campaign is composed of several state machines that communicate almost entirely through Mega Drive work RAM:
 
-1. `game_state` (`$FFFF00`) seleciona o modo global;
-2. cada modo tem normalmente um handler de inicialização e outro de atualização;
-3. os modos mais complexos têm um segundo índice de subestado e uma jump table própria;
-4. `level` (`$FFFF02`) é o contador persistente da campanha, de `0` a `7`;
-5. depois de cada round, o ecrã de resultados incrementa `level` e volta ao estado de introdução do round;
-6. depois do round 8, `bad_ending_selected` (`$FFDE10`) decide entre o final bom e o final mau.
+1. `game_state` (`$FFFF00`) selects the global mode.
+2. Each mode normally has an initialization handler and an update handler.
+3. Complex modes use a secondary state index and their own jump table.
+4. `level` (`$FFFF02`) is the persistent campaign counter, ranging from `0` through `7`.
+5. After each round, the round-clear screen increments `level` and returns to the level-introduction state.
+6. After round 8, `bad_ending_selected` (`$FFDE10`) selects the good or bad ending.
 
-Fluxo normal de uma campanha:
+Normal campaign flow:
 
 ```text
 Sega ($00/$02)
-  -> introdução narrativa ($04/$06)
-  -> título ($08/$0A)
-  -> menu ($10/$12)
-  -> seleção de personagem ($20/$22)
-  -> introdução do round ($28/$2A)
+  -> story opening ($04/$06)
+  -> title ($08/$0A)
+  -> mode menu ($10/$12)
+  -> character select ($20/$22)
+  -> round introduction ($28/$2A)
   -> gameplay ($14/$16)
   -> round clear ($18/$1A)
-       | level < 7: level++ e volta a $28
-       ` level = 7: $24 final bom ou $1C final mau
+       | level < 7: level++ and return to $28
+       ` level = 7: $24 good ending or $1C bad ending
 ```
 
-Há uma distinção importante entre dois sentidos de “história”:
+There is an important distinction between two uses of the word “story”:
 
-- `init_intro` / `game_mode_intro` são apenas a sequência narrativa antes do título;
-- a campanha jogável é o ciclo `level start -> in-game -> round clear`, governado por `game_state`, `level`, flags de conclusão e a oferta final.
+- `init_intro` and `game_mode_intro` implement only the narrative opening before the title.
+- The playable campaign is the `level start -> in-game -> round clear` cycle governed by `game_state`, `level`, completion flags, and the final offer.
 
 ---
 
-## 2. Dispatcher global
+## 2. Global dispatcher
 
-### 2.1 Assembly
+### 2.1 Assembly implementation
 
-O núcleo em `game_infinite_loop` (`$3A2`) lê `game_state`, duplica-o para obter um offset de quatro bytes e consulta `game_state_handler_table` (`$3BA`):
+The core loop at `game_infinite_loop` (`$3A2`) reads `game_state`, doubles it to obtain a four-byte table offset, and looks up `game_state_handler_table` at `$3BA`:
 
 ```asm
 moveq  #0,d0
@@ -58,65 +60,65 @@ jsr    sync_z80_1
 bra.s  game_infinite_loop
 ```
 
-Como os valores de `game_state` são pares, cada valor seleciona um longword da tabela. Há onze pares inicialização/atualização:
+Because every `game_state` value is even, each value selects one longword. The table contains eleven initialization/update pairs:
 
-| `game_state` | Handler | Função |
+| `game_state` | Handler | Purpose |
 |---:|---|---|
-| `$00` / `$02` | `init_segascreen` / `game_mode_segascreen` | logótipo Sega |
-| `$04` / `$06` | `init_intro` / `game_mode_intro` | prólogo narrativo |
-| `$08` / `$0A` | `init_titlescreen` / `game_mode_titlescreen` | título |
-| `$0C` / `$0E` | `init_top10score` / `game_mode_top10score` | top 10 |
-| `$10` / `$12` | `init_selectscreenmode` / `game_mode_selectscreenmode` | menu principal / OPTIONS |
-| `$14` / `$16` | `init_ingame` / `game_mode_ingame` | gameplay ou attract mode |
-| `$18` / `$1A` | `init_roundclear` / `game_mode_roundclear` | bónus e resultados do round |
-| `$1C` / `$1E` | `init_ending_bad` / `game_mode_ending_bad` | final mau |
-| `$20` / `$22` | `init_characterselectscreen` / `game_mode_characterselectscreen` | seleção de personagem |
-| `$24` / `$26` | `init_ending_good` / `game_mode_ending_good` | final bom |
-| `$28` / `$2A` | `init_levelstart` / `game_mode_levelstart` | apresentação do round |
+| `$00` / `$02` | `init_segascreen` / `game_mode_segascreen` | Sega logo |
+| `$04` / `$06` | `init_intro` / `game_mode_intro` | story opening |
+| `$08` / `$0A` | `init_titlescreen` / `game_mode_titlescreen` | title screen |
+| `$0C` / `$0E` | `init_top10score` / `game_mode_top10score` | top-ten scores |
+| `$10` / `$12` | `init_selectscreenmode` / `game_mode_selectscreenmode` | main menu and OPTIONS |
+| `$14` / `$16` | `init_ingame` / `game_mode_ingame` | gameplay or attract mode |
+| `$18` / `$1A` | `init_roundclear` / `game_mode_roundclear` | round bonuses and results |
+| `$1C` / `$1E` | `init_ending_bad` / `game_mode_ending_bad` | bad ending |
+| `$20` / `$22` | `init_characterselectscreen` / `game_mode_characterselectscreen` | character select |
+| `$24` / `$26` | `init_ending_good` / `game_mode_ending_good` | good ending |
+| `$28` / `$2A` | `init_levelstart` / `game_mode_levelstart` | round presentation |
 
-O padrão é consistente: o handler de inicialização termina normalmente com `addq.w #2,game_state`; a partir daí, o loop chama o handler de atualização em todos os frames.
+The pattern is consistent: an initialization handler normally ends with `addq.w #2,game_state`, after which the global loop calls the corresponding update handler every frame.
 
-### 2.2 C++ recompilado
+### 2.2 Recompiled C++ implementation
 
-`SorManualFunctions.cpp` preserva este mecanismo numa implementação manual de `Sor::game_infinite_loop`. As constantes mais relevantes são:
+`SorManualFunctions.cpp` preserves this mechanism in the manual implementation of `Sor::game_infinite_loop`. Its relevant constants are:
 
 ```cpp
 constexpr m_long kGameState      = 0xFFFFFF00u;
 constexpr m_long kStateJumpTable = 0x000003BAu;
 ```
 
-O C++ lê o word de estado, calcula `state + state`, lê o ponteiro longword da ROM e chama `dispatch(handler)`. Portanto, a recompilação não substitui a campanha por uma abstração moderna; ela conserva o modelo de controlo do cartucho. As rotinas restantes em `generated/Sor.cpp` são traduções quase literais das instruções 68000, com endereços de RAM explícitos.
+The C++ reads the state word, calculates `state + state`, fetches a longword pointer from ROM, and invokes `dispatch(handler)`. The recompilation therefore does not replace campaign control with a modern abstraction; it deliberately preserves the cartridge's original execution model. The related routines in `generated/Sor.cpp` are nearly literal translations of the 68000 instructions and still expose the original RAM addresses.
 
 ---
 
-## 3. Prólogo, título e attract mode
+## 3. Story opening, title, and attract mode
 
-### 3.1 Nova sessão
+### 3.1 Starting a new session
 
-`init_intro` (`$8FD0`) não se limita a desenhar o prólogo. Também reinicializa os dados persistentes de uma nova sessão:
+`init_intro` (`$8FD0`) does more than draw the opening. It also resets the persistent state of a new session:
 
 - `level = 0`;
 - `wave = 0`;
-- scores de P1 e P2 a zero;
-- flags de morte/estado dos jogadores a zero;
-- ponteiros de vidas por pontuação a zero;
-- `player_mode_copy` a zero;
-- música do prólogo (`$83`).
+- P1 and P2 scores to zero;
+- player death and status flags to zero;
+- score-based extra-life pointers to zero;
+- `player_mode_copy` to zero;
+- opening music to sound ID `$83`.
 
-Isto torna o prólogo a fronteira lógica de “nova campanha”. O menu e a seleção de personagem que aparecem depois operam sobre esta sessão já limpa.
+This makes the opening the logical boundary of a new campaign. The menu and character-select screens that follow operate on this freshly cleared session.
 
-### 3.2 Saltar a abertura
+### 3.2 Skipping the opening
 
-Em `game_mode_intro` (`$904E`), Start pode enviar a execução para:
+In `game_mode_intro` (`$904E`), Start can route execution to:
 
-- título (`game_state = $08`) quando a sequência ainda está numa fase inicial;
-- menu principal (`game_state = $10`) quando já passou o limiar interno da cena.
+- the title (`game_state = $08`) while the scene is in an early phase;
+- the main menu (`game_state = $10`) once the scene has passed its internal threshold.
 
-Sem input, a timeline partilhada `story_scene_timeline_update` (`$B6DE`) cria objetos narrativos segundo uma lista temporizada. Quando a lista acaba, escreve em `game_state` o próximo estado configurado pela cena. `story_scene_select_script` (`$3F65E`) lê esta configuração em `$3F680`: a entrada do prólogo termina com estado `$00`, que `game_mode_intro` converte na entrada em attract mode.
+Without input, the shared `story_scene_timeline_update` routine (`$B6DE`) creates narrative objects from a timed list. When the list ends, it writes the next state configured for that scene. `story_scene_select_script` (`$3F65E`) reads this configuration from `$3F680`: the opening configuration ends with state `$00`, which `game_mode_intro` converts into entry into attract mode.
 
-### 3.3 A campanha de demonstração não é uma campanha normal
+### 3.3 Attract mode is not a normal campaign
 
-Se o título expira, `$90AA` prepara o attract mode:
+When the title times out, code at `$90AA` prepares attract mode:
 
 ```asm
 move.w #$0014,game_state
@@ -125,21 +127,21 @@ move.l #$00FF7000,demo_ai_input_p1
 move.l #$00FF8000,demo_ai_input_p2
 ```
 
-Com `demo_mode != 0`:
+While `demo_mode != 0`:
 
-- a leitura de joypad em `$813C` mistura bytes dos streams de input artificial;
-- `init_ingame` chama internamente `init_levelstart`, evitando o fluxo interativo normal;
-- são impostos personagens, vidas e duração da demo;
-- Start coloca o bit 7 de `demo_mode`, começa o fade e aborta a demonstração;
-- no fim do fade, `game_mode_ingame` regressa ao logótipo (`$00`) ou ao top 10 (`$0C`), em vez de entrar em round clear.
+- joypad code at `$813C` merges bytes from scripted input streams;
+- `init_ingame` internally calls `init_levelstart`, bypassing the interactive start flow;
+- characters, lives, and demo duration are forced;
+- Start sets bit 7 of `demo_mode`, starts a fade, and aborts the demonstration;
+- after the fade, `game_mode_ingame` returns to the Sega logo (`$00`) or the top-ten screen (`$0C`) instead of entering round clear.
 
-Assim, os estados `$14/$16` são partilhados entre campanha e demo, mas a flag `demo_mode` muda as entradas, o HUD e a rota de saída.
+States `$14/$16` are therefore shared by the campaign and the demonstration, but `demo_mode` changes their input source, HUD setup, and exit route.
 
 ---
 
-## 4. Início da campanha e introdução de cada round
+## 4. Campaign start and round introduction
 
-Depois da confirmação de personagem, `initialize_player_continues` (`$17A2`) configura continues/vidas e escreve:
+After character confirmation, `initialize_player_continues` (`$17A2`) initializes continues and lives, then writes:
 
 ```asm
 move.w #$0028,game_state
@@ -147,97 +149,97 @@ move.w #$0028,game_state
 
 ### 4.1 `init_levelstart` (`$106EA`)
 
-O handler de inicialização do round:
+The round initialization handler:
 
-- limpa quase toda a RAM de trabalho;
-- repõe `wave = 0`;
-- marca `level_intro_active = 1`;
-- inicia o fade em `$40`;
-- carrega arte, tilemaps, HUD e dados dependentes de `level`;
-- chama `start_round_setup`;
-- recria os objetos P1/P2 com os IDs escolhidos;
-- avança `game_state` de `$28` para `$2A`.
+- clears almost all work RAM;
+- resets `wave = 0`;
+- sets `level_intro_active = 1`;
+- initializes the fade counter to `$40`;
+- loads art, tilemaps, HUD data, and other resources selected by `level`;
+- calls `start_round_setup`;
+- recreates the P1/P2 objects with the selected character IDs;
+- advances `game_state` from `$28` to `$2A`.
 
-O carregamento de dados é indexado pelo número do round. Por exemplo, `load_level_data` (`$576`) multiplica `level` por seis e usa uma entrada de seis bytes na tabela ROM `$1C378`.
+Level data is indexed by the current round number. For example, `load_level_data` (`$576`) multiplies `level` by six and selects a six-byte entry in the ROM table at `$1C378`.
 
-### 4.2 Máquina de estados da apresentação
+### 4.2 Round-presentation state machine
 
-`game_mode_levelstart` entra em `level_intro_dispatcher` (`$11A50`). O índice `level_intro_substate` (`$FB48`) seleciona uma de seis entradas em `level_intro_jt` (`$11A5C`):
+`game_mode_levelstart` enters `level_intro_dispatcher` (`$11A50`). `level_intro_substate` (`$FB48`) selects one of six entries in `level_intro_jt` (`$11A5C`):
 
-1. espera pelo fade-in;
-2. move as duas metades do banner “ROUND n” para o centro;
-3. espera `$60` frames;
-4. move o banner para fora;
-5. espera `$30` frames;
-6. `level_intro_finish` escreve `game_state = $14`.
+1. wait for fade-in;
+2. move the two halves of the “ROUND n” banner toward the center;
+3. wait `$60` frames;
+4. move the banner off-screen;
+5. wait `$30` frames;
+6. execute `level_intro_finish`, which writes `game_state = $14`.
 
-Ao chegar a `$14`, `init_ingame` configura os contadores de fade/tempo e avança imediatamente para `$16`.
+Once state `$14` is reached, `init_ingame` configures the fade and timing counters and advances immediately to `$16`.
 
 ---
 
-## 5. Gameplay e progressão dentro do round
+## 5. Gameplay and within-round progression
 
-### 5.1 Atualização por frame
+### 5.1 Per-frame update
 
-No caminho normal de `game_mode_ingame` (`$1087A`), quando não há fade nem pausa, o jogo executa sucessivamente:
+On the normal path through `game_mode_ingame` (`$1087A`), while neither fading nor paused, the game updates:
 
-- relógio e limites do cenário;
-- pausa/entrada de segundo jogador;
-- máquina da oferta de Mr. X;
-- HUD e objetos;
-- lógica de waves;
-- arte pendente;
-- dispatcher secundário de fluxo de nível.
+- the clock and scene boundaries;
+- pause handling and second-player joining;
+- Mr. X's offer state machine;
+- HUD and objects;
+- wave logic;
+- pending art transfers;
+- the secondary level-flow dispatcher.
 
-`level_flow_handler` (`$464`) usa `level_flow_flags` (`$FFFA72`) para impedir que fases de carregamento, música e setup sejam repetidas. `wave` (`$FFFF04`) seleciona os blocos de inimigos do round; `level` seleciona a tabela principal.
+`level_flow_handler` (`$464`) uses `level_flow_flags` (`$FFFA72`) to prevent loading, music, and setup phases from being repeated. `wave` (`$FFFF04`) selects enemy groups within the round, while `level` selects the main round table.
 
-### 5.2 Conclusão do round
+### 5.2 Completing a round
 
-`end_of_level_flag` (`$FFFA73`) é a indicação explícita de que a parte jogável terminou. Ela pode ser levantada por caminhos dependentes do round, por exemplo quando acabam certas waves ou quando se satisfaz a condição especial do nível 6.
+`end_of_level_flag` (`$FFFA73`) explicitly marks the playable portion of a round as complete. It can be set by round-dependent paths, including wave exhaustion and the special completion condition for level index 6, which is round 7.
 
-Enquanto a flag está ativa, `end_level_player_exit_update` (`$502C`) força a animação/posição de saída dos jogadores. Quando a saída termina, escreve:
+While this flag is set, `end_level_player_exit_update` (`$502C`) forces the players through their stage-exit animation and position. When the exit completes, it writes:
 
 ```asm
 move.b #1,fade_out_flag
 move.w #$40,palette_fade_counter
 ```
 
-Quando o fade acaba, o caminho de campanha em `ingame_finish_fade` (`$108CC`) escolhe normalmente:
+Once the fade completes, the normal campaign path in `ingame_finish_fade` (`$108CC`) selects:
 
 ```asm
 move.w #$0018,game_state
 ```
 
-Ou seja, a conclusão física do nível não incrementa diretamente `level`; transfere o controlo para o ecrã de round clear.
+The physical end of a level therefore does not increment `level` directly. It transfers control to the round-clear screen.
 
-Há rotas laterais no mesmo ponto:
+The same routing point also has alternate paths:
 
-- attract mode volta ao circuito de apresentação;
-- flags de game over/continue podem enviar ao top 10 ou reiniciar outra sequência;
-- uma ramificação especial da narrativa a dois jogadores força `level = 5` e reentra em `$28`.
+- attract mode returns to the presentation loop;
+- game-over and continue flags can enter the top-ten screen or another recovery sequence;
+- a special two-player story branch forces `level = 5` and re-enters state `$28`.
 
-Esta última ramificação existe no código, mas o nome funcional da flag que a ativa ainda não foi promovido para os CSVs, porque a sua semântica completa depende de todos os resultados do duelo entre jogadores.
+That final branch is visible in the code, but its controlling flag has not been given a permanent CSV name because its complete meaning depends on every possible outcome of the player-versus-player confrontation.
 
 ---
 
-## 6. Round clear é o gestor da campanha
+## 6. Round clear is the campaign manager
 
-### 6.1 Inicialização
+### 6.1 Initialization
 
-`init_roundclear` (`$91A0`) chama `round_clear_sequence_init` (`$181EA`). Esta rotina:
+`init_roundclear` (`$91A0`) calls `round_clear_sequence_init` (`$181EA`). This routine:
 
-- normaliza jogadores mortos/inativos;
-- carrega o ecrã de resultados;
-- prepara bónus de tempo, dificuldade, vidas e especiais;
-- no round final, inclui valores adicionais ligados às vidas restantes;
-- limpa estado transitório, incluindo `mr_x_offer_flag`;
-- põe `round_clear_substate = 0`.
+- normalizes dead or inactive player objects;
+- loads the results screen;
+- prepares time, difficulty, life, and special-attack bonuses;
+- includes additional remaining-life values on the final round;
+- clears transient state, including `mr_x_offer_flag`;
+- initializes `round_clear_substate = 0`.
 
-### 6.2 Tally e avanço
+### 6.2 Score tally and campaign advancement
 
-`round_clear_sequence_update` (`$1833C`) usa `round_clear_substate` (`$FB4C`) como offset em `round_clear_jt` (`$18350`). A tabela conduz animações, conversão dos bónus em score, esperas e fade.
+`round_clear_sequence_update` (`$1833C`) uses `round_clear_substate` (`$FB4C`) as an offset into `round_clear_jt` (`$18350`). The table controls animations, bonus-to-score conversion, delays, and fading.
 
-O ponto decisivo é `round_clear_advance_campaign` (`$183B0`):
+The decisive routine is `round_clear_advance_campaign` (`$183B0`):
 
 ```asm
 cmpi.w #7,level
@@ -247,11 +249,11 @@ move.w  #$28,game_state
 rts
 ```
 
-Logo, os oito rounds são representados por `level = 0..7`. Para `0..6`, o round clear é a única rotina observada que incrementa o contador normal da campanha e inicia a apresentação seguinte.
+The eight rounds are therefore represented by `level = 0..7`. For levels `0..6`, round clear is the only observed normal-campaign routine that increments the level counter and starts the next presentation.
 
-### 6.3 Seleção do final
+### 6.3 Ending selection
 
-No round 8 (`level == 7`), a execução cai em `round_clear_select_ending` (`$183C4`):
+On round 8 (`level == 7`), execution falls through to `round_clear_select_ending` (`$183C4`):
 
 ```asm
 moveq #$24,d0
@@ -262,99 +264,99 @@ set_state:
 move.w d0,game_state
 ```
 
-Esta é a prova direta da semântica de `$FFDE10`:
+This directly proves the meaning of `$FFDE10`:
 
-- zero: `game_state = $24`, final bom;
-- não zero: `game_state = $1C`, final mau.
+- zero selects `game_state = $24`, the good ending;
+- nonzero selects `game_state = $1C`, the bad ending.
 
 ---
 
-## 7. Oferta de Mr. X e bifurcação narrativa
+## 7. Mr. X's offer and the narrative branch
 
-### 7.1 Ativação
+### 7.1 Activation
 
-Na secção final do round 8, a lógica do objeto de jogador em `$50A6` deteta que os jogadores chegaram à posição da cena. Depois de todos os jogadores ativos entrarem na zona, ela:
+In the final section of round 8, player-object logic at `$50A6` detects that the active players have entered the scene area. Once all active players are in position, it executes:
 
 ```asm
 move.b #1,mr_x_offer_flag
 move.b #1,stop_clock
 ```
 
-A partir daí, `mr_x_offer_update` (`$11B4C`), chamado em todos os frames de gameplay, deixa de retornar imediatamente e começa a processar `mr_x_offer_state` (`$FFDE04`).
+From that point onward, `mr_x_offer_update` (`$11B4C`), which runs every gameplay frame, stops returning immediately and begins processing `mr_x_offer_state` (`$FFDE04`).
 
-### 7.2 Estrutura da máquina
+### 7.2 State-machine structure
 
-O estado é usado duas vezes:
+The offer state is used in two ways:
 
-- como índice byte em `mr_x_offer_control_table` (`$120AA`), que decide se o controlo está bloqueado, libertado ou numa fase de escolha;
-- multiplicado por dois como índice em `mr_x_offer_jt` (`$11B94`).
+- as a byte index into `mr_x_offer_control_table` (`$120AA`), which determines whether control is blocked, enabled, or waiting for a choice;
+- doubled to index `mr_x_offer_jt` (`$11B94`).
 
-As fases observáveis incluem:
+The observable phases include:
 
-- parar os jogadores e o relógio;
-- carregar arte e texto;
-- abrir/fechar a área visível da cena via registo VDP `$92xx`;
-- desenhar diálogo letra a letra;
-- permitir escolha esquerda/direita e confirmação;
-- em 2P, comparar as escolhas dos dois jogadores;
-- ativar `half_damage` durante um duelo P1 contra P2;
-- regressar ao combate normal ou marcar o resultado narrativo.
+- stopping the players and the game clock;
+- loading art and text;
+- opening and closing the visible scene area through VDP register `$92xx`;
+- drawing dialogue one character at a time;
+- allowing left/right selection and confirmation;
+- comparing both players' choices in 2P mode;
+- enabling `half_damage` during a P1-versus-P2 duel;
+- returning to normal combat or marking the narrative outcome.
 
-As escolhas ficam nos campos de estado dos objetos dos jogadores (em particular bits de `object+$59`). `$FFDE0E` não guarda a resposta: é `mr_x_dialogue_clear_flags`. A rotina `$12576` consome o bit 0 para limpar a área principal de diálogo e o bit 1 para limpar as duas áreas de escolha. A ligação entre aceitação e final mau é, por sua vez, inequívoca.
+The choices themselves are stored in player-object state, particularly bits in `object+$59`. `$FFDE0E` does not store the answers: it is `mr_x_dialogue_clear_flags`. Routine `$12576` consumes bit 0 to clear the main dialogue area and bit 1 to clear both player-choice tile areas. The connection between accepting the offer and the bad ending is unambiguous.
 
-### 7.3 Um jogador
+### 7.3 One-player path
 
-`mr_x_offer_choice_init` (`$11CCA`) começa por limpar `bad_ending_selected`. A resposta do jogador escolhe depois um dos ramos:
+`mr_x_offer_choice_init` (`$11CCA`) begins by clearing `bad_ending_selected`. The player's response then selects one of two branches:
 
-- recusar: a cena termina, o controlo regressa e o combate contra Mr. X pode concluir normalmente;
-- aceitar: `mr_x_offer_mark_bad_ending` (`$12074`) escreve `1` em `bad_ending_selected` e avança o diálogo.
+- refuse: the scene ends, control is restored, and the fight against Mr. X can finish normally;
+- accept: `mr_x_offer_mark_bad_ending` (`$12074`) writes `1` to `bad_ending_selected` and advances the dialogue state.
 
-O combate/saída termina ainda pelo mecanismo normal de round clear. A diferença só é consumida em `$183C4`, depois do tally.
+Combat and stage exit still finish through the normal round-clear mechanism. The result byte is consumed only later at `$183C4`, after the score tally.
 
-### 7.4 Dois jogadores
+### 7.4 Two-player path
 
-Em 2P a mesma máquina admite mais casos:
+The same state machine supports additional cases in 2P mode:
 
-- respostas compatíveis podem seguir diretamente para o ramo correspondente;
-- respostas incompatíveis ativam o confronto P1 contra P2;
-- `half_damage` altera a força aplicada durante esse confronto;
-- a máscara `player_mode` pode ser temporariamente alterada enquanto a máquina decide qual jogador continua;
-- existe uma rota que volta ao round 6 (`level = 5`) antes de reentrar no ciclo normal.
+- matching answers can proceed directly to the corresponding branch;
+- conflicting answers activate a P1-versus-P2 confrontation;
+- `half_damage` changes applied strength during this fight;
+- the `player_mode` mask can be modified temporarily while the machine determines which player continues;
+- one branch returns to round 6 by setting `level = 5` before re-entering the normal cycle.
 
-O código mostra claramente esta topologia, embora atribuir um nome narrativo definitivo a todas as combinações exija uma matriz de testes de input no jogo. Por isso, os CSVs agora identificam apenas os estados e resultados confirmados estaticamente.
+The code clearly establishes this topology. Assigning a definitive narrative name to every answer combination, however, requires a dynamic input matrix. The CSVs therefore name only states and outcomes confirmed by static evidence.
 
 ---
 
-## 8. Finais
+## 8. Endings
 
-### 8.1 Final bom: estados `$24/$26`
+### 8.1 Good ending: states `$24/$26`
 
 `init_ending_good`:
 
-- limpa a RAM de objetos;
-- carrega os assets da sequência através de `good_ending_sequence_init` (`$B3C6`);
-- toca o tema `$91`;
-- avança para `$26`.
+- clears object RAM;
+- loads the ending assets through `good_ending_sequence_init` (`$B3C6`);
+- queues music ID `$91`;
+- advances to state `$26`.
 
-`game_mode_ending_good` usa `story_scene_timeline_update`, a mesma infraestrutura temporal do prólogo. Depois de a cena estar suficientemente avançada, Start permite saltar para o top 10 (`$0C`). Sem input, a configuração 1 em `story_scene_config_table` também termina em `$0C` quando o índice da timeline ultrapassa `$12`.
+`game_mode_ending_good` uses `story_scene_timeline_update`, the same timed-scene infrastructure used by the opening. Once the scene is sufficiently advanced, Start can skip to the top-ten screen (`$0C`). Without input, configuration 1 in `story_scene_config_table` also ends at `$0C` when its timeline index passes `$12`.
 
-### 8.2 Final mau: estados `$1C/$1E`
+### 8.2 Bad ending: states `$1C/$1E`
 
 `bad_ending_sequence_init` (`$87C6`):
 
-- limpa os objetos;
-- toca o tema `$8F`;
-- escolhe o retrato com base na personagem/jogador sobrevivente;
-- inicializa a máquina em `$F910`;
-- cria o primeiro objeto da cena.
+- clears the object area;
+- queues music ID `$8F`;
+- selects portrait art based on the surviving player and character;
+- initializes the state machine at `$F910`;
+- creates the first scene object.
 
-`bad_ending_sequence_update` (`$8890`) despacha essa máquina através da tabela relativa `$88A0`, atualiza objetos e permite Start nas fases finais. O último fade escreve `game_state = 0`, regressando ao ciclo do logótipo Sega.
+`bad_ending_sequence_update` (`$8890`) dispatches this machine through the relative table at `$88A0`, updates ending objects, and accepts Start during the final phases. The last fade writes `game_state = 0`, returning to the Sega-logo loop.
 
-O final mau tem, portanto, uma implementação separada da timeline genérica usada pelo prólogo e pelo final bom.
+The bad ending therefore has a separate implementation from the generic timeline used by the opening and the good ending.
 
 ---
 
-## 9. Pseudocódigo reconstruído
+## 9. Reconstructed pseudocode
 
 ```cpp
 for (;;) {
@@ -394,43 +396,43 @@ void advanceCampaignAfterTally() {
 
 ---
 
-## 10. Mapa de dados essenciais
+## 10. Essential data map
 
-| Endereço | Símbolo | Papel |
+| Address | Symbol | Role |
 |---:|---|---|
-| `$FFFF00` | `game_state` | modo global |
-| `$FFFF02` | `level` | round atual, `0..7` |
-| `$FFFF04` | `wave` | grupo atual dentro do round |
-| `$FFFF18` | `player_mode` | máscara de jogadores ativos |
-| `$FFFF2A` | `demo_mode` | separa attract mode da campanha |
-| `$FFFA1F` | `level_intro_active` | bloqueia gameplay durante o fade inicial |
-| `$FFFA71` | `fade_out_flag` | transição para fora do gameplay |
-| `$FFFA72` | `level_flow_flags` | gates internos do carregamento/fluxo |
-| `$FFFA73` | `end_of_level_flag` | round jogável concluído |
-| `$FFFA30/$31/$33` | `story_scene_step/last_step/next_state` | timeline do prólogo/final bom |
-| `$FFFB06` | `story_scene_timer` | espera entre entradas da timeline |
-| `$FFFB48` | `level_intro_substate` | apresentação “ROUND n” |
-| `$FFFB4A` | `level_intro_timer` | temporização da apresentação |
-| `$FFFB4C` | `round_clear_substate` | tally e avanço da campanha |
-| `$FFFB4E` | `round_clear_timer` | espera curta do tally |
-| `$FFDE00` | `mr_x_offer_flag` | ativa a cena final |
-| `$FFDE04` | `mr_x_offer_state` | estado da oferta |
-| `$FFDE0E` | `mr_x_dialogue_clear_flags` | pedidos de limpeza das áreas de diálogo |
-| `$FFDE10` | `bad_ending_selected` | resultado consumido após o round 8 |
-| `$FFF910` | `bad_ending_substate` | máquina exclusiva do final mau |
+| `$FFFF00` | `game_state` | global mode |
+| `$FFFF02` | `level` | current round, `0..7` |
+| `$FFFF04` | `wave` | current enemy group within the round |
+| `$FFFF18` | `player_mode` | active-player mask |
+| `$FFFF2A` | `demo_mode` | distinguishes attract mode from campaign play |
+| `$FFFA1F` | `level_intro_active` | blocks gameplay during the initial fade |
+| `$FFFA30/$31/$33` | `story_scene_step/last_step/next_state` | opening and good-ending timeline |
+| `$FFFA71` | `fade_out_flag` | transition out of gameplay |
+| `$FFFA72` | `level_flow_flags` | internal loading and flow gates |
+| `$FFFA73` | `end_of_level_flag` | playable round completed |
+| `$FFFB06` | `story_scene_timer` | delay between timeline entries |
+| `$FFFB48` | `level_intro_substate` | “ROUND n” presentation |
+| `$FFFB4A` | `level_intro_timer` | round-presentation timing |
+| `$FFFB4C` | `round_clear_substate` | score tally and campaign advancement |
+| `$FFFB4E` | `round_clear_timer` | short tally delay |
+| `$FFDE00` | `mr_x_offer_flag` | activates the final offer |
+| `$FFDE04` | `mr_x_offer_state` | offer state-machine index |
+| `$FFDE0E` | `mr_x_dialogue_clear_flags` | requests clearing dialogue areas |
+| `$FFDE10` | `bad_ending_selected` | final result consumed after round 8 |
+| `$FFF910` | `bad_ending_substate` | bad-ending-specific state machine |
 
 ---
 
-## 11. Conclusões
+## 11. Conclusions
 
-- A unidade persistente da campanha é `level`; `wave` só descreve progresso interno do round.
-- A progressão normal entre rounds pertence ao ecrã de round clear, não à lógica que derrota o boss.
-- A introdução do round e o tally têm máquinas de estados independentes (`$FB48` e `$FB4C`).
-- O attract mode reutiliza o gameplay, mas é isolado por `demo_mode` e nunca segue a progressão normal de campanha.
-- A oferta de Mr. X é executada dentro de `game_mode_ingame`, não num `game_state` global separado.
-- A decisão narrativa final é reduzida a um byte, `bad_ending_selected`, lido num único ponto de routing depois do round 8.
-- O C++ recompilado mantém deliberadamente esta arquitetura de ROM/RAM; compreender o modo história continua a exigir seguir os endereços e jump tables originais.
+- The campaign's persistent unit of progress is `level`; `wave` describes only progress within a round.
+- Normal advancement between rounds belongs to the round-clear screen, not to the logic that defeats the boss.
+- The round introduction and score tally have independent state machines at `$FB48` and `$FB4C`.
+- Attract mode reuses gameplay but is isolated by `demo_mode` and never follows normal campaign progression.
+- Mr. X's offer runs inside `game_mode_ingame`; it is not a separate global `game_state`.
+- The final narrative choice is reduced to one byte, `bad_ending_selected`, read at a single routing point after round 8.
+- The recompiled C++ deliberately preserves this ROM/RAM architecture, so understanding story mode still requires tracing the original addresses and jump tables.
 
-## 12. Trabalho futuro
+## 12. Future work
 
-Uma análise dinâmica pode completar a matriz 2P da oferta de Mr. X. O teste ideal registaria, para cada combinação de respostas, os valores por frame de `$FFDE04`, `$FFDE10`, os bytes `object+$59` de P1/P2, `$FFFF18`, `$FFFF34`, `$FFFF36` e `game_state`. Isso permitiria nomear com 100% de confiança as duas flags ainda não promovidas e documentar exatamente quando a rota especial regressa ao round 6.
+A dynamic analysis can complete the 2P matrix for Mr. X's offer. The ideal test would record, for every combination of answers, the per-frame values of `$FFDE04`, `$FFDE10`, P1/P2 `object+$59`, `$FFFF18`, `$FFFF34`, `$FFFF36`, and `game_state`. This would make it possible to name the two remaining flags with 100% confidence and document exactly when the special route returns to round 6.
