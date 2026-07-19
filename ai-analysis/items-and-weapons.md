@@ -86,7 +86,7 @@ The effect index, not the object type itself, drives resource application. Curre
 
 ## How a pickup is collected
 
-Pickups are acquired through the same close-interaction search that begins normal attacks. `sub_3136` builds a small three-dimensional box around the player and scans the object table. It first recognizes carried-object types `$08..$0C`; it also explicitly accepts pickup types `$47`, `$4B`, `$4C`, `$4F`, `$3F`, and `$40`.
+Pickups are acquired through the same close-interaction search that begins normal attacks. `find_close_interaction_target` builds a small three-dimensional box around the player and scans the object table. It first recognizes carried-object types `$08..$0C`; it also explicitly accepts pickup types `$47`, `$4B`, `$4C`, `$4F`, `$3F`, and `$40`.
 
 For a consumable it does not populate the player's carried-weapon fields. It only writes:
 
@@ -360,27 +360,27 @@ void apply_pickup_effect(Player *p, unsigned effect) {
 | `$5C1E` | `knife_weapon_dispatcher` | Type-$08 knife dispatcher and counted-use lifecycle. |
 | `$5D84` | `launch_released_weapon` | Detaches and launches a command-3 weapon according to holder facing. |
 | `$5E2E` | `update_held_weapon` | Shared held/drop/throw ownership and attachment logic. |
-| `$6114` | `sub_00006114` | Type-$09 bottle dispatcher. |
-| `$614E` | `sub_0000614E` | Bottle break and three-shard spawn. |
-| `$61BE` | `sub_000061BE` | Type-$1E bottle-shard/debris dispatcher. |
-| `$61F6` | `sub_000061F6` | Type-$0A long melee weapon dispatcher. |
-| `$6226` | `sub_00006226` | Type-$0B long melee weapon dispatcher. |
+| `$6114` | `bottle_weapon_dispatcher` | Type-$09 bottle dispatcher. |
+| `$614E` | `break_bottle_into_shards` | Bottle break and three-shard spawn. |
+| `$61BE` | `bottle_shard_dispatcher` | Type-$1E bottle-shard/debris dispatcher. |
+| `$61F6` | `long_weapon_type0A_dispatcher` | Type-$0A long melee weapon dispatcher. |
+| `$6226` | `long_weapon_type0B_dispatcher` | Type-$0B long melee weapon dispatcher. |
 | `$6256` | `pepper_spray_weapon_dispatcher` | Type-$0C thrown pepper-spray and smoke/effect dispatcher. |
 | `$62DA` | `throw_pepper_spray` | Applies the pepper-spray throw position and X/Z velocity. |
 | `$6328` | `begin_pepper_smoke_emission` | Converts an impact into the first smoke/effect object. |
 | `$6372` | `emit_pepper_smoke_sequence` | Emits the remaining smoke/effect sequence. |
-| `$69CC` | `sub_000069CC` | Converts a reserved pickup into an effect on its collector, then deletes it. |
-| `$69E6` | `sub_000069E6` | Dispatches pickup effect index 0..5. |
-| `$6A04` | `sub_00006A04` | Full/small health pickup effects. |
-| `$6A14` | `sub_00006A14` | Extra-life pickup effect. |
-| `$6A2A` | `sub_00006A2A` | Extra-special pickup effect. |
-| `$6A46` | `sub_00006A46` | 3,000/10,000 score pickup effects. |
-| `$6A70` | `loc_00006A70` | Camera-relative off-screen cleanup shared by pickups. |
-| `$6AF4` | `sub_00006AF4` | Type-$11 breakable prop dispatcher. |
-| `$6B34` | `sub_00006B34` | Break type-$11 prop and emit ten debris objects. |
-| `$6C84` | `sub_00006C84` | Type-$19 breakable/bouncing prop dispatcher. |
+| `$69CC` | `consume_collected_pickup` | Converts a reserved pickup into an effect on its collector, then deletes it. |
+| `$69E6` | `dispatch_pickup_effect` | Dispatches pickup effect index 0..5. |
+| `$6A04` | `apply_health_pickup` | Full/small health pickup effects. |
+| `$6A14` | `apply_extra_life_pickup` | Extra-life pickup effect. |
+| `$6A2A` | `apply_extra_special_pickup` | Extra-special pickup effect. |
+| `$6A46` | `apply_score_pickup` | 3,000/10,000 score pickup effects. |
+| `$6A70` | `delete_pickup_behind_camera` | Camera-relative off-screen cleanup shared by pickups. |
+| `$6AF4` | `breakable_type11_dispatcher` | Type-$11 breakable prop dispatcher. |
+| `$6B34` | `break_type11_prop` | Break type-$11 prop and emit ten debris objects. |
+| `$6C84` | `breakable_type19_dispatcher` | Type-$19 breakable/bouncing prop dispatcher. |
 | `$10DA6` | `sub_00010DA6` | Add three-byte packed-BCD score value. |
-| `$10DCA` | `sub_00010DCA` | Add one-byte packed-BCD life/special value using predecrement. |
+| `$10DCA` | `add_bcd_resource_value` | Add one-byte packed-BCD life/special value using predecrement. |
 
 ## Uncertainties and recommended traces
 

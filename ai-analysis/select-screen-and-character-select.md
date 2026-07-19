@@ -71,7 +71,7 @@ Both the select screen and character select are **sub-state machines** on top of
 |------|-------------|
 | Clear `cheat_flag` (`$FA7B`) | OPTIONS cheat rows off |
 | `$FF06 = 1`, `$E000 = 3` | Screen context flags |
-| `sub_A63A(d0=2)` | Load menu art / palettes |
+| `load_nemesis_art_bundle(d0=2)` | Load menu art / palettes |
 | Clear `select_screen_substate` (`$FB0E`) | Sub-state = 0 |
 | Zero P1 object slot (`$B800`, 128 bytes) | Cursor object workspace |
 | Loop 3× over ROM `$1060` | Draw **1 PLAYER**, **2 PLAYERS**, **OPTIONS** via `vdp_write_menu_string` (`$1290A`) |
@@ -320,7 +320,7 @@ Left/Right adjust the global `level` word (0 = first round). That value is what 
 
 Confirmed layout: **Adam · Axel · Blaze** (left to right). Note that the stored **character ID** is not the same as the screen slot index (Axel is ID `0` but stands in the middle).
 
-6. Load character art (`sub_A63A`, Kosinski `$71C6C`, UI tilemaps via `sub_A8B8`).
+6. Load character art (`load_nemesis_art_bundle`, Kosinski `$71C6C`, UI tilemaps via `sub_A8B8`).
 
 ### 7.3 Update — `screen_state_dispatcher` ($170A)
 

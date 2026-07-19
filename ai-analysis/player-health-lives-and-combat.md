@@ -2,7 +2,7 @@
 
 ## Scope and method
 
-This document describes the playable-character systems in the original 68000 program, using `output/sor.asm` as the primary source. Addresses are ROM offsets unless prefixed with `FF`, in which case they are work-RAM addresses. The names proposed here are analytical names: most routines are still emitted as `sub_...` in the current disassembly.
+This document describes the playable-character systems in the original 68000 program, using `output/sor.asm` as the primary source. Addresses are ROM offsets unless prefixed with `FF`, in which case they are work-RAM addresses. Routine and data names follow `code-analysis/labels.csv` and `code-analysis/addresses.csv`; generated `sub_...` names remain only where no semantic label exists yet.
 
 The strongest conclusions come from following both players through the fixed object slots at `$FFB800` and `$FFB880`, then tracing their per-frame update, collision response, HUD update, death, respawn, and continue paths. Some action-state meanings remain provisional because the state byte selects character-specific animation data indirectly.
 
@@ -10,7 +10,7 @@ The strongest conclusions come from following both players through the fixed obj
 
 The game separates three kinds of player resource:
 
-1. **Health** is a binary word in each live player object at offset `+$32`. Full health is `$0050` (80 units). `sub_4E6C` is the shared saturating adjustment routine and also redraws the health bar.
+1. **Health** is a binary word in each live player object at offset `+$32`. Full health is `$0050` (80 units). `adjust_player_health` is the shared saturating adjustment routine and also redraws the health bar.
 2. **Lives** are one-byte packed-BCD counters at `$FFFF20` and `$FFFF23`. A life is deducted only after the KO animation reaches its death-resolution state, not at the instant health reaches zero.
 3. **Continues** are words at `$FFFF1A` and `$FFFF1C`. They begin at 3. Accepting a continue subtracts one, clears that player's score and extra-life threshold progress, restores the configured starting lives, and re-enters the current round.
 
@@ -31,7 +31,7 @@ P1 is always the object at `$FFB800`; P2 is always at `$FFB880`. Player code dis
 
 | Offset | Size | Meaning | Evidence / confidence |
 |---:|---:|---|---|
-| `+$00` | byte | Object type/lifecycle. `1` is an active playable character; `15` is the dead/game-over/continue object. | High: `sub_2B48`, `$5434`-`$56xx`. |
+| `+$00` | byte | Object type/lifecycle. `1` is an active playable character; `15` is the dead/game-over/continue object. | High: `resolve_player_death`, `$5434`-`$56xx`. |
 | `+$01` | byte | General object flags (visibility/activity/collision bits). | High at bit level; not all bits named. |
 | `+$08` | word | Animation/action selector. Its low bits also encode facing/variant information in several routines. | High. |
 | `+$0A` | byte | Current animation frame. | High: incremented by `sub_39E8`; used by hit tables. |
@@ -66,7 +66,7 @@ The health and outgoing-hit fields are especially important: health belongs to t
 
 ## Input and action selection
 
-`sub_568A` copies the correct player's controller word into object `+$54`. If `control_scheme` is nonzero, it permutes the three face-button bits while preserving directions and Start. This lets the rest of player code use a fixed logical layout regardless of the OPTIONS setting.
+`remap_player_gameplay_input` copies the correct player's controller word into object `+$54`. If `control_scheme` is nonzero, it permutes the three face-button bits while preserving directions and Start. This lets the rest of player code use a fixed logical layout regardless of the OPTIONS setting.
 
 The idle/ground action path around `$2CD2` applies a priority chain:
 
@@ -78,7 +78,7 @@ resolve normal attack, bit 4 ($3028)
 otherwise dispatch directional movement from low input nibble
 ```
 
-The normal-attack path is more than a state change. `sub_3136` searches the object table for a nearby grabbable target. For ordinary enemies it accepts object types 8 through 12 when their reservation byte is clear and their subtype is allowed. On success it:
+The normal-attack path is more than a state change. `find_close_interaction_target` searches the object table for a nearby grabbable target. For ordinary enemies it accepts object types 8 through 12 when their reservation byte is clear and their subtype is allowed. On success it:
 
 - records the target type in player `+$60`;
 - records its pointer in player `+$5E`;
@@ -88,7 +88,7 @@ The normal-attack path is more than a state change. `sub_3136` searches the obje
 
 This is the bridge from a close normal attack into the grab subsystem. While holding a target, the alternate path at `$2D20` selects grab strikes and throws from both the current directional input and the target's state. The target and player exchange reaction values through `+$37`, `+$51`, `+$52`, `+$5E`, `+$60`, `+$7C`, and `+$7D`. Throws then apply explicit X/Z velocities and clear the relationship on both objects.
 
-The attack+jump chord (`sub_322A`) recognizes either order: attack held plus a new jump press, or jump held plus a new attack press. It selects action `$20` (plus character/facing variants), or `$4A` while carrying a target. This is the two-button rear/escape attack family, distinct from the police special.
+The attack+jump chord (`player_attack_jump_chord`) recognizes either order: attack held plus a new jump press, or jump held plus a new attack press. It selects action `$20` (plus character/facing variants), or `$4A` while carrying a target. This is the two-button rear/escape attack family, distinct from the police special.
 
 ### Action-state numbers
 
@@ -103,7 +103,7 @@ The byte at `+$30` is not a simple enum in isolation. Bit 0 is commonly facing, 
 | `$20+` | Attack+jump chord / rear attack family. |
 | `$28+` | Grab acquisition and held-target actions. |
 | `$44+` | Grab attack/throw selection. |
-| `$50..$5F` | Hurt, knockdown, and death transitions; these states are protected from ordinary re-entry by `sub_333E`. |
+| `$50..$5F` | Hurt, knockdown, and death transitions; these states are protected from ordinary re-entry by `resolve_player_hit_or_ko`. |
 | `$56/$57` | Fatal-hit launch/death animation entry. |
 | `$60+` | Player/player or grab/throw reaction families. |
 
@@ -111,7 +111,7 @@ Because the same base state maps differently for Axel, Adam, and Blaze, names sh
 
 ## Outgoing attacks and damage descriptors
 
-`sub_41EA` derives the active hit descriptor every frame:
+`compute_player_attack_descriptor` derives the active hit descriptor every frame:
 
 ```c
 descriptor_table = table_for_action(player.action_animation);
@@ -124,11 +124,11 @@ player.hit_property = (descriptor >> 4);          // merged into object +$42
 
 The exact table layout is compact and partly self-indexing, but the behavioral result is unambiguous: `+$34 == 0` means the current pose does not inflict damage; a nonzero low nibble is the amount applied on a valid collision. The high nibble is later used to select the victim's reaction/knockdown response.
 
-The global byte currently named `half_damage` at `$FFFA43` is enabled for the forced P1-versus-P2 fight in the Mr. X branch. It changes both descriptor conversion in `sub_41EA` and several player-hit reaction choices. The intent is reduced/modified friendly-fire damage, although the nibble transformation is encoded enough that the exact arithmetic should not be described as a simple `damage /= 2` without a runtime trace.
+The global byte currently named `half_damage` at `$FFFA43` is enabled for the forced P1-versus-P2 fight in the Mr. X branch. It changes both descriptor conversion in `compute_player_attack_descriptor` and several player-hit reaction choices. The intent is reduced/modified friendly-fire damage, although the nibble transformation is encoded enough that the exact arithmetic should not be described as a simple `damage /= 2` without a runtime trace.
 
 ### Player-versus-player contact
 
-`sub_4478` runs only when:
+`resolve_player_vs_player_collision` runs only when:
 
 - both player-mode bits are set (`player_mode == 3`);
 - neither player is in excluded spawn/invulnerability states;
@@ -141,7 +141,7 @@ It alternates which player is tested first, compares one player's body box (`+$6
 
 ### Shared health adjuster
 
-`sub_4E6C` takes a signed delta in `d7`, adds it to object `+$32`, and clamps the result:
+`adjust_player_health` takes a signed delta in `d7`, adds it to object `+$32`, and clamps the result:
 
 ```c
 void adjust_player_health(Player *p, int delta) {
@@ -154,11 +154,11 @@ void adjust_player_health(Player *p, int delta) {
 
 The routine divides health by 8 to select bar segments and uses the remainder to choose the partially filled end tile. P1 and P2 have separate tile destinations and art tables, but identical health arithmetic.
 
-Fresh spawn and respawn (`sub_1E0E`) pass `+$50` to this routine, guaranteeing full health. A large-food item also passes `+$50`; the smaller healing item passes `+$14` (20 units) through item dispatch at `$6A04/$6A08`.
+Fresh spawn and respawn (`player_spawn_or_respawn`) pass `+$50` to this routine, guaranteeing full health. A large-food item also passes `+$50`; the smaller healing item passes `+$14` (20 units) through item dispatch at `$6A04/$6A08`.
 
 ### Applying an incoming hit
 
-`sub_351E` is the central player-damage application routine. It reads the attacker pointer from victim `+$7E`, prefers attacker `+$34`, and falls back to victim `+$56` when the live descriptor is zero. It then clears the deferred field and selected hit flags, negates the damage, and calls `sub_4E6C`.
+`apply_player_damage` is the central player-damage application routine. It reads the attacker pointer from victim `+$7E`, prefers attacker `+$34`, and falls back to victim `+$56` when the live descriptor is zero. It then clears the deferred field and selected hit flags, negates the damage, and calls `adjust_player_health`.
 
 ```c
 bool apply_player_damage(Player *victim) {
@@ -173,9 +173,9 @@ bool apply_player_damage(Player *victim) {
 }
 ```
 
-`sub_333E` is the hit/KO gate. It ignores already protected hurt/death states, checks health, interprets the reaction selector in `+$7D`, and jumps through a reaction table. When health is zero, it enters the fatal path at `$33E4`: release any grabbed object, detach contact partners, orient away from the attacker, enter state `$56/$57`, and apply an upward velocity of `$FFF70000`.
+`resolve_player_hit_or_ko` is the hit/KO gate. It ignores already protected hurt/death states, checks health, interprets the reaction selector in `+$7D`, and jumps through a reaction table. When health is zero, it enters the fatal path at `$33E4`: release any grabbed object, detach contact partners, orient away from the attacker, enter state `$56/$57`, and apply an upward velocity of `$FFF70000`.
 
-Several hurt/throw paths call `sub_351E` only when the relevant animation/contact phase is reached. Thus collision detection records a pending result first; damage and animation response are synchronized later by the player's state machine.
+Several hurt/throw paths call `apply_player_damage` only when the relevant animation/contact phase is reached. Thus collision detection records a pending result first; damage and animation response are synchronized later by the player's state machine.
 
 ### Falls and out-of-bounds deaths
 
@@ -191,7 +191,7 @@ There are three distinct moments:
 
 `sub_3448` selects the byte immediately before the player's special counter. Because lives and specials are adjacent (`$FFFF20/$FFFF21` and `$FFFF23/$FFFF24`), this is the life byte. It invokes the BCD arithmetic helper at `$10DCA` with table entry `$0C`, whose packed value is `$99999999`; one `ABCD` operation therefore subtracts one from the one-byte packed-BCD life counter. It also refreshes the lives/special HUD.
 
-`sub_2B48` then behaves as follows:
+`resolve_player_death` then behaves as follows:
 
 ```c
 if (player_lives != 0) {
@@ -204,7 +204,7 @@ if (player_lives != 0) {
 }
 ```
 
-On respawn, `sub_1E0E`:
+On respawn, `player_spawn_or_respawn`:
 
 - clears stale grab/contact/death state;
 - selects a level-specific spawn point (or the current camera-relative point for respawns);
@@ -233,7 +233,7 @@ p1_specials = p2_specials = 0;
 
 ### Score-awarded extra lives
 
-Every active player frame, `sub_4D60` compares the player's six-digit packed-BCD score against a threshold chosen by `lives_via_points_ptr_p1/p2`. The ROM table at `$4DEC` contains:
+Every active player frame, `update_score_and_award_extra_life` compares the player's six-digit packed-BCD score against a threshold chosen by `lives_via_points_ptr_p1/p2`. The ROM table at `$4DEC` contains:
 
 | Threshold index | Packed value | Decimal score |
 |---:|---:|---:|
@@ -262,11 +262,11 @@ The player-mode byte is a live mask, not merely the original menu choice:
 
 When a player reaches the continue/game-over object type, the corresponding mode bit is cleared. The other player can continue alone, so one player's death does not end a two-player game.
 
-The continue UI is implemented by the dead player's object (`type $0F`) in the `$52xx-$58xx` region. Direction presses toggle the yes/no selection in object `+$63`; a face-button press confirms. `sub_5334` selects the correct player's continue, character, and status fields:
+The continue UI is implemented by the dead player's object (`type $0F`) in the `$52xx-$58xx` region. Direction presses toggle the yes/no selection in object `+$63`; a face-button press confirms. `confirm_player_continue` selects the correct player's continue, character, and status fields:
 
 - choosing **No** clears the remaining continue word and marks that player as out;
 - choosing **Yes** subtracts one continue, recreates an active player object with the selected character, restores the corresponding player-mode bit, and clears the player's extra-life threshold index;
-- `sub_565C` clears that player's score and restores lives from `2*lives_setting+1` before normal spawn logic restores health and specials.
+- `reset_player_after_continue` clears that player's score and restores lives from `2*lives_setting+1` before normal spawn logic restores health and specials.
 
 P2 also has an in-game join path at `$115CC`: if P2 is inactive, a second controller is present, Round 8 is not active, and no police special is running, Start can create P2 directly with two specials. A small table chooses a character relative to P1's character. This is separate from accepting a continue.
 
@@ -276,7 +276,7 @@ The bytes at `$FFFF22` and `$FFFF25` are persistent per-player out/continue-disp
 
 ### Activation gate
 
-`sub_3FCC` tests logical face-button bit 6 and rejects activation when any of the following is true:
+`try_activate_police_special` tests logical face-button bit 6 and rejects activation when any of the following is true:
 
 - player health is zero;
 - the round-intro sequence is active;
@@ -318,10 +318,10 @@ enemy/player hit overlaps player hurt box
 collision records attacker (+$7E) and reaction (+$7C/+$7D)
         |
         v
-sub_351E reads attacker +$34 (or deferred +$56)
+apply_player_damage reads attacker +$34 (or deferred +$56)
         |
         v
-sub_4E6C: health = clamp(health - damage, 0, 80), redraw bar
+adjust_player_health: health = clamp(health - damage, 0, 80), redraw bar
         |
         +---- health > 0 ----> hurt/knockdown state ----> regain control
         |
@@ -337,7 +337,7 @@ sub_4E6C: health = clamp(health - damage, 0, 80), redraw bar
                  |                                 |
              lives > 0                         lives == 0
                  |                                 |
-        sub_1E0E respawn                    type $0F continue UI
+        player_spawn_or_respawn respawn                    type $0F continue UI
         health=80; specials=1                      |
                                             +------+------+
                                             |             |
@@ -353,26 +353,26 @@ sub_4E6C: health = clamp(health - damage, 0, 80), redraw bar
 
 | ROM address | Current symbol | Analytical role |
 |---:|---|---|
-| `$1E0E` | `sub_00001E0E` | Spawn/respawn active player; restore health and specials. |
-| `$2B48` | `sub_00002B48` | Resolve completed death into respawn or continue object. |
-| `$3028` | `sub_00003028` | Normal-attack entry and combo continuation. |
-| `$3136` | `sub_00003136` | Find/reserve nearby grabbable object. |
-| `$322A` | `sub_0000322A` | Attack+jump chord / rear attack. |
-| `$333E` | `sub_0000333E` | Player hit/KO reaction gate. |
-| `$351E` | `sub_0000351E` | Apply pending incoming damage. |
-| `$3FCC` | `sub_00003FCC` | Validate and start police special. |
-| `$41EA` | `sub_000041EA` | Compute per-frame outgoing attack descriptor. |
-| `$4478` | `sub_00004478` | P1/P2 collision and friendly-fire resolution. |
-| `$4D60` | `sub_00004D60` | Check score thresholds and award extra lives. |
-| `$4E14` | `sub_00004E14` | Draw player lives and specials counters. |
-| `$4E6C` | `sub_00004E6C` | Saturating health adjustment and health-bar draw. |
-| `$5334` | `sub_00005334` | Confirm per-player continue selection. |
-| `$565C` | `sub_0000565C` | Reset score and configured lives after continue. |
-| `$568A` | `sub_0000568A` | Copy/remap controller input into player object. |
-| `$107F2` | `sub_000107F2` | Create active players at round start and grant two specials. |
-| `$10C88` | `sub_00010C88` | Run round clock unless paused/special-active; start time-over. |
-| `$10DCA` | `sub_00010DCA` | Packed-BCD resource adjustment helper. |
-| `$115CC` | `sub_000115CC` | P2 join and per-player continue/out HUD logic. |
+| `$1E0E` | `player_spawn_or_respawn` | Spawn/respawn active player; restore health and specials. |
+| `$2B48` | `resolve_player_death` | Resolve completed death into respawn or continue object. |
+| `$3028` | `player_normal_attack_input` | Normal-attack entry and combo continuation. |
+| `$3136` | `find_close_interaction_target` | Find/reserve nearby grabbable object. |
+| `$322A` | `player_attack_jump_chord` | Attack+jump chord / rear attack. |
+| `$333E` | `resolve_player_hit_or_ko` | Player hit/KO reaction gate. |
+| `$351E` | `apply_player_damage` | Apply pending incoming damage. |
+| `$3FCC` | `try_activate_police_special` | Validate and start police special. |
+| `$41EA` | `compute_player_attack_descriptor` | Compute per-frame outgoing attack descriptor. |
+| `$4478` | `resolve_player_vs_player_collision` | P1/P2 collision and friendly-fire resolution. |
+| `$4D60` | `update_score_and_award_extra_life` | Check score thresholds and award extra lives. |
+| `$4E14` | `draw_player_lives_and_specials` | Draw player lives and specials counters. |
+| `$4E6C` | `adjust_player_health` | Saturating health adjustment and health-bar draw. |
+| `$5334` | `confirm_player_continue` | Confirm per-player continue selection. |
+| `$565C` | `reset_player_after_continue` | Reset score and configured lives after continue. |
+| `$568A` | `remap_player_gameplay_input` | Copy/remap controller input into player object. |
+| `$107F2` | `spawn_round_players` | Create active players at round start and grant two specials. |
+| `$10C88` | `update_game_clock` | Run round clock unless paused/special-active; start time-over. |
+| `$10DCA` | `add_bcd_resource_value` | Packed-BCD resource adjustment helper. |
+| `$115CC` | `update_join_and_continue_hud` | P2 join and per-player continue/out HUD logic. |
 
 ## Remaining uncertainties and useful runtime checks
 

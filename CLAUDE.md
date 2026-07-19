@@ -106,5 +106,10 @@ PYTHONPATH=../RageDecompiler python3 -m tools iterative-disasm output/sor.asm ou
 - Do not commit `rom/SOR.bin`, build directories, CMake fetch content, or local
   output captures.
 - Generated recompilation code belongs under `generated/`.
+- Keep every manuscript in `ai-analysis/` synchronized with
+  `code-analysis/labels.csv` and `code-analysis/addresses.csv`. When a symbol is
+  added, renamed, or removed, update the corresponding prose and evidence tables
+  in the same change; do not retain a generated `sub_...` or `loc_...` name where
+  a semantic label exists.
 - Keep `MegaDriveEnvironment` changes in the sibling submodule and update the
   parent gitlink afterward.
