@@ -378,6 +378,22 @@ adjust_player_health: health = clamp(health - damage, 0, 80), redraw bar
 | `$10DCA (add_bcd_resource_value)` | Packed-BCD resource adjustment helper. |
 | `$115CC (update_join_and_continue_hud)` | P2 join and per-player continue/out HUD logic. |
 
+## Label-confidence audit and corrected legacy names
+
+Every code entry in the evidence map above is now confirmed at 100% for the
+bounded behavior stated in `labels.csv`. Remaining uncertainty about individual
+polymorphic object bits does not make those entry-point descriptions
+uncertain. Two older gameplay names required correction rather than promotion:
+
+| Address | Final finding | Decisive evidence |
+|---:|---|---|
+| `$2550 (player_reaction_type8_damage)` | Collision-reaction `$08`: apply pending damage; branch to the common fatal/KO path when health reaches zero; otherwise play sound `$A2`, write `+$41=8`, and select animation `$8A`. | It is target 8 in the reaction table rooted at `$24CC`; its body contains no P1/P2 ownership test. The former `players_beating_each_other` name described one possible producer of reaction metadata, not this routine. |
+| `$544A (clear_inactive_player_hud)` | `player_mode=0` branch of the type-`$0F` continue/out dispatcher; selects the HUD by whether `a0==$B800` and fills its two 36-byte tile regions with `$06D7`. | The four-entry table at `$5442` selects `$544A (clear_inactive_player_hud)` only for mode zero. A live probe initialized both type-`$0F` player slots with mode zero; runtime entry logging reached `$544A (clear_inactive_player_hud)` twice and all four sentinel regions `$FF600A/$FF6032/$FF605A/$FF6082` became `$06D7`. It is not the Game Over screen initializer. |
+
+The dynamic probe exercised the actual per-frame object dispatcher. It did not
+call either target directly or infer execution merely from a successful remote
+connection.
+
 ## Remaining uncertainties and useful runtime checks
 
 1. The global byte at `$FFFA43 (half_damage)` clearly modifies P1/P2 damage and is enabled for the forced duel, but the descriptor-nibble transformation should be traced with known attacks before naming its exact arithmetic contract.

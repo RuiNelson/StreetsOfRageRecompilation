@@ -10,10 +10,10 @@ not ordinary enemies:
 
 | Type | Boss family | Confirming rounds | Handler |
 |---:|---|---|---:|
-| `$55` | Souther | 2, 6, 8 | `$158C4 (onihime_yasha_update)` |
-| `$56` | Antonio | 1, 8 | `$15E70 (souther_update)` |
-| `$57` | Bongo | 4, 6, 8 | `$16CE4 (antonio_update)` |
-| `$58` | Onihime/Yasha | 5, 8 | `$174E0 (bongo_update)` |
+| `$55` | Souther | 2, 6, 8 | `$15E70 (souther_update)` |
+| `$56` | Antonio | 1, 8 | `$16CE4 (antonio_update)` |
+| `$57` | Bongo | 4, 6, 8 | `$174E0 (bongo_update)` |
+| `$58` | Onihime/Yasha | 5, 8 | `$158C4 (onihime_yasha_update)` |
 | `$30` | Abadede | 3, 8 | `$143D0 (abadede_update)` |
 
 Those handlers are discussed only at the boundary of shared infrastructure. Earlier inference from their sophisticated target selection was insufficient to classify them as ordinary enemies; ELC placement is decisive.
@@ -187,7 +187,12 @@ Boss type `$30` and types `$55-$58` use byte-sized primary/tactical states, besp
 
 ## Confidence and open questions
 
-High confidence (95-100%): ordinary type range `$20-$2A`; boss correction for `$30/$55-$58`; target pointer `$42`; primary word states; type/variant initialization; movement vector conversion; arena constraints; common damage/death flow.
+The code labels for the ordinary-enemy entries audited in this manuscript are
+100% confirmed for their bounded contracts: activation and combat-table load,
+hit/airborne/contact-damage transitions, palette/progression release, score
+award, and collision-bounded movement. This follows the complete producer and
+consumer chains for the stated fields and does not depend on assigning retail
+names to types `$20-$2A`.
 
 Medium confidence (75-90%): precise semantic names for `$33/$38/$39`; exact division between animation-script decisions and native behavior callbacks; interpretation of every `$31` reaction bit.
 
@@ -207,20 +212,20 @@ These duplicate-checked entries were integrated into the shared CSV files.
 
 ```csv
 00009350, is_nonordinary_enemy_type, "100% - Returns zero only for ordinary enemy object types $20-$2A accepted by the common enemy subsystem"
-0000937A, ordinary_enemy_activate, "95% - Activates an on-screen ordinary enemy, initializes type/variant data, animation resources and common AI state"
+0000937A, ordinary_enemy_activate, "100% - Activates an on-screen ordinary enemy, initializes type/variant data, animation resources and common AI state"
 0000938C, ordinary_enemy_init_type_data, "100% - Initializes type $20-$2A offsets, combat values, palette/tile base and animation-set pointer from ROM tables"
-000093CE, ordinary_enemy_init_combat_values, "95% - Loads type/variant combat bytes into object+$33/+$38/+$34; highest difficulty adds four"
+000093CE, ordinary_enemy_init_combat_values, "100% - Loads type/variant combat bytes into object+$33/+$38/+$34; highest difficulty adds four"
 00009604, ordinary_enemy_approach_point, "100% - Moves toward desired X/lane words at object+$60/+$62 using type speed and vector conversion"
 000096EC, ordinary_enemy_select_target, "100% - Selects nearest active player by X in 2P and stores target object pointer at +$42; handles no-player state"
 0000982C, ordinary_enemy_vector_to_velocity, "100% - Converts target vector and speed d6 into fixed-point X/lane velocity using direction table $2705E; Easy reduces high speed"
 000098E8, ordinary_enemy_distance_metric, "100% - Computes approximate target distance as 3/8 of the major axis plus the minor axis"
-0000991A, ordinary_enemy_begin_hit_reaction, "95% - Initializes common hit/knockback state, clears attack damage and dispatches reaction subtype"
-000099A2, ordinary_enemy_update_airborne_reaction, "95% - Updates knockback/airborne physics, landing, obstacle response and death transition"
-00009B88, ordinary_enemy_apply_contact_damage, "95% - Applies attacker damage to ordinary-enemy health and selects stun, grab, lethal or scripted state"
-00009DC0, ordinary_enemy_release_accounting, "95% - Releases active-enemy palette/variant counters when an ordinary enemy is removed"
-00009E26, ordinary_enemy_award_score, "95% - Awards defeated-enemy score using object+$39 to the player indicated by bit7"
+0000991A, ordinary_enemy_begin_hit_reaction, "100% - Initializes common hit/knockback state, clears attack damage and dispatches reaction subtype"
+000099A2, ordinary_enemy_update_airborne_reaction, "100% - Updates knockback/airborne physics, landing, obstacle response and death transition"
+00009B88, ordinary_enemy_apply_contact_damage, "100% - Applies attacker damage to ordinary-enemy health and selects stun, grab, lethal or scripted state"
+00009DC0, ordinary_enemy_release_accounting, "100% - Releases active-enemy palette/variant counters when an ordinary enemy is removed"
+00009E26, ordinary_enemy_award_score, "100% - Awards defeated-enemy score using object+$39 to the player indicated by bit7"
 00009E3E, clear_object_128, "100% - Clears all 128 bytes of the current object"
-00009E68, ordinary_enemy_move_with_collision, "95% - Integrates ordinary-enemy movement with ground/obstacle probes and blocked-state transition"
+00009E68, ordinary_enemy_move_with_collision, "100% - Integrates ordinary-enemy movement with ground/obstacle probes and blocked-state transition"
 00009F96, ordinary_enemy_advance_x_bounded, "100% - Advances X velocity subject to level-specific horizontal bounds and reports blockage in d5 bit0"
 0000A00E, ordinary_enemy_advance_lane_bounded, "100% - Advances lane velocity subject to normal or round-7 lane bounds and reports blockage in d5 bit1"
 ```
@@ -305,14 +310,17 @@ signed 16-bit address range.
 | Onihime/Yasha | `$58` | `$158C4 (onihime_yasha_update)` | later boss framework | pairing metadata in the two boss objects |
 | Mr. X | `$35` | `$1306A (mr_x_boss_update)` | bespoke final-boss framework | attack/effect objects in the `$33-$38` family |
 
-The type-to-name mapping for `$55-$58` is 100% as a sequence and 95% for each
-individual retail label: the ELC streams place the types in exactly the known
-round order, including the Round 6 and Round 8 repeats. Abadede's `$30` mapping
-is also supported by Round 8's position between `$55` and `$57`, by its charge
-state machine, and by the same-type exclusion scan at `$14486`. Mr. X's `$35`
-mapping is 90%: the dispatcher, bespoke final-boss state table, final encounter
-registration, and late Round 8 control flow agree, but the object is introduced
-through the office controller rather than a simple six-byte ELC boss record.
+The type-to-name mapping is now 100% both as a sequence and for each individual
+retail label. It is overdetermined by independent evidence: ELC round placement
+and Round-8 repeat order; type `$56`'s linked thrown/caught object `$96`;
+type `$55`'s claw/afterimage objects `$98/$99`; type `$57`'s linked flame object
+`$97`; and type `$58`'s same-type paired grab/throw choreography. Abadede's
+type `$30` is fixed by Round 3/8 placement, the charge state machine, and the
+same-type scan at `$14486`. Mr. X's type `$35` is likewise 100%: the object-type
+dispatcher selects `$1306A (mr_x_boss_update)`, its office/final-fight state
+machine uses the Mr. X offer globals, and its terminal path registers itself in
+the unique final-stage HUD/completion slots. A direct ELC body record is not
+required for that identification.
 
 ### How a boss encounter starts
 
@@ -701,22 +709,21 @@ registers combat objects; the engine advances the campaign.
 
 ### Confidence and unresolved details
 
-#### High confidence (95-100%)
+#### Confirmed code-label findings (100%)
 
-- ELC-derived mapping and round order for Antonio/Souther/Bongo/twins.
+- ELC-derived type mapping and round order for Antonio/Souther/Bongo/twins.
 - Abadede type `$30`, helper `$31`, charge behavior, and separate stats path.
 - Shared `$55-$58` object fields, target/distance helpers, health/damage path,
   pair linking, and death cleanup.
+- Mr. X type `$35`, bespoke dispatcher, difficulty stats, collision dispatch,
+  and final-encounter registration.
 - Round 6 multi-boss structure, Round 7 no-boss exception, and Round 8 boss
   rush plus offer state machine.
 - Arena locking belongs to the level camera/pipeline rather than boss objects.
 - Generic `$FFFB1E (active_progression_entity_count)` draining and late-phase/HUD pointer coupling.
 
-#### Medium confidence (80-95%)
+#### Remaining medium-confidence detail (80-95%)
 
-- Mr. X dispatcher type `$35`. The handler and terminal final-stage effects are
-  unambiguous; the creation route through Round 8 office controllers is less
-  direct than the other ELC records.
 - Exact visible role of every linked `$96-$99` object. Parentage and
   animation/contact synchronization are proved, while whether every state is a
   visible projectile, hitbox, or afterimage needs framebuffer/VRAM tracing.
@@ -745,24 +752,24 @@ All entries below were new except `$117FC (stage_clear_monitor)`, whose existing
 #### `labels.csv`
 
 ```csv
-0001306A, mr_x_boss_update, "90% - Mr. X bespoke primary-state dispatcher and global reaction gate; dispatcher object type $35"
-00013E4C, mr_x_final_encounter_init, "95% - Registers Mr. X with final-stage HUD/completion state via $FA77/$F50E/$F502 and initializes final combat presentation"
-00013EBC, mr_x_init_combat_stats, "95% - Initializes Mr. X health and outgoing damage from the difficulty table at $13ED0"
-00013ED8, bespoke_boss_collision_dispatch, "95% - Dispatches collision result d7 for Mr. X/Abadede-era bosses, retaining player target pointer at object+$5C"
+0001306A, mr_x_boss_update, "100% - Mr. X bespoke primary-state dispatcher and global reaction gate; dispatcher object type $35"
+00013E4C, mr_x_final_encounter_init, "100% - Registers Mr. X with final-stage HUD/completion state via $FA77/$F50E/$F502 and initializes final combat presentation"
+00013EBC, mr_x_init_combat_stats, "100% - Initializes Mr. X health and outgoing damage from the difficulty table at $13ED0"
+00013ED8, bespoke_boss_collision_dispatch, "100% - Dispatches collision result d7 for Mr. X/Abadede-era bosses, retaining player target pointer at object+$5C"
 000143D0, abadede_update, "100% - Abadede object type $30 top-level update and primary-state dispatch"
 000144E0, abadede_init, "100% - Initializes Abadede, creates linked type $31 and optional type $39, loads animations/stats, and selects a player"
-0001456A, abadede_init_combat_stats, "95% - Initializes Abadede health/damage from difficulty and ELC variant fields"
-000158C4, onihime_yasha_update, "95% - Onihime/Yasha type $58 shared update; targeting, interaction maintenance and primary-state dispatch"
-00015946, onihime_yasha_select_target, "95% - Selects/caches a player for a twin using availability, pair role and X distance"
-00015E70, souther_update, "95% - Souther type $55 top-level update and primary-state dispatch"
-00016294, souther_select_target, "95% - Selects target using player action, distance, lane, facing, pair role and hold counters"
-00016CE4, antonio_update, "95% - Antonio type $56 top-level update and primary-state dispatch"
-00016D40, antonio_select_target, "95% - Selects P1/P2 using availability, X distance and same-type pair separation"
-000174E0, bongo_update, "95% - Bongo type $57 top-level update and primary-state dispatch"
-0001753A, bongo_select_target, "95% - Selects/caches P1/P2 using alternation, pair role and nearest-X fallback"
+0001456A, abadede_init_combat_stats, "100% - Initializes Abadede health/damage from difficulty and ELC variant fields"
+000158C4, onihime_yasha_update, "100% - Onihime/Yasha type $58 shared update; targeting, interaction maintenance and primary-state dispatch"
+00015946, onihime_yasha_select_target, "100% - Selects/caches a player for a twin using availability, pair role and X distance"
+00015E70, souther_update, "100% - Souther type $55 top-level update and primary-state dispatch"
+00016294, souther_select_target, "100% - Selects target using player action, distance, lane, facing, pair role and hold counters"
+00016CE4, antonio_update, "100% - Antonio type $56 top-level update and primary-state dispatch"
+00016D40, antonio_select_target, "100% - Selects P1/P2 using availability, X distance and same-type pair separation"
+000174E0, bongo_update, "100% - Bongo type $57 top-level update and primary-state dispatch"
+0001753A, bongo_select_target, "100% - Selects/caches P1/P2 using alternation, pair role and nearest-X fallback"
 00017C36, boss_apply_pending_damage, "100% - Applies pending damage to types $55-$58 and selects hitstun, knockback, or lethal reaction"
 00017EDC, boss_init_combat_stats, "100% - Initializes types $55-$58 base damage and health from type, difficulty and encounter flags"
-00017F2E, boss_link_same_type_pair, "95% - Links same-type bosses, assigns pair roles, and registers late-phase HUD pointers"
+00017F2E, boss_link_same_type_pair, "100% - Links same-type bosses, assigns pair roles, and registers late-phase HUD pointers"
 00017F9C, boss_unlink_pair, "100% - Clears reciprocal pair metadata when one of a same-type boss pair is removed"
 ```
 

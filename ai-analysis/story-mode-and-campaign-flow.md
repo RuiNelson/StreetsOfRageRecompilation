@@ -291,6 +291,14 @@ The offer state is used in two ways:
 - as a byte index into `$120AA (mr_x_offer_control_table)`, which determines whether control is blocked, enabled, or waiting for a choice;
 - doubled to index `$11B94 (mr_x_offer_jt)`.
 
+The control-table interpretation is now 100% confirmed by its two independent
+consumers. `$11B54` distinguishes values `0`, `1`, and `2` to release control,
+set the player-lock bits, or zero player input respectively. `$120F6` tests bit
+7 of the same indexed byte before accepting the left/right/face-button choice.
+The ROM bytes contain ordinary `$01/$02/$00` phases plus `$81` choice-enabled
+phases, so `$120AA (mr_x_offer_control_table)` is a per-state control/choice
+policy table rather than code or dialogue data.
+
 The observable phases include:
 
 - stopping the players and the game clock;

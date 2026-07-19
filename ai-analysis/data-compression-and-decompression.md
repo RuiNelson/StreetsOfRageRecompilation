@@ -422,6 +422,14 @@ Practical invariants for a native reimplementation or data extractor are:
 
 ## Confidence and open questions
 
+All code labels listed in the analysis-data ledger below are now confirmed at
+100% for their stated entry-point contracts. In particular, the producer at
+`$8454 (queue_nemesis_art_cues)` and the resumable consumers at `$84BA/$8510`
+agree on the six-byte queue format, while `$19848 (load_level_graphics_maps_and_camera)`
+has a complete per-level table walk through both codecs and both calls to the
+camera-plane initializer. The broader content labels in the medium-confidence
+section remain separate visual/asset-identification questions.
+
 ### High confidence (95-100%)
 
 - Identification of Nemesis, Enigma, and Kosinski.
@@ -468,13 +476,13 @@ New entries:
 00008280, nemesis_build_decode_table, "100% - Expands the Nemesis stream prefix-code header into the 256-entry direct lookup table at $FFF600"
 000082D2, enigmadec_with_plane_header, "100% - Copies an 8-byte plane header from (a0)+ to (a1)+, then falls through to the Enigma tilemap decoder"
 000082D6, enigmadec, "100% - Enigma tilemap decompressor; a0=stream, a1=word destination, d0=base tile; returns source even-aligned"
-00008454, queue_nemesis_art_cues, "95% - Resolves an art-set index through the table at $8672 and appends 6-byte Nemesis source/VRAM-destination records at $FFDCD0"
+00008454, queue_nemesis_art_cues, "100% - Resolves an art-set index through the table at $8672 and appends 6-byte Nemesis source/VRAM-destination records at $FFDCD0"
 000084BA, begin_incremental_nemesis_decode, "100% - Initializes the queued Nemesis stream, lookup table, XOR writer and resumable state for VBlank art upload"
 00008510, continue_incremental_nemesis_decode, "100% - Resumes queued Nemesis-to-VRAM decoding for at most five tiles (160 bytes) per VBlank and advances/completes the queue"
 0000A63A, load_nemesis_art_bundle, "100% - Processes four packed art IDs; selects VDP command/source records from $A662 and Nemesis-decompresses each directly to VRAM"
 0000A82A, load_enigma_map_bundle, "100% - Processes four packed map IDs; selects destination/source/base records at $A85A and decodes headered Enigma maps"
 0000B748, load_kosinski_story_asset, "100% - Selects a Kosinski source and RAM destination from the 8-byte record table at $B768 and decompresses it"
-00019848, load_level_graphics_maps_and_camera, "95% - Loads the per-level mixed-codec graphics/maps package, builds plane data, and initializes both camera structures"
+00019848, load_level_graphics_maps_and_camera, "100% - Loads the per-level mixed-codec graphics/maps package, builds plane data, and initializes both camera structures"
 ```
 
 Suggested corrections to existing comments:

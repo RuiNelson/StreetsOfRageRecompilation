@@ -384,6 +384,27 @@ void apply_pickup_effect(Player *p, unsigned effect) {
 | `$10DA6 (sub_00010DA6)` | Add three-byte packed-BCD score value. |
 | `$10DCA (add_bcd_resource_value)` | Add one-byte packed-BCD life/special value using predecrement. |
 
+## Code-label confirmation audit
+
+The formerly conservative confidence values on the weapon/prop entry points
+are now 100% for the contracts stated in `labels.csv`. The confirmation is
+structural: `$21E6 (player_release_thrown_weapon)` issues command 3 only to
+carried types `$08/$0C`; `$5D84 (launch_released_weapon)` consumes command 3
+and installs facing-dependent position/velocity; `$5E2E (update_held_weapon)`
+owns the shared holder link and attach/drop/throw transitions. The type
+dispatcher fixes `$6114 (bottle_weapon_dispatcher)`, `$61BE (bottle_shard_dispatcher)`,
+and `$6256 (pepper_spray_weapon_dispatcher)` to types `$09/$1E/$0C`.
+`$614E (break_bottle_into_shards)` changes the bottle art and creates exactly
+three type-`$1E` objects, while the shard handler applies gravity and deletes
+on landing. Finally, `$6A70 (delete_pickup_behind_camera)` contains the explicit
+normal/Round-8 boundary comparison, and `$6C84 (breakable_type19_dispatcher)`
+is the type-`$19` state dispatcher whose impact path installs bounce velocity,
+timer, airborne flag, and eventual deletion.
+
+This does not resolve the separate visual question of which ELC container owns
+every hidden reward; that relationship is external to the local type-`$19`
+dispatcher and remains correctly listed below.
+
 ## Uncertainties and recommended traces
 
 1. Trace the pipe and bat landing states to count their exact remaining-use rules after each floor impact.

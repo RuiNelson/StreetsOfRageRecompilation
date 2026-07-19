@@ -320,6 +320,16 @@ Left/Right adjust the global `$FFFF02 (level)` word (0 = first round). That valu
 
 Confirmed layout: **Adam · Axel · Blaze** (left to right). Note that the stored **character ID** is not the same as the screen slot index (Axel is ID `0` but stands in the middle).
 
+`$1A44 (char_select_portrait_setup)` is the type-7 state-zero handler, not a
+gameplay player-position routine. The table at `$1A20` dispatches portrait
+state zero to `$1A44 (char_select_portrait_setup)`; the routine selects the
+character-specific animation pointer, writes X/lane/height, advances `+$30`,
+and starts the idle animation. A live remote run reached character select by
+normal input and observed the three type-7 objects after this handler:
+`$FFB900 (object_table)` ID 1 at `(48,32,192)`, `$B980` ID 0 at `(176,32,192)`, and `$BA00`
+ID 2 at `(280,32,192)`. This disconfirms the former `set_player_position`
+label and confirms the portrait-specific name.
+
 6. Load character art (`$A63A (load_nemesis_art_bundle)`, Kosinski `$71C6C`, UI tilemaps via `sub_A8B8`).
 
 ### 7.3 Update — `$170A (screen_state_dispatcher)`
@@ -475,6 +485,7 @@ Downstream consumers:
 | `$19FC (char_select_cursor_x)` | X = `$20/$80/$E0` |
 | `$1A0E (char_id_from_slot)` | Slot → ID: 0→Adam(1), 1→Axel(0), 2→Blaze(2) |
 | `$1A02 (char_portrait_object_ptrs)` | → `$B900/$B980/$BA00` |
+| `$1A44 (char_select_portrait_setup)` | Initialize one type-7 portrait's character-specific position, animation, and first active state. |
 | `$1C684 (options_sound_name_table)` | 12-byte name rows for sound test |
 | `$1C9FC (options_control_strings)` | Control-scheme descriptions |
 

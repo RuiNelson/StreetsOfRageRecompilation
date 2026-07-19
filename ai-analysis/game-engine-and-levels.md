@@ -827,7 +827,31 @@ entirely by data. The engine is data-driven, but not data-only.
 
 ---
 
-## 11. Remaining uncertainties and useful next experiments
+## 11. Code-label confirmation audit
+
+The open descriptor-field questions above are intentionally narrower than the
+code labels. The following previously sub-100% entries are now confirmed for
+their stated, bounded behavior:
+
+| Address | Confirmed boundary | Direct evidence |
+|---:|---|---|
+| `$464 (level_flow_handler)` | Late-phase entity-drain, art, music, palette, and status gates in `$FFFA72 (level_flow_flags)`. | Every read/write is a bit operation on `$FFFA72 (level_flow_flags)` or a documented phase side effect; it is pipeline state `$16`. |
+| `$576 (load_level_data)` | Select the six-byte per-level record at `$1C378 (level_resource_table)`, process its pointer, and leave its trailing parameters to the caller. | `level*6`, `(a3)+` longword, call `$1053E`, then return with `a3` advanced four bytes. |
+| `$E5C (start_round_setup)` | Decode the selected ELC stream, choose the effective difficulty, seed the first wave descriptor, and create the round-specific fixed objects. | The level-indexed `$1B036 (level_elc_offset_table)` decode to `$FF6800 (elc_buffer)` and all eight level branches are explicit. |
+| `$810 (prepare_next_spawn_section)` | Split the next length-prefixed ELC section and compact records that pass difficulty/player-count gates. | The word length advances `$FFFC14 (display_list_head)`; surviving six-byte records are copied in place until `$99`. |
+| `$936 (select_deferred_spawn)` | Scan the filtered section and select a record whose ordinary-enemy palette/art residency can be satisfied. | Record/type checks feed the `$FFFA60..$FFFA70` residency counters and save the selected pointer at `$FFFC28 (pending_spawn_record_ptr)`. |
+| `$B76 (load_deferred_spawn_art_and_spawn)` | Finish any required resource load, spawn the selected record, and compact the remainder over it. | It waits for `$FFDCD0 (art_array_cue)`, calls the resource loader/spawner, then shifts six-byte records through the `$99` terminator. |
+| `$8454 (queue_nemesis_art_cues)` | Resolve an art-set list and append six-byte source/destination records to the incremental Nemesis queue. | The producer and `$84BA/$8510` consumer agree on the exact longword-source/word-VRAM record layout. |
+| `$18F32 (advance_round7_vertical_wave)` | Consume the round-7 wave request and start its vertical-camera transition. | It clears the request, increments `$FFFF04 (wave)`, and writes the round-7 camera/transition flags and bounds. |
+| `$19848 (load_level_graphics_maps_and_camera)` | Load the per-level mixed-codec graphics/map package and initialize both camera-plane structures. | Its fixed table walk performs two Kosinski uploads, two Enigma RAM decodes, map construction, then two calls to `$19922 (init_camera_plane)`. |
+
+These confirmations do not assign names to every byte inside a resource
+descriptor; they establish the entry points and observable contracts actually
+recorded in `labels.csv`.
+
+---
+
+## 12. Remaining uncertainties and useful next experiments
 
 1. **ELC framing after the timed section.** The length-prefixed and `$99`-ended
    behavior is clear in code, but a fully decoded dump of all eight decompressed
