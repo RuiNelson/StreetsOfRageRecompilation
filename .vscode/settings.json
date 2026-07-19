@@ -8,5 +8,8 @@
     "files.associations": {
         "*.hpp": "cpp",
         "*.cpp": "cpp"
-    }
+    },
+    "cSpell.words": [
+        "initialises"
+    ]
 }

@@ -3,6 +3,7 @@
 ; statically due to indirect jumps (jump tables, function pointers).
 ; Format: one 6-digit uppercase hex address per line.
 
+0003A2
 000436
 000464
 0004CA
