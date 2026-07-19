@@ -310,7 +310,7 @@ Left/Right adjust the global `$FFFF02 (level)` word (0 = first round). That valu
 | P1 | `$FFB800 (p1_object)` `$FFB800 (p1_object)` | 6 | **0** (left) | `$20` | Adam |
 | P2 (if `player_mode == 3`) | `$FFB880 (p2_object)` `$FFB880 (p2_object)` | 6 | **2** (right) | `$E0` | Blaze |
 
-5. Spawn **portraits** (object type **7**), left → right on screen:
+5. Spawn **animated full-body character previews** (object type **7**), left → right on screen. The large static face portraits above them are separate screen art, not these objects:
 
 | Screen order | Slot | Base | Type | ID at `+$50` | Character |
 |--------------|------|------|------|--------------|-----------|
@@ -320,15 +320,19 @@ Left/Right adjust the global `$FFFF02 (level)` word (0 = first round). That valu
 
 Confirmed layout: **Adam · Axel · Blaze** (left to right). Note that the stored **character ID** is not the same as the screen slot index (Axel is ID `0` but stands in the middle).
 
-`$1A44 (char_select_portrait_setup)` is the type-7 state-zero handler, not a
-gameplay player-position routine. The table at `$1A20` dispatches portrait
-state zero to `$1A44 (char_select_portrait_setup)`; the routine selects the
-character-specific animation pointer, writes X/lane/height, advances `+$30`,
-and starts the idle animation. A live remote run reached character select by
-normal input and observed the three type-7 objects after this handler:
+`$1A44 (char_select_character_preview_setup)` is the type-7 state-zero handler,
+not a gameplay player-position or static-portrait routine. The table at `$1A20`
+dispatches preview state zero to `$1A44 (char_select_character_preview_setup)`;
+the routine selects the character-specific animation pointer, writes
+X/lane/height, advances `+$30`, and starts the idle animation. A live remote run
+reached character select by normal input and observed the three type-7 objects
+after this handler:
 `$FFB900 (object_table)` ID 1 at `(48,32,192)`, `$B980` ID 0 at `(176,32,192)`, and `$BA00`
-ID 2 at `(280,32,192)`. This disconfirms the former `set_player_position`
-label and confirms the portrait-specific name.
+ID 2 at `(280,32,192)`. A framebuffer capture shows these coordinates belong
+to the three animated, full-body fighters in the lower grid, while the face
+portraits occupy the separate upper panels. This disconfirms both the former
+`set_player_position` name and the intermediate `char_select_portrait_setup`
+name.
 
 6. Load character art (`$A63A (load_nemesis_art_bundle)`, Kosinski `$71C6C`, UI tilemaps via `sub_A8B8`).
 
@@ -339,7 +343,7 @@ Indexed by `$FFF904 (char_select_substate)`, table `$171A (char_select_jt)`:
 | `$FFF904 (char_select_substate)` | Handler | Role |
 |---------|---------|------|
 | `$00` | `$1726 (char_select_play_music)` | Queue select BGM; run one object pass |
-| `$02` | `$1738 (char_select_fade_in)` | Wait fade-in; enable portrait anim flags |
+| `$02` | `$1738 (char_select_fade_in)` | Wait fade-in; enable character-preview animation flags |
 | `$04` | `$175A (char_select_interactive)` | Main loop: objects + wait for confirms |
 | `$06` | `$1788 (char_select_exit_delay)` | Count down `$FFF90A (char_select_exit_delay)` |
 | `$08` | `$1794 (char_select_fade_out)` | Palette fade-out |
@@ -351,11 +355,11 @@ Each frame during interactive select:
 
 1. For P1 and P2 slots: if type ≠ 0, dispatch via object-type jump table `$B236`
 2. Copy held/press input into object fields
-3. Process portrait objects in the object table
+3. Process animated character-preview objects in the object table
 4. `$10514 (sync_z80_2)` (VBlank wait)
 
 Type **6** = cursor selection logic (`$1916 (char_select_player_input)`).
-Type **7** = portrait animation / DMA frames.
+Type **7** = animated full-body character preview / DMA frames.
 
 ### 7.5 Cursor input — `$1916 (char_select_player_input)`
 
@@ -377,7 +381,7 @@ left  ($19EA):  0→2, 2→1, 1→0
 
 In 2P mode, if the destination slot equals the other player’s `$58`, the code steps **again** so both cannot claim the same character.
 
-On move: clear old portrait highlight (`+$5C`), set new highlight, update X from `$19FC (char_select_cursor_x)` (`$20` / `$80` / `$E0`), refresh name palettes, play UI sound.
+On move: clear the old preview selection (`+$5C`), select the new preview, update X from `$19FC (char_select_cursor_x)` (`$20` / `$80` / `$E0`), refresh name palettes, play UI sound.
 
 **Confirm** (face/Start, `$55 & $F0`):
 
@@ -484,8 +488,8 @@ Downstream consumers:
 | `$19E4 (char_select_nav_right)` / `$19EA (char_select_nav_left)` | Slot wrap tables |
 | `$19FC (char_select_cursor_x)` | X = `$20/$80/$E0` |
 | `$1A0E (char_id_from_slot)` | Slot → ID: 0→Adam(1), 1→Axel(0), 2→Blaze(2) |
-| `$1A02 (char_portrait_object_ptrs)` | → `$B900/$B980/$BA00` |
-| `$1A44 (char_select_portrait_setup)` | Initialize one type-7 portrait's character-specific position, animation, and first active state. |
+| `$1A02 (char_preview_object_ptrs)` | → `$B900/$B980/$BA00` animated full-body previews |
+| `$1A44 (char_select_character_preview_setup)` | Initialize one type-7 character preview's position, animation, and first active state. |
 | `$1C684 (options_sound_name_table)` | 12-byte name rows for sound test |
 | `$1C9FC (options_control_strings)` | Control-scheme descriptions |
 
@@ -516,7 +520,7 @@ Downstream consumers:
 ```
  $00  music + objects
  $02  fade in
- $04  interactive (type 6 cursors + type 7 portraits)
+ $04  interactive (type 6 cursors + type 7 character previews)
         │ all players confirmed ($F908)
  $06  short delay
  $08  fade out
