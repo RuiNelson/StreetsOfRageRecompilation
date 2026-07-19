@@ -423,7 +423,59 @@ void advanceCampaignAfterTally() {
 
 ---
 
-## 11. Conclusions
+## 11. Dynamic verification with `megadrive-remote`
+
+The story-opening analysis was checked against a fresh, naturally booted game process through the typed `megadrive_remote` client. The test did not call `restart_game`, inject controller input, patch ROM, or write RAM. It used read-only state queries, VSync waits, VDP inspection, and framebuffer captures.
+
+### 11.1 Observed timeline state
+
+The first connection was made while the opening was already running:
+
+| Field | Observed value | Static interpretation |
+|---|---:|---|
+| `game_state` (`$FFFF00`) | `$0006` | `game_mode_intro` |
+| `story_scene_step` (`$FFFA30`) | `$05` | current timeline entry |
+| `story_scene_last_step` (`$FFFA31`) | `$16` | last opening entry loaded from config 0 |
+| `story_scene_next_state` (`$FFFA33`) | `$00` | configured completion state |
+| `story_scene_timer` (`$FFFB06`) | `$01EA` | 490 frames remaining for the current object |
+| `story_scene_script_ptr` (`$FFFC24`) | `$0003F690` | opening timeline selected by `$3F680` |
+
+Samples were then taken every 60 VSyncs. During timeline step 5, `story_scene_timer` decreased from 490 to 9. Once it expired, `story_scene_step` advanced first to 6 and then to 7; the next long-duration object loaded a timer of 888. This behavior directly matches `story_scene_timeline_update` at `$B6DE`: wait for `$FB06` to reach zero, increment `$FFFA30`, read the next eight-byte script record, and install its timer and object parameters.
+
+### 11.2 Visual and VDP evidence
+
+The captured framebuffer was consistently `320x224`. The coherent VDP snapshot reported:
+
+- active display: `320x224`;
+- 64 CRAM palette entries;
+- 80 decoded SAT entries;
+- Plane A tilemap: `64x64` cells.
+
+The captures showed three distinct phases:
+
+1. Japanese narrative text over the night-time city panorama;
+2. the horizontally moving city panorama after the text disappeared;
+3. a black transition frame while the timeline advanced to the next scene object.
+
+Every sampled framebuffer had a different SHA-256 digest, including while `story_scene_step` remained at 5. The scene therefore continued animating during the per-object wait rather than remaining visually static until the next timeline entry.
+
+### 11.3 Natural completion route
+
+After the opening completed without input, a later read reported:
+
+```text
+game_state = $0016
+demo_mode  = $01
+level      = $0000
+```
+
+The runtime log also reached `start_round_setup`. This confirms the complete natural route described in section 3: opening state `$06` uses config 0 with next state `$00`; `game_mode_intro` recognizes that completion value, enables `demo_mode`, supplies the scripted input pointers, and enters attract-mode gameplay on level 0.
+
+The dynamic run therefore confirms the manuscript's central claims about the narrative animation: its global state, timeline variables, timer behavior, script pointer, changing visual output, and natural transition into attract mode.
+
+---
+
+## 12. Conclusions
 
 - The campaign's persistent unit of progress is `level`; `wave` describes only progress within a round.
 - Normal advancement between rounds belongs to the round-clear screen, not to the logic that defeats the boss.
@@ -433,6 +485,6 @@ void advanceCampaignAfterTally() {
 - The final narrative choice is reduced to one byte, `bad_ending_selected`, read at a single routing point after round 8.
 - The recompiled C++ deliberately preserves this ROM/RAM architecture, so understanding story mode still requires tracing the original addresses and jump tables.
 
-## 12. Future work
+## 13. Future work
 
 A dynamic analysis can complete the 2P matrix for Mr. X's offer. The ideal test would record, for every combination of answers, the per-frame values of `$FFDE04`, `$FFDE10`, P1/P2 `object+$59`, `$FFFF18`, `$FFFF34`, `$FFFF36`, and `game_state`. This would make it possible to name the two remaining flags with 100% confidence and document exactly when the special route returns to round 6.
