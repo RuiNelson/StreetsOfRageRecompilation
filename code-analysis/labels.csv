@@ -254,7 +254,7 @@
 00003FCC, try_activate_police_special, "98% - Validates special-button, counter, round and global gates; consumes one special and starts the police event"
 000041EA, compute_player_attack_descriptor, "95% - Derives active per-frame attack damage low nibble and hit-property high nibble from action, character and animation frame"
 00004478, resolve_player_vs_player_collision, "95% - In 2P, intersects player body/attack boxes and records friendly-fire or push/grab reactions"
-00004D60, update_score_and_award_extra_life, "98% - Checks per-player BCD score against the $4DEC threshold table, awards a life, and advances the threshold index"
+00004D60, update_score_hud_and_check_extra_life, "100% - Checks the player's BCD score against the next $4DEC threshold, conditionally awards a life, advances the threshold index, and redraws all six score digits"
 00004E14, draw_player_lives_and_specials, "98% - Writes the selected player's lives and special counters to HUD tiles"
 00004E6C, adjust_player_health, "100% - Adds signed d7 to player +$32, clamps to 0..$50, and redraws the health bar"
 00005334, confirm_player_continue, "95% - Applies Yes/No continue choice for the owning player; consumes a continue and rebuilds the active player on Yes"

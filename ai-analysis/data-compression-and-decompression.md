@@ -8,9 +8,9 @@ Three Sega-era formats are present:
 
 | Format | Main entry points | Natural output | Principal uses |
 |---|---:|---|---|
-| Nemesis | `$008192`, `$0081A4`; incremental path `$0084BA`/`$008510` | 4-bpp tile rows (or arbitrary nibble streams) | Tile art, enemy load cues, HUD/status graphics |
-| Enigma | `$0082D2`, `$0082D6` | 16-bit tilemap words | Plane maps, level maps, UI maps |
-| Kosinski | `$0085A2` | Arbitrary bytes | Art, maps, level data, demo input, ending assets, Z80 driver |
+| Nemesis | `$8192 (nemesisdec_vram)`, `$81A4 (nemesisdec_ram)`; incremental path `$84BA (begin_incremental_nemesis_decode)`/`$8510 (continue_incremental_nemesis_decode)` | 4-bpp tile rows (or arbitrary nibble streams) | Tile art, enemy load cues, HUD/status graphics |
+| Enigma | `$82D2 (enigmadec_with_plane_header)`, `$82D6 (enigmadec)` | 16-bit tilemap words | Plane maps, level maps, UI maps |
+| Kosinski | `$85A2 (kosinskidec)` | Arbitrary bytes | Art, maps, level data, demo input, ending assets, Z80 driver |
 
 The division is deliberate. Nemesis exploits repeated pixel nibbles, Enigma exploits repeated or sequential tile indices and shared attribute bits, and Kosinski is a general LZ back-reference codec.
 
@@ -20,10 +20,10 @@ All addresses below are ROM addresses unless explicitly prefixed with `FF`/`A0`/
 
 The game has two visibly different loading paths:
 
-1. **Blocking loads during screen or level setup.** Nemesis, Enigma, or Kosinski runs to completion, usually into `$FF8000` or directly into the VDP data port.
+1. **Blocking loads during screen or level setup.** Nemesis, Enigma, or Kosinski runs to completion, usually into `$FF8000 (decompression_scratch_buffer)` or directly into the VDP data port.
 2. **Incremental Nemesis art loads during gameplay.** A queue of `(compressed source, VRAM destination)` records is consumed at no more than five tiles (160 uncompressed bytes) per VBlank.
 
-The buffer formerly named `nemesis_dec_buffer` at `$FF8000` is not Nemesis-specific; `addresses.csv` now calls it `decompression_scratch_buffer`. It is a general scratch area used by all three formats. Kosinski commonly receives `a1=$FF8000`; Nemesis RAM mode and Enigma commonly receive their destination in `a4` and `a1`, respectively.
+Earlier notes treated `$FF8000 (decompression_scratch_buffer)` as Nemesis-specific. The current name reflects that it is a general scratch area used by all three formats. Kosinski commonly receives `a1=$FF8000`; Nemesis RAM mode and Enigma commonly receive their destination in `a4` and `a1`, respectively.
 
 The codecs do not allocate memory, carry bounds, or validate malformed streams. Correct source, destination, and sufficient output space are contracts imposed by each call site.
 
@@ -33,14 +33,14 @@ The codecs do not allocate memory, carry bounds, or validate malformed streams. 
 
 The common decoder begins at `$0081AE`. Two public entries select the output writer:
 
-| Address | Proposed name | Inputs | Destination |
-|---:|---|---|---|
-| `$008192` | `nemesisdec_vram` | `a0` = compressed stream; VDP command already selected | `a4=$C00000`, no address-register increment |
-| `$0081A4` | `nemesisdec_ram` | `a0` = compressed stream; `a4` = RAM destination | `(a4)+` |
+| Reference | Inputs | Destination |
+| --- | --- | --- |
+| `$8192 (nemesisdec_vram)` | `a0` = compressed stream; VDP command already selected | `a4=$C00000`, no address-register increment |
+| `$81A4 (nemesisdec_ram)` | `a0` = compressed stream; `a4` = RAM destination | `(a4)+` |
 
-The existing `labels.csv` address `$018192` for `nemesisdec_vram` is a typo. There is no decompressor at `$018192`; the relevant entry is `$008192`.
+The existing `labels.csv` address `$018192` for `$8192 (nemesisdec_vram)` is a typo. There is no decompressor at `$018192`; the relevant entry is `$8192 (nemesisdec_vram)`.
 
-Both entries preserve `d0-a1/a3-a5` with `movem`. The decoder uses a 512-byte lookup table at `$FFF600` (`mem_ram+$F600`), built by `$008280`. The RAM entry does **not** take its destination in `a1`; callers consistently preload `a4`.
+Both entries preserve `d0-a1/a3-a5` with `movem`. The decoder uses a 512-byte lookup table at `$FFF600 (nemesis_decode_table)` (`mem_ram+$F600`), built by `$8280 (nemesis_build_decode_table)`. The RAM entry does **not** take its destination in `a1`; callers consistently preload `a4`.
 
 ### Stream header
 
@@ -64,7 +64,7 @@ If bit 15 is set, the entry advances the writer address by ten bytes, selecting 
 
 ### Code table
 
-After the header comes a canonical prefix-code description. `$008280` expands it into the direct lookup table at `$FFF600`:
+After the header comes a canonical prefix-code description. `$8280 (nemesis_build_decode_table)` expands it into the direct lookup table at `$FFF600 (nemesis_decode_table)`:
 
 ```text
 group byte:
@@ -90,7 +90,7 @@ bits 3..0 = pixel nibble
 
 ### Data bitstream and inline escape
 
-The payload is read MSB-first. `$0081DC` peeks the next eight bits and normally resolves them through `$FFF600`. The decoder then emits one through eight copies of the token's low nibble into the 32-bit row accumulator `d4`.
+The payload is read MSB-first. `$0081DC` peeks the next eight bits and normally resolves them through `$FFF600 (nemesis_decode_table)`. The decoder then emits one through eight copies of the token's low nibble into the 32-bit row accumulator `d4`.
 
 Prefixes `$FC-$FF` are reserved. `$008228` consumes six one-bits and then reads a raw seven-bit token with the same `rrr0vvvv` meaning (three repeat bits and four value bits). This escape permits values that are not economical enough to appear in the stream's prefix table.
 
@@ -135,9 +135,9 @@ The encoder guarantees that a token does not overrun the eight-nibble row bounda
 
 ### Direct consumers
 
-`$00A63A` is a four-ID bundle loader. Each nonzero byte in `d0` selects an eight-byte record from the table at `$00A662`: a VDP command long and a Nemesis source pointer. It then calls `$008192`, so these art streams decode directly to VRAM.
+`$A63A (load_nemesis_art_bundle)` is a four-ID bundle loader. Each nonzero byte in `d0` selects an eight-byte record from the table at `$00A662`: a VDP command long and a Nemesis source pointer. It then calls `$8192 (nemesisdec_vram)`, so these art streams decode directly to VRAM.
 
-`start_round_setup` at `$000E5C` selects one Nemesis stream per level through the relative-word table at `$01B036`, sets `a4=$FF6800`, and calls `$0081A4`. The resulting data is the enemy load-cue data consumed during that round, demonstrating that Nemesis is a nibble-stream codec rather than a tile-only API.
+`$E5C (start_round_setup)` selects one Nemesis stream per level through the relative-word table at `$1B036 (level_elc_offset_table)`, sets `a4=$FF6800`, and calls `$81A4 (nemesisdec_ram)`. The resulting data is the enemy load-cue data consumed during that round, demonstrating that Nemesis is a nibble-stream codec rather than a tile-only API.
 
 ROM validation gives the following enemy-load-cue sizes:
 
@@ -163,43 +163,43 @@ The exact visual identity of every `$010E42` region remains less certain than th
 
 The gameplay path avoids decompressing large art streams in one frame:
 
-1. `$008454` receives an art-set index in `d0`, resolves a relative list through the table rooted at `$008672`, and appends six-byte records to `$FFDCD0`: a source long plus a VRAM-destination word.
-2. `$0084BA` starts the queue head when no stream is active. It reads the Nemesis header, selects normal/XOR output, builds `$FFF600`, primes the 16-bit payload buffer, and saves decoder state in `$FFDD10-$FFDD28`.
-3. `$008510`, called from the VBlank handler path at `$01A07C`, selects the queued VRAM address and resumes the decoder.
+1. `$8454 (queue_nemesis_art_cues)` receives an art-set index in `d0`, resolves a relative list through the table rooted at `$008672`, and appends six-byte records to `$FFDCD0 (art_array_cue)`: a source long plus a VRAM-destination word.
+2. `$84BA (begin_incremental_nemesis_decode)` starts the queue head when no stream is active. It reads the Nemesis header, selects normal/XOR output, builds `$FFF600 (nemesis_decode_table)`, primes the 16-bit payload buffer, and saves decoder state in `$FFDD10-$FFDD28`.
+3. `$8510 (continue_incremental_nemesis_decode)`, called from the VBlank handler path at `$01A07C`, selects the queued VRAM address and resumes the decoder.
 4. One call decodes at most five tiles. It sets `a5=8` for each tile, reuses the common nibble decoder, decrements the remaining tile count, and advances the stored VRAM address by `$00A0` after a full five-tile slice (`5 * 32` bytes).
 5. On completion `$008592` shifts the following six-byte records toward the queue head.
 
-`game_mode_ingame` calls `$0084BA` once per update to start pending work; VBlank calls `$008510` to make bounded progress. This separation is the important scheduling property: table construction and stream setup occur in game time, while VDP writes occur in the safe display interval.
+`$1087A (game_mode_ingame)` calls `$84BA (begin_incremental_nemesis_decode)` once per update to start pending work; VBlank calls `$8510 (continue_incremental_nemesis_decode)` to make bounded progress. This separation is the important scheduling property: table construction and stream setup occur in game time, while VDP writes occur in the safe display interval.
 
 The saved state has the following observed meanings:
 
 | RAM | Width | Meaning |
 |---:|---:|---|
-| `$FFDCD0` | long | Queue-head source pointer; while active, the current compressed-stream cursor |
-| `$FFDCD4` | word | Current VRAM byte destination |
-| `$FFDD10` | long | Selected normal/XOR writer address |
+| `$FFDCD0 (art_array_cue)` | long | Queue-head source pointer; while active, the current compressed-stream cursor |
+| `$FFDCD4 (nemesis_art_vram_destination)` | word | Current VRAM byte destination |
+| `$FFDD10 (nemesis_incremental_writer)` | long | Selected normal/XOR writer address |
 | `$FFDD14` | long | Saved `d0` decode scratch/state |
 | `$FFDD18` | long | Saved `d1` decode scratch/state |
-| `$FFDD1C` | long | XOR previous-row accumulator (`d2`) |
-| `$FFDD20` | long | Payload bit buffer (`d5`, low word significant) |
-| `$FFDD24` | long | Number of valid bits (`d6`, low word significant) |
-| `$FFDD28` | word | Tiles remaining |
-| `$FFDD2A` | word | Per-call tile budget, reloaded to 5 |
+| `$FFDD1C (nemesis_incremental_xor_row)` | long | XOR previous-row accumulator (`d2`) |
+| `$FFDD20 (nemesis_incremental_bit_buffer)` | long | Payload bit buffer (`d5`, low word significant) |
+| `$FFDD24 (nemesis_incremental_bits_remaining)` | long | Number of valid bits (`d6`, low word significant) |
+| `$FFDD28 (nemesis_incremental_tiles_remaining)` | word | Tiles remaining |
+| `$FFDD2A (nemesis_incremental_tile_budget)` | word | Per-call tile budget, reloaded to 5 |
 
 ## Enigma
 
 ### Identification and entry points
 
-The unlabeled routine at `$0082D6` is the standard Enigma tilemap decompressor. Its operation families, inline tile attributes, variable-width tile index, and `$7F`-family terminator distinguish it from the adjacent Nemesis code.
+The unlabeled routine at `$82D6 (enigmadec)` is the standard Enigma tilemap decompressor. Its operation families, inline tile attributes, variable-width tile index, and `$7F`-family terminator distinguish it from the adjacent Nemesis code.
 
 There are two entries:
 
-| Address | Proposed name | Behavior |
-|---:|---|---|
-| `$0082D2` | `enigmadec_with_plane_header` | Copies two longs (eight bytes) from `(a0)+` to `(a1)+`, then falls through |
-| `$0082D6` | `enigmadec` | Decodes the Enigma header/payload from `a0` to 16-bit words at `a1`; `d0` is the base tile word |
+| Reference | Behavior |
+| --- | --- |
+| `$82D2 (enigmadec_with_plane_header)` | Copies two longs (eight bytes) from `(a0)+` to `(a1)+`, then falls through |
+| `$82D6 (enigmadec)` | Decodes the Enigma header/payload from `a0` to 16-bit words at `a1`; `d0` is the base tile word |
 
-The eight copied bytes are not part of Enigma itself. Callers using `$82D2`, notably `$00A82A`, preserve a plane-layout header before decoding the following tile words. Direct callers use `$82D6` and begin immediately at the Enigma header.
+The eight copied bytes are not part of Enigma itself. Callers using `$82D2 (enigmadec_with_plane_header)`, notably `$A82A (load_enigma_map_bundle)`, preserve a plane-layout header before decoding the following tile words. Direct callers use `$82D6 (enigmadec)` and begin immediately at the Enigma header.
 
 ### Header
 
@@ -255,27 +255,27 @@ function enigma_decode(src, dst, base_tile):
 
 ### Consumers and validated streams
 
-`$00A82A` is the Enigma analogue of the Nemesis bundle loader. A nonzero ID selects a ten-byte record at `$00A85A`: destination pointer, source pointer, and base tile word. It calls `$82D2`, retaining the leading eight-byte plane header.
+`$A82A (load_enigma_map_bundle)` is the Enigma analogue of the Nemesis bundle loader. A nonzero ID selects a ten-byte record at `$00A85A`: destination pointer, source pointer, and base tile word. It calls `$82D2 (enigmadec_with_plane_header)`, retaining the leading eight-byte plane header.
 
 Representative ROM-validated streams are:
 
 | Source | Entry | Base | Compressed bytes consumed | Decoded words | Context |
 |---:|---:|---:|---:|---:|---|
-| `$07228E` | `$82D2` | `$0001` | 20 | 52 | Headered UI/plane map |
-| `$06F51C` | `$82D2` | `$06BF` | 54 | 160 | Headered UI/plane map |
-| `$01F596` | `$82D2` | `$2001` | 64 | 154 | Headered ending map |
-| `$065976` | `$82D6` | `$0000` | 814 | 768 | Level-specific animated/map data |
-| `$012842` | `$82D6` | `$0000` | 70 | 60 | Small RAM table |
+| `$07228E` | `$82D2 (enigmadec_with_plane_header)` | `$0001` | 20 | 52 | Headered UI/plane map |
+| `$06F51C` | `$82D2 (enigmadec_with_plane_header)` | `$06BF` | 54 | 160 | Headered UI/plane map |
+| `$01F596` | `$82D2 (enigmadec_with_plane_header)` | `$2001` | 64 | 154 | Headered ending map |
+| `$065976` | `$82D6 (enigmadec)` | `$0000` | 814 | 768 | Level-specific animated/map data |
+| `$012842` | `$82D6 (enigmadec)` | `$0000` | 70 | 60 | Small RAM table |
 
-The compressed-byte count includes the six-byte Enigma header and, for `$82D2`, the preceding eight-byte plane header; it is rounded to the even source cursor returned by the assembly.
+The compressed-byte count includes the six-byte Enigma header and, for `$82D2 (enigmadec_with_plane_header)`, the preceding eight-byte plane header; it is rounded to the even source cursor returned by the assembly.
 
-During `$019848` level setup, two Enigma streams selected from the per-level table at `$05F5B8` decode to `$FF4000` and `$FF4800`. These are later referenced by the level-plane structures at `$FFE000` and `$FFE100`, making Enigma central to level tilemap construction rather than merely a menu codec.
+During `$19848 (load_level_graphics_maps_and_camera)` level setup, two Enigma streams selected from the per-level table at `$05F5B8` decode to `$FF4000` and `$FF4800`. These are later referenced by the level-plane structures at `$FFE000 (primary_camera)` and `$FFE100 (secondary_camera)`, making Enigma central to level tilemap construction rather than merely a menu codec.
 
 ## Kosinski
 
 ### Entry and descriptor ordering
 
-`kosinskidec` at `$0085A2` takes:
+`$85A2 (kosinskidec)` takes:
 
 - `a0`: compressed source;
 - `a1`: byte destination.
@@ -356,17 +356,17 @@ function kosinski_decode(src, dst):
 
 | Call site | Source | Destination | Validated compressed -> output | Interpretation |
 |---:|---:|---:|---:|---|
-| `$0016E4` | `$071C6C` | `$FF8000` | 656 -> 2,248 bytes | Character-select UI/map data |
+| `$0016E4` | `$071C6C` | `$FF8000 (decompression_scratch_buffer)` | 656 -> 2,248 bytes | Character-select UI/map data |
 | `$00880E` | `$0389A0` | `$FF7000` | 514 -> 1,568 bytes | Ending/demo shared art |
-| `$008854` | `$01F596` | `$FF8000` | 374 -> 2,248 bytes | Bad-ending map data |
-| `$010648` | `$0795A2` | `$FF7000` | 7,581 -> 7,936 bytes | Z80 DAC/PCM driver image |
+| `$008854` | `$01F596` | `$FF8000 (decompression_scratch_buffer)` | 374 -> 2,248 bytes | Bad-ending map data |
+| `$010648` | `$795A2 (z80_dac_driver_kosinski)` | `$FF7000` | 7,581 -> 7,936 bytes | Z80 DAC/PCM driver image |
 | `$010864` | `$01CAEC` | `$FF7000` | 611 -> 8,192 bytes | Attract/demo input data |
 
-`load_z80_dac_driver` deserves a size caveat. The Kosinski stream expands to exactly `$1F00` (7,936) bytes, but `$010656` copies only `dbf d2` with `d2=$1EC6`, i.e. `$1EC7` (7,879) bytes, into Z80 RAM `$0000`. The final 57 decompressed bytes are not copied. The loader separately writes sample-bank bytes to Z80 `$1FF8-$1FFB`, leaving the intervening mailbox/workspace region under explicit runtime control.
+`$1061C (load_z80_dac_driver)` deserves a size caveat. The Kosinski stream expands to exactly `$1F00` (7,936) bytes, but `$010656` copies only `dbf d2` with `d2=$1EC6`, i.e. `$1EC7` (7,879) bytes, into Z80 RAM `$0000`. The final 57 decompressed bytes are not copied. The loader separately writes sample-bank bytes to Z80 `$1FF8-$1FFB`, leaving the intervening mailbox/workspace region under explicit runtime control.
 
-`$00B748` selects fourteen Kosinski ending/story assets through eight-byte `(source,destination)` records at `$00B768`. Validated output sizes range from 512 bytes (`$039B80`) to 11,616 bytes (`$037360`), and destinations range across work RAM (`$FF0000`, `$FF0620`, `$FF0BE0`, and others). The caller can then upload art, retain maps, or build scene data without changing the codec.
+`$B748 (load_kosinski_story_asset)` selects fourteen Kosinski ending/story assets through eight-byte `(source,destination)` records at `$00B768`. Validated output sizes range from 512 bytes (`$039B80`) to 11,616 bytes (`$037360`), and destinations range across work RAM (`$FF0000`, `$FF0620`, `$FF0BE0`, and others). The caller can then upload art, retain maps, or build scene data without changing the codec.
 
-### Level setup at `$019848`
+### Level setup at `$19848 (load_level_graphics_maps_and_camera)`
 
 The per-level table at `$05F5B8` mixes codecs in a fixed sequence:
 
@@ -377,7 +377,7 @@ one record:   Kosinski source long (destination $FFA000)
 then:         palette and plane configuration
 ```
 
-The first two Kosinski streams are decoded through `$FF8000` and copied to the VDP. The Enigma streams form the two main level-map datasets. The final Kosinski stream populates `$FFA000` and is subsequently used by the scrolling/plane machinery.
+The first two Kosinski streams are decoded through `$FF8000 (decompression_scratch_buffer)` and copied to the VDP. The Enigma streams form the two main level-map datasets. The final Kosinski stream populates `$FFA000` and is subsequently used by the scrolling/plane machinery.
 
 ROM-validated source sizes show why more than one codec is useful:
 
@@ -396,7 +396,7 @@ For Kosinski columns both sides are bytes. For Enigma columns the left side is c
 
 There is one unresolved detail at `$0198AA`: after each first-stage Kosinski decode, the assembly performs a fixed 151 calls to the 38-long VDP copy cascade, larger than many individual decoded streams. The control flow is unambiguous, but the intended padding/retained-buffer semantics should be confirmed with a VRAM trace before assigning exact visual regions to every byte beyond each stream's terminator.
 
-`$0199C6` performs a further level-dependent Kosinski decode into `$FF8000`, then copies selected 16-byte chunks into the large plane buffers at `$FF0000`/`$FF2000`. This is the bridge from compressed block definitions to the runtime level layout assembled for scrolling.
+`$0199C6` performs a further level-dependent Kosinski decode into `$FF8000 (decompression_scratch_buffer)`, then copies selected 16-byte chunks into the large plane buffers at `$FF0000`/`$FF2000`. This is the bridge from compressed block definitions to the runtime level layout assembled for scrolling.
 
 ## Format comparison and invariants
 
@@ -432,7 +432,7 @@ Practical invariants for a native reimplementation or data extractor are:
 - Kosinski little-endian/LSB-first descriptor ordering and match lengths.
 - The incremental Nemesis five-tile VBlank budget.
 - ROM-derived compressed and output sizes in the tables.
-- Correction of `nemesisdec_vram` from `$018192` to `$008192`.
+- Correction of `$8192 (nemesisdec_vram)` from `$018192` to `$8192 (nemesisdec_vram)`.
 
 ### Medium confidence (75-90%)
 

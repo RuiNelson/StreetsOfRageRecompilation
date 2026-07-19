@@ -185,6 +185,21 @@ These produce `output/sor.asm` and a coverage map. The static tools follow known
 control flow from the vector table and from every address listed in
 `code-analysis/aux_addresses.txt`.
 
+### Analysis manuscript synchronization
+
+Keep the reverse-engineering manuscripts synchronized after changing
+`code-analysis/labels.csv` or `code-analysis/addresses.csv`:
+
+```bash
+./sync_ai_analysis.py          # update every ai-analysis/*.md manuscript
+./sync_ai_analysis.py --check  # verify synchronization without writing
+```
+
+The stable address drives each reference, so a renamed CSV label is propagated
+automatically. Known references use the canonical `` `$ADDRESS (label)` ``
+form. The synchronizer also combines Address/Symbol table columns where both
+refer to the same address and leaves fenced assembly or pseudocode unchanged.
+
 ### Discovery
 
 A large part of Streets of Rage is reached only through **indirect** control

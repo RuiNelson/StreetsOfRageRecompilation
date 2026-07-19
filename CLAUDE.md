@@ -92,6 +92,8 @@ Use the checked-in scripts from this repository:
 ./disassemble_nolabels.sh
 ./disassemble_iterative.sh
 ./discover_aux_smart.sh
+./sync_ai_analysis.py
+./sync_ai_analysis.py --check
 ```
 
 Equivalent direct tool calls use the sibling `RageDecompiler` on `PYTHONPATH`:
@@ -109,7 +111,9 @@ PYTHONPATH=../RageDecompiler python3 -m tools iterative-disasm output/sor.asm ou
 - Keep every manuscript in `ai-analysis/` synchronized with
   `code-analysis/labels.csv` and `code-analysis/addresses.csv`. When a symbol is
   added, renamed, or removed, update the corresponding prose and evidence tables
-  in the same change; do not retain a generated `sub_...` or `loc_...` name where
-  a semantic label exists.
+  in the same change by running `./sync_ai_analysis.py`. References to known
+  symbols use the canonical form `` `$ADDRESS (label)` ``; do not retain a
+  generated `sub_...` or `loc_...` name where a semantic label exists. Run
+  `./sync_ai_analysis.py --check` before committing analysis changes.
 - Keep `MegaDriveEnvironment` changes in the sibling submodule and update the
   parent gitlink afterward.

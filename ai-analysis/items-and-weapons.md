@@ -2,7 +2,7 @@
 
 ## Scope and terminology
 
-This document describes the gameplay objects that can be collected, carried, swung, thrown, broken, or converted into player resources. It is based primarily on `output/sor.asm`, especially the object handlers from `$5C1E` through `$6C84`, the player interaction search at `$3136`, and the packed-BCD resource helpers at `$10DA6/$10DCA`.
+This document describes the gameplay objects that can be collected, carried, swung, thrown, broken, or converted into player resources. It is based primarily on `output/sor.asm`, especially the object handlers from `$5C1E (knife_weapon_dispatcher)` through `$6C84 (breakable_type19_dispatcher)`, the player interaction search at `$3136 (find_close_interaction_target)`, and the packed-BCD resource helpers at `$10DA6/$10DCA`.
 
 The code makes a useful distinction that is easy to lose in a visual description of the game:
 
@@ -21,14 +21,14 @@ The global object dispatcher at `$B236` indexes a word table by object type. The
 
 | Object type | Handler | Role |
 |---:|---:|---|
-| `$08` | `$5C1E` | Knife; damage 5, limited use count, and a straight-line attack-button throw. |
-| `$09` | `$6114` | Bottle; damage 3, breaks and emits three shard objects. |
-| `$0A` | `$61F6` | Long melee weapon A (bat/pipe); damage 4. |
-| `$0B` | `$6226` | Long melee weapon B (pipe/bat); damage 4. |
-| `$0C` | `$6256` | Thrown pepper spray; damage 2, immobilizing reaction, and smoke/effect-emission states. |
-| `$11` | `$6AF4` | Breakable prop/container family; emits ten debris objects of the same type with fragment subtypes. |
-| `$19` | `$6C84` | Second breakable prop family; launches/bounces when struck, then despawns. |
-| `$1E` | `$61BE` | Bottle-shard/debris projectile emitted by type `$09`. |
+| `$08` | `$5C1E (knife_weapon_dispatcher)` | Knife; damage 5, limited use count, and a straight-line attack-button throw. |
+| `$09` | `$6114 (bottle_weapon_dispatcher)` | Bottle; damage 3, breaks and emits three shard objects. |
+| `$0A` | `$61F6 (long_weapon_type0A_dispatcher)` | Long melee weapon A (bat/pipe); damage 4. |
+| `$0B` | `$6226 (long_weapon_type0B_dispatcher)` | Long melee weapon B (pipe/bat); damage 4. |
+| `$0C` | `$6256 (pepper_spray_weapon_dispatcher)` | Thrown pepper spray; damage 2, immobilizing reaction, and smoke/effect-emission states. |
+| `$11` | `$6AF4 (breakable_type11_dispatcher)` | Breakable prop/container family; emits ten debris objects of the same type with fragment subtypes. |
+| `$19` | `$6C84 (breakable_type19_dispatcher)` | Second breakable prop family; launches/bounces when struck, then despawns. |
+| `$1E` | `$61BE (bottle_shard_dispatcher)` | Bottle-shard/debris projectile emitted by type `$09`. |
 | `$3F` | `$68E2` | 3,000-point pickup. |
 | `$40` | `$6904` | 10,000-point pickup. |
 | `$47` | `$6988` | Full-health food pickup (`+$50`, 80 health; visually the large food). |
@@ -86,7 +86,7 @@ The effect index, not the object type itself, drives resource application. Curre
 
 ## How a pickup is collected
 
-Pickups are acquired through the same close-interaction search that begins normal attacks. `find_close_interaction_target` builds a small three-dimensional box around the player and scans the object table. It first recognizes carried-object types `$08..$0C`; it also explicitly accepts pickup types `$47`, `$4B`, `$4C`, `$4F`, `$3F`, and `$40`.
+Pickups are acquired through the same close-interaction search that begins normal attacks. `$3136 (find_close_interaction_target)` builds a small three-dimensional box around the player and scans the object table. It first recognizes carried-object types `$08..$0C`; it also explicitly accepts pickup types `$47`, `$4B`, `$4C`, `$4F`, `$3F`, and `$40`.
 
 For a consumable it does not populate the player's carried-weapon fields. It only writes:
 
@@ -95,7 +95,7 @@ pickup->collector_at_52 = player;
 pickup->interaction_at_51 = 1;
 ```
 
-On the pickup's next update, `$69CC` sees the nonzero interaction byte, temporarily changes `a0` to the collecting player, dispatches by pickup `+$50`, and deletes the pickup object after the effect returns.
+On the pickup's next update, `$69CC (consume_collected_pickup)` sees the nonzero interaction byte, temporarily changes `a0` to the collecting player, dispatches by pickup `+$50`, and deletes the pickup object after the effect returns.
 
 ```c
 void consume_pickup(Pickup *item) {
@@ -113,7 +113,7 @@ The collector pointer is what makes resource ownership deterministic in 2P: an i
 
 ### Health food
 
-Effects 0 and 1 enter `$6A04/$6A08` with signed health deltas `$50` and `$14`. Both call the shared player health routine at `$4E6C`, which clamps object `+$32` to `0..$50` and redraws the correct player's bar. The result is:
+Effects 0 and 1 enter `$6A04/$6A08` with signed health deltas `$50` and `$14`. Both call the shared player health routine at `$4E6C (adjust_player_health)`, which clamps object `+$32` to `0..$50` and redraws the correct player's bar. The result is:
 
 - large food: restore up to 80 units, effectively full health from any nonnegative value;
 - small food: restore 20 units;
@@ -123,7 +123,7 @@ Both use the same health-pickup sound.
 
 ### Extra life
 
-Effect 2 at `$6A14` selects `p1_special_attacks` or `p2_special_attacks` as `a6`, then calls `$10DCA` with BCD table entry 0 (`$00000100`). The helper uses `ABCD -(a5),-(a6)`, so the predecrement changes the byte immediately **before** the special counter: the corresponding life counter.
+Effect 2 at `$6A14 (apply_extra_life_pickup)` selects `$FFFF21 (p1_special_attacks)` or `$FFFF24 (p2_special_attacks)` as `a6`, then calls `$10DCA (add_bcd_resource_value)` with BCD table entry 0 (`$00000100`). The helper uses `ABCD -(a5),-(a6)`, so the predecrement changes the byte immediately **before** the special counter: the corresponding life counter.
 
 ```c
 // a6 initially points to special counter
@@ -135,7 +135,7 @@ It plays the extra-life/reward sound and refreshes the lives/special HUD.
 
 ### Extra police special
 
-Effect 3 at `$6A2A` deliberately points `a6` one byte beyond the special counter: `$FFFF22` for P1 or `$FFFF25` for P2. The BCD helper's predecrement therefore lands on `$FFFF21/$FFFF24` and adds one police special. This is also why `$FFFF22/$FFFF25` must not be mistaken for the counter modified by the pickup.
+Effect 3 at `$6A2A (apply_extra_special_pickup)` deliberately points `a6` one byte beyond the special counter: `$FFFF22 (p1_out_or_continue_flag)` for P1 or `$FFFF25 (p2_out_or_continue_flag)` for P2. The BCD helper's predecrement therefore lands on `$FFFF21/$FFFF24` and adds one police special. This is also why `$FFFF22/$FFFF25` must not be mistaken for the counter modified by the pickup.
 
 ### Score items
 
@@ -144,7 +144,7 @@ Effects 4 and 5 select an end pointer at `$FFFF0C` for P1 or `$FFFF14` for P2 an
 - effect 4 uses table index `$0E`, packed value `$00003000`: 3,000 points;
 - effect 5 uses table index `$0A`, packed value `$00010000`: 10,000 points.
 
-`$10DA6` performs three chained `ABCD` operations and saturates an overflow at `$999900`. Score ownership again follows the collector object address (`$B800` means P1; otherwise P2). These awards can immediately trigger the independent extra-life threshold check at `$4D60` on a subsequent player update.
+`$10DA6` performs three chained `ABCD` operations and saturates an overflow at `$999900`. Score ownership again follows the collector object address (`$FFB800 (p1_object)` means P1; otherwise P2). These awards can immediately trigger the independent extra-life threshold check at `$4D60 (update_score_hud_and_check_extra_life)` on a subsequent player update.
 
 ## Weapon ownership and interaction protocol
 
@@ -168,9 +168,9 @@ Carried weapons use two linked records:
 | `+$56` | Short lifetime/effect timer in broken states. |
 | `+$7C/$7D` | Recorded collision/reaction data. |
 
-The same proximity search at `$3136` accepts types `$08..$0C` only when weapon `+$51` is clear and its subtype is allowed. It then writes the player/weapon links, reserves the weapon, and changes the player to the pickup/grab action family at `$28`.
+The same proximity search at `$3136 (find_close_interaction_target)` accepts types `$08..$0C` only when weapon `+$51` is clear and its subtype is allowed. It then writes the player/weapon links, reserves the weapon, and changes the player to the pickup/grab action family at `$28`.
 
-The common weapon positioning code at `$5E2E` distinguishes a player holder (`holder->type == 1`) from an enemy holder. For players it verifies that `player->weapon_at_5e` still points back to the object, then uses:
+The common weapon positioning code at `$5E2E (update_held_weapon)` distinguishes a player holder (`holder->type == 1`) from an enemy holder. For players it verifies that `player->weapon_at_5e` still points back to the object, then uses:
 
 - player action/animation at `+$08`;
 - current animation frame at `+$0A`;
@@ -182,7 +182,7 @@ to place and flip the weapon sprite in the character's hand each frame.
 Enemy-held weapons use a more generic attachment table but the same holder
 pointer. When an armed enemy enters a knockdown/drop transition, the ownership
 command detaches the weapon, gives it ballistic motion, and eventually clears
-`+$51` after it settles. The object is then eligible for the same `$3136` pickup
+`+$51` after it settles. The object is then eligible for the same `$3136 (find_close_interaction_target)` pickup
 scan used for weapons originally placed on the ground. Therefore weapons are
 independent objects even while they look like part of a character sprite.
 
@@ -221,31 +221,31 @@ use and especially impacts with the floor eventually retire the weapon object.
 
 ### Type `$08`: knife
 
-The handler at `$5C1E` initializes damage `+$34 = 5`, the highest of the ordinary carried weapons here. It supports ground settling, holder attachment, a directed throw with X velocity, collision bounce, and eventual deletion.
+The handler at `$5C1E (knife_weapon_dispatcher)` initializes damage `+$34 = 5`, the highest of the ordinary carried weapons here. It supports ground settling, holder attachment, a directed throw with X velocity, collision bounce, and eventual deletion.
 
 The player action path at `$21E6-$222E` checks whether the carried object is type
 `$08` (or the pepper weapon `$0C`). On the attack animation's release frame it
 writes command 3 to weapon `+$51` and clears the player's carried-weapon type.
-`$5D84` then detaches the knife and assigns signed horizontal velocity according
+`$5D84 (launch_released_weapon)` then detaches the knife and assigns signed horizontal velocity according
 to facing. This is the straight-line knife throw produced by the attack button.
 
 Object `+$50` is a use counter. While it is below 3, a new held-use phase increments it. At 3 it enters a terminal state, hides/disables normal collision, starts a `$10`-frame timer in `+$56`, and deletes itself when the timer expires. Static code therefore gives this weapon three counted uses; whether a particular pickup/throw animation consumes a count can be confirmed by watching `+$50` during play.
 
 ### Type `$09`: bottle
 
-The bottle handler at `$6114` initializes damage 3. When its collision result becomes nonzero for the first time, it changes to broken art, plays the break sound, and spawns three objects of type `$1E` with different X/Z velocities. Object `+$54` prevents the shatter path from running twice.
+The bottle handler at `$6114 (bottle_weapon_dispatcher)` initializes damage 3. When its collision result becomes nonzero for the first time, it changes to broken art, plays the break sound, and spawns three objects of type `$1E` with different X/Z velocities. Object `+$54` prevents the shatter path from running twice.
 
-The type `$1E` children use the small debris handler at `$61BE`: they move under gravity and delete on ground contact. The original bottle continues through common holder/drop code until its broken state is retired. This is a one-way transition; there is no path from shards back to a collectable bottle.
+The type `$1E` children use the small debris handler at `$61BE (bottle_shard_dispatcher)`: they move under gravity and delete on ground contact. The original bottle continues through common holder/drop code until its broken state is retired. This is a one-way transition; there is no path from shards back to a collectable bottle.
 
 ### Types `$0A` and `$0B`: long melee weapons
 
-The two handlers at `$61F6` and `$6226` differ mainly in art data (`$6FA9A` versus `$6FB5A`) and both initialize damage 4. They are the steel pipe and baseball bat. They reuse the common ownership, attachment, drop, throw, collision, and landing paths rather than carrying the knife's explicit three-use counter or the bottle's shatter flag.
+The two handlers at `$61F6 (long_weapon_type0A_dispatcher)` and `$6226 (long_weapon_type0B_dispatcher)` differ mainly in art data (`$6FA9A` versus `$6FB5A`) and both initialize damage 4. They are the steel pipe and baseball bat. They reuse the common ownership, attachment, drop, throw, collision, and landing paths rather than carrying the knife's explicit three-use counter or the bottle's shatter flag.
 
 Assigning `$0A` to one visible weapon and `$0B` to the other remains medium confidence without rendering the two art streams. Mechanically the distinction is small: both provide the same outgoing damage, can be dropped and collected again while durability remains, and wear through closely related impact/landing state transitions.
 
 ### Type `$0C`: pepper spray and smoke
 
-The `$6256` handler initializes damage 2. Its initial animation/state depends on object `+$08`, and a used/thrown instance can become a short-lived effect emitter. The terminal path sets a timer, spawns additional type-`$0C` objects with special animation selectors (`+$08 = 4` or `6`), and emits a sequence of effect objects from a ROM position table before deleting the source.
+The `$6256 (pepper_spray_weapon_dispatcher)` handler initializes damage 2. Its initial animation/state depends on object `+$08`, and a used/thrown instance can become a short-lived effect emitter. The terminal path sets a timer, spawns additional type-`$0C` objects with special animation selectors (`+$08 = 4` or `6`), and emits a sequence of effect objects from a ROM position table before deleting the source.
 
 The player release path treats `$0C` like the knife and throws it from the
 holder. On impact, `$6328-$63C2` converts the source into a timed emitter and
@@ -271,7 +271,7 @@ The weapon remains an object rather than becoming a player damage bonus. This is
 
 `$6AF4/$6B0A` initializes a collision-enabled breakable prop. Its `+$31` byte selects fragment variants: zero is the intact object; a nonzero value chooses an already broken/debris animation and begins in a later state.
 
-On an accepted damaging collision (`$6B34`) the intact object:
+On an accepted damaging collision (`$6B34 (break_type11_prop)`) the intact object:
 
 1. disables its intact collision bit;
 2. plays the break sound;
@@ -305,7 +305,7 @@ container and reward records in each decoded level stream.
 
 Items and weapons enter through the ordinary level object stream and share the global 128-byte object pool. Initializers call `$6AA6`, which ORs level-specific flag bits into object `+$01`; this accounts for round-dependent orientation/priority behavior without separate item classes.
 
-The common off-screen cleanup at `$6A70` compares object X to the camera. In ordinary rounds, objects sufficiently behind the camera are deleted. Round 8 reverses/changes the boundary because its scrolling direction and arena behavior differ. Weapon-specific falling states also consume durability and delete objects that cannot settle, have exhausted their wear state, or reach a terminal timer.
+The common off-screen cleanup at `$6A70 (delete_pickup_behind_camera)` compares object X to the camera. In ordinary rounds, objects sufficiently behind the camera are deleted. Round 8 reverses/changes the boundary because its scrolling direction and arena behavior differ. Weapon-specific falling states also consume durability and delete objects that cannot settle, have exhausted their wear state, or reach a terminal timer.
 
 There is no separate inventory array. At most one carried object is represented by the player's `+$5E/+$60` pair, while every ground or airborne weapon continues to consume a normal object-table slot.
 
@@ -353,34 +353,34 @@ void apply_pickup_effect(Player *p, unsigned effect) {
 
 ## Evidence map
 
-| Address | Current symbol | Analytical role |
-|---:|---|---|
-| `$21E6` | `player_release_thrown_weapon` | Commands a carried knife or pepper spray to detach on the attack-animation release frame. |
-| `$3136` | `find_close_interaction_target` | Finds grabbable enemies, weapons, and consumable pickups in the player's close-interaction box. |
-| `$5C1E` | `knife_weapon_dispatcher` | Type-$08 knife dispatcher and counted-use lifecycle. |
-| `$5D84` | `launch_released_weapon` | Detaches and launches a command-3 weapon according to holder facing. |
-| `$5E2E` | `update_held_weapon` | Shared held/drop/throw ownership and attachment logic. |
-| `$6114` | `bottle_weapon_dispatcher` | Type-$09 bottle dispatcher. |
-| `$614E` | `break_bottle_into_shards` | Bottle break and three-shard spawn. |
-| `$61BE` | `bottle_shard_dispatcher` | Type-$1E bottle-shard/debris dispatcher. |
-| `$61F6` | `long_weapon_type0A_dispatcher` | Type-$0A long melee weapon dispatcher. |
-| `$6226` | `long_weapon_type0B_dispatcher` | Type-$0B long melee weapon dispatcher. |
-| `$6256` | `pepper_spray_weapon_dispatcher` | Type-$0C thrown pepper-spray and smoke/effect dispatcher. |
-| `$62DA` | `throw_pepper_spray` | Applies the pepper-spray throw position and X/Z velocity. |
-| `$6328` | `begin_pepper_smoke_emission` | Converts an impact into the first smoke/effect object. |
-| `$6372` | `emit_pepper_smoke_sequence` | Emits the remaining smoke/effect sequence. |
-| `$69CC` | `consume_collected_pickup` | Converts a reserved pickup into an effect on its collector, then deletes it. |
-| `$69E6` | `dispatch_pickup_effect` | Dispatches pickup effect index 0..5. |
-| `$6A04` | `apply_health_pickup` | Full/small health pickup effects. |
-| `$6A14` | `apply_extra_life_pickup` | Extra-life pickup effect. |
-| `$6A2A` | `apply_extra_special_pickup` | Extra-special pickup effect. |
-| `$6A46` | `apply_score_pickup` | 3,000/10,000 score pickup effects. |
-| `$6A70` | `delete_pickup_behind_camera` | Camera-relative off-screen cleanup shared by pickups. |
-| `$6AF4` | `breakable_type11_dispatcher` | Type-$11 breakable prop dispatcher. |
-| `$6B34` | `break_type11_prop` | Break type-$11 prop and emit ten debris objects. |
-| `$6C84` | `breakable_type19_dispatcher` | Type-$19 breakable/bouncing prop dispatcher. |
-| `$10DA6` | `sub_00010DA6` | Add three-byte packed-BCD score value. |
-| `$10DCA` | `add_bcd_resource_value` | Add one-byte packed-BCD life/special value using predecrement. |
+| Reference | Analytical role |
+| --- | --- |
+| `$21E6 (player_release_thrown_weapon)` | Commands a carried knife or pepper spray to detach on the attack-animation release frame. |
+| `$3136 (find_close_interaction_target)` | Finds grabbable enemies, weapons, and consumable pickups in the player's close-interaction box. |
+| `$5C1E (knife_weapon_dispatcher)` | Type-$08 knife dispatcher and counted-use lifecycle. |
+| `$5D84 (launch_released_weapon)` | Detaches and launches a command-3 weapon according to holder facing. |
+| `$5E2E (update_held_weapon)` | Shared held/drop/throw ownership and attachment logic. |
+| `$6114 (bottle_weapon_dispatcher)` | Type-$09 bottle dispatcher. |
+| `$614E (break_bottle_into_shards)` | Bottle break and three-shard spawn. |
+| `$61BE (bottle_shard_dispatcher)` | Type-$1E bottle-shard/debris dispatcher. |
+| `$61F6 (long_weapon_type0A_dispatcher)` | Type-$0A long melee weapon dispatcher. |
+| `$6226 (long_weapon_type0B_dispatcher)` | Type-$0B long melee weapon dispatcher. |
+| `$6256 (pepper_spray_weapon_dispatcher)` | Type-$0C thrown pepper-spray and smoke/effect dispatcher. |
+| `$62DA (throw_pepper_spray)` | Applies the pepper-spray throw position and X/Z velocity. |
+| `$6328 (begin_pepper_smoke_emission)` | Converts an impact into the first smoke/effect object. |
+| `$6372 (emit_pepper_smoke_sequence)` | Emits the remaining smoke/effect sequence. |
+| `$69CC (consume_collected_pickup)` | Converts a reserved pickup into an effect on its collector, then deletes it. |
+| `$69E6 (dispatch_pickup_effect)` | Dispatches pickup effect index 0..5. |
+| `$6A04 (apply_health_pickup)` | Full/small health pickup effects. |
+| `$6A14 (apply_extra_life_pickup)` | Extra-life pickup effect. |
+| `$6A2A (apply_extra_special_pickup)` | Extra-special pickup effect. |
+| `$6A46 (apply_score_pickup)` | 3,000/10,000 score pickup effects. |
+| `$6A70 (delete_pickup_behind_camera)` | Camera-relative off-screen cleanup shared by pickups. |
+| `$6AF4 (breakable_type11_dispatcher)` | Type-$11 breakable prop dispatcher. |
+| `$6B34 (break_type11_prop)` | Break type-$11 prop and emit ten debris objects. |
+| `$6C84 (breakable_type19_dispatcher)` | Type-$19 breakable/bouncing prop dispatcher. |
+| `$10DA6 (sub_00010DA6)` | Add three-byte packed-BCD score value. |
+| `$10DCA (add_bcd_resource_value)` | Add one-byte packed-BCD life/special value using predecrement. |
 
 ## Uncertainties and recommended traces
 

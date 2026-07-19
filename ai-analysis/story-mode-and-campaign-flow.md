@@ -14,12 +14,12 @@ The names used below match the symbols added to the analysis CSVs. Meanings infe
 
 The game has no single class, structure, or function representing “story mode.” The campaign is composed of several state machines that communicate almost entirely through Mega Drive work RAM:
 
-1. `game_state` (`$FFFF00`) selects the global mode.
+1. `$FFFF00 (game_state)` selects the global mode.
 2. Each mode normally has an initialization handler and an update handler.
 3. Complex modes use a secondary state index and their own jump table.
-4. `level` (`$FFFF02`) is the persistent campaign counter, ranging from `0` through `7`.
-5. After each round, the round-clear screen increments `level` and returns to the level-introduction state.
-6. After round 8, `bad_ending_selected` (`$FFDE10`) selects the good or bad ending.
+4. `$FFFF02 (level)` is the persistent campaign counter, ranging from `0` through `7`.
+5. After each round, the round-clear screen increments `$FFFF02 (level)` and returns to the level-introduction state.
+6. After round 8, `$FFDE10 (bad_ending_selected)` selects the good or bad ending.
 
 Normal campaign flow:
 
@@ -38,8 +38,8 @@ Sega ($00/$02)
 
 There is an important distinction between two uses of the word “story”:
 
-- `init_intro` and `game_mode_intro` implement only the narrative opening before the title.
-- The playable campaign is the `level start -> in-game -> round clear` cycle governed by `game_state`, `level`, completion flags, and the final offer.
+- `$8FD0 (init_intro)` and `$904E (game_mode_intro)` implement only the narrative opening before the title.
+- The playable campaign is the `level start -> in-game -> round clear` cycle governed by `$FFFF00 (game_state)`, `$FFFF02 (level)`, completion flags, and the final offer.
 
 ---
 
@@ -47,7 +47,7 @@ There is an important distinction between two uses of the word “story”:
 
 ### 2.1 Assembly implementation
 
-The core loop at `game_infinite_loop` (`$3A2`) reads `game_state`, doubles it to obtain a four-byte table offset, and looks up `game_state_handler_table` at `$3BA`:
+The core loop at `$3A2 (game_infinite_loop)` reads `$FFFF00 (game_state)`, doubles it to obtain a four-byte table offset, and looks up `$3BA (game_state_handler_table)`:
 
 ```asm
 moveq  #0,d0
@@ -60,21 +60,21 @@ jsr    sync_z80_1
 bra.s  game_infinite_loop
 ```
 
-Because every `game_state` value is even, each value selects one longword. The table contains eleven initialization/update pairs:
+Because every `$FFFF00 (game_state)` value is even, each value selects one longword. The table contains eleven initialization/update pairs:
 
-| `game_state` | Handler | Purpose |
+| `$FFFF00 (game_state)` | Handler | Purpose |
 |---:|---|---|
-| `$00` / `$02` | `init_segascreen` / `game_mode_segascreen` | Sega logo |
-| `$04` / `$06` | `init_intro` / `game_mode_intro` | story opening |
-| `$08` / `$0A` | `init_titlescreen` / `game_mode_titlescreen` | title screen |
-| `$0C` / `$0E` | `init_top10score` / `game_mode_top10score` | top-ten scores |
-| `$10` / `$12` | `init_selectscreenmode` / `game_mode_selectscreenmode` | main menu and OPTIONS |
-| `$14` / `$16` | `init_ingame` / `game_mode_ingame` | gameplay or attract mode |
-| `$18` / `$1A` | `init_roundclear` / `game_mode_roundclear` | round bonuses and results |
-| `$1C` / `$1E` | `init_ending_bad` / `game_mode_ending_bad` | bad ending |
-| `$20` / `$22` | `init_characterselectscreen` / `game_mode_characterselectscreen` | character select |
-| `$24` / `$26` | `init_ending_good` / `game_mode_ending_good` | good ending |
-| `$28` / `$2A` | `init_levelstart` / `game_mode_levelstart` | round presentation |
+| `$00` / `$02` | `$8EAC (init_segascreen)` / `$8F44 (game_mode_segascreen)` | Sega logo |
+| `$04` / `$06` | `$8FD0 (init_intro)` / `$904E (game_mode_intro)` | story opening |
+| `$08` / `$0A` | `$90C8 (init_titlescreen)` / `$9102 (game_mode_titlescreen)` | title screen |
+| `$0C` / `$0E` | `$9128 (init_top10score)` / `$9152 (game_mode_top10score)` | top-ten scores |
+| `$10` / `$12` | `$9170 (init_selectscreenmode)` / `$919A (game_mode_selectscreenmode)` | main menu and OPTIONS |
+| `$14` / `$16` | `$10840 (init_ingame)` / `$1087A (game_mode_ingame)` | gameplay or attract mode |
+| `$18` / `$1A` | `$91A0 (init_roundclear)` / `$91CE (game_mode_roundclear)` | round bonuses and results |
+| `$1C` / `$1E` | `$9250 (init_ending_bad)` / `$9278 (game_mode_ending_bad)` | bad ending |
+| `$20` / `$22` | `$927C (init_characterselectscreen)` / `$92A8 (game_mode_characterselectscreen)` | character select |
+| `$24` / `$26` | `$91D4 (init_ending_good)` / `$9214 (game_mode_ending_good)` | good ending |
+| `$28` / `$2A` | `$106EA (init_levelstart)` / `$1077C (game_mode_levelstart)` | round presentation |
 
 The pattern is consistent: an initialization handler normally ends with `addq.w #2,game_state`, after which the global loop calls the corresponding update handler every frame.
 
@@ -95,26 +95,26 @@ The C++ reads the state word, calculates `state + state`, fetches a longword poi
 
 ### 3.1 Starting a new session
 
-`init_intro` (`$8FD0`) does more than draw the opening. It also resets the persistent state of a new session:
+`$8FD0 (init_intro)` does more than draw the opening. It also resets the persistent state of a new session:
 
 - `level = 0`;
 - `wave = 0`;
 - P1 and P2 scores to zero;
 - player death and status flags to zero;
 - score-based extra-life pointers to zero;
-- `player_mode_copy` to zero;
+- `$FFFF38 (player_mode_copy)` to zero;
 - opening music to sound ID `$83`.
 
 This makes the opening the logical boundary of a new campaign. The menu and character-select screens that follow operate on this freshly cleared session.
 
 ### 3.2 Skipping the opening
 
-In `game_mode_intro` (`$904E`), Start can route execution to:
+In `$904E (game_mode_intro)`, Start can route execution to:
 
 - the title (`game_state = $08`) while the scene is in an early phase;
 - the main menu (`game_state = $10`) once the scene has passed its internal threshold.
 
-Without input, the shared `story_scene_timeline_update` routine (`$B6DE`) creates narrative objects from a timed list. When the list ends, it writes the next state configured for that scene. `story_scene_select_script` (`$3F65E`) reads this configuration from `$3F680`: the opening configuration ends with state `$00`, which `game_mode_intro` converts into entry into attract mode.
+Without input, the shared `$B6DE (story_scene_timeline_update)` routine creates narrative objects from a timed list. When the list ends, it writes the next state configured for that scene. `$3F65E (story_scene_select_script)` reads this configuration from `$3F680 (story_scene_config_table)`: the opening configuration ends with state `$00`, which `$904E (game_mode_intro)` converts into entry into attract mode.
 
 ### 3.3 Attract mode is not a normal campaign
 
@@ -130,24 +130,24 @@ move.l #$00FF8000,demo_ai_input_p2
 While `demo_mode != 0`:
 
 - joypad code at `$813C` merges bytes from scripted input streams;
-- `init_ingame` internally calls `init_levelstart`, bypassing the interactive start flow;
+- `$10840 (init_ingame)` internally calls `$106EA (init_levelstart)`, bypassing the interactive start flow;
 - characters, lives, and demo duration are forced;
-- Start sets bit 7 of `demo_mode`, starts a fade, and aborts the demonstration;
-- after the fade, `game_mode_ingame` returns to the Sega logo (`$00`) or the top-ten screen (`$0C`) instead of entering round clear.
+- Start sets bit 7 of `$FFFF2A (demo_mode)`, starts a fade, and aborts the demonstration;
+- after the fade, `$1087A (game_mode_ingame)` returns to the Sega logo (`$00`) or the top-ten screen (`$0C`) instead of entering round clear.
 
-States `$14/$16` are therefore shared by the campaign and the demonstration, but `demo_mode` changes their input source, HUD setup, and exit route.
+States `$14/$16` are therefore shared by the campaign and the demonstration, but `$FFFF2A (demo_mode)` changes their input source, HUD setup, and exit route.
 
 ---
 
 ## 4. Campaign start and round introduction
 
-After character confirmation, `initialize_player_continues` (`$17A2`) initializes continues and lives, then writes:
+After character confirmation, `$17A2 (initialize_player_continues)` initializes continues and lives, then writes:
 
 ```asm
 move.w #$0028,game_state
 ```
 
-### 4.1 `init_levelstart` (`$106EA`)
+### 4.1 `$106EA (init_levelstart)`
 
 The round initialization handler:
 
@@ -155,25 +155,25 @@ The round initialization handler:
 - resets `wave = 0`;
 - sets `level_intro_active = 1`;
 - initializes the fade counter to `$40`;
-- loads art, tilemaps, HUD data, and other resources selected by `level`;
-- calls `start_round_setup`;
+- loads art, tilemaps, HUD data, and other resources selected by `$FFFF02 (level)`;
+- calls `$E5C (start_round_setup)`;
 - recreates the P1/P2 objects with the selected character IDs;
-- advances `game_state` from `$28` to `$2A`.
+- advances `$FFFF00 (game_state)` from `$28` to `$2A`.
 
-Level data is indexed by the current round number. For example, `load_level_data` (`$576`) multiplies `level` by six and selects a six-byte entry in the ROM table at `$1C378`.
+Level data is indexed by the current round number. For example, `$576 (load_level_data)` multiplies `$FFFF02 (level)` by six and selects a six-byte entry in the ROM table at `$1C378 (level_resource_table)`.
 
 ### 4.2 Round-presentation state machine
 
-`game_mode_levelstart` enters `level_intro_dispatcher` (`$11A50`). `level_intro_substate` (`$FB48`) selects one of six entries in `level_intro_jt` (`$11A5C`):
+`$1077C (game_mode_levelstart)` enters `$11A50 (level_intro_dispatcher)`. `$FFFB48 (level_intro_substate)` selects one of six entries in `$11A5C (level_intro_jt)`:
 
 1. wait for fade-in;
 2. move the two halves of the “ROUND n” banner toward the center;
 3. wait `$60` frames;
 4. move the banner off-screen;
 5. wait `$30` frames;
-6. execute `level_intro_finish`, which writes `game_state = $14`.
+6. execute `$11B04 (level_intro_finish)`, which writes `game_state = $14`.
 
-Once state `$14` is reached, `init_ingame` configures the fade and timing counters and advances immediately to `$16`.
+Once state `$14` is reached, `$10840 (init_ingame)` configures the fade and timing counters and advances immediately to `$16`.
 
 ---
 
@@ -181,7 +181,7 @@ Once state `$14` is reached, `init_ingame` configures the fade and timing counte
 
 ### 5.1 Per-frame update
 
-On the normal path through `game_mode_ingame` (`$1087A`), while neither fading nor paused, the game updates:
+On the normal path through `$1087A (game_mode_ingame)`, while neither fading nor paused, the game updates:
 
 - the clock and scene boundaries;
 - pause handling and second-player joining;
@@ -191,26 +191,26 @@ On the normal path through `game_mode_ingame` (`$1087A`), while neither fading n
 - pending art transfers;
 - the secondary level-flow dispatcher.
 
-`level_flow_handler` (`$464`) uses `level_flow_flags` (`$FFFA72`) to prevent loading, music, and setup phases from being repeated. `wave` (`$FFFF04`) selects enemy groups within the round, while `level` selects the main round table.
+`$464 (level_flow_handler)` uses `$FFFA72 (level_flow_flags)` to prevent loading, music, and setup phases from being repeated. `$FFFF04 (wave)` selects enemy groups within the round, while `$FFFF02 (level)` selects the main round table.
 
 ### 5.2 Completing a round
 
-`end_of_level_flag` (`$FFFA73`) explicitly marks the playable portion of a round as complete. It can be set by round-dependent paths, including wave exhaustion and the special completion condition for level index 6, which is round 7.
+`$FFFA73 (end_of_level_flag)` explicitly marks the playable portion of a round as complete. It can be set by round-dependent paths, including wave exhaustion and the special completion condition for level index 6, which is round 7.
 
-While this flag is set, `end_level_player_exit_update` (`$502C`) forces the players through their stage-exit animation and position. When the exit completes, it writes:
+While this flag is set, `$502C (end_level_player_exit_update)` forces the players through their stage-exit animation and position. When the exit completes, it writes:
 
 ```asm
 move.b #1,fade_out_flag
 move.w #$40,palette_fade_counter
 ```
 
-Once the fade completes, the normal campaign path in `ingame_finish_fade` (`$108CC`) selects:
+Once the fade completes, the normal campaign path in `$108CC (ingame_finish_fade)` selects:
 
 ```asm
 move.w #$0018,game_state
 ```
 
-The physical end of a level therefore does not increment `level` directly. It transfers control to the round-clear screen.
+The physical end of a level therefore does not increment `$FFFF02 (level)` directly. It transfers control to the round-clear screen.
 
 The same routing point also has alternate paths:
 
@@ -226,20 +226,20 @@ That final branch is visible in the code, but its controlling flag has not been 
 
 ### 6.1 Initialization
 
-`init_roundclear` (`$91A0`) calls `round_clear_sequence_init` (`$181EA`). This routine:
+`$91A0 (init_roundclear)` calls `$181EA (round_clear_sequence_init)`. This routine:
 
 - normalizes dead or inactive player objects;
 - loads the results screen;
 - prepares time, difficulty, life, and special-attack bonuses;
 - includes additional remaining-life values on the final round;
-- clears transient state, including `mr_x_offer_flag`;
+- clears transient state, including `$FFDE00 (mr_x_offer_flag)`;
 - initializes `round_clear_substate = 0`.
 
 ### 6.2 Score tally and campaign advancement
 
-`round_clear_sequence_update` (`$1833C`) uses `round_clear_substate` (`$FB4C`) as an offset into `round_clear_jt` (`$18350`). The table controls animations, bonus-to-score conversion, delays, and fading.
+`$1833C (round_clear_sequence_update)` uses `$FFFB4C (round_clear_substate)` as an offset into `$18350 (round_clear_jt)`. The table controls animations, bonus-to-score conversion, delays, and fading.
 
-The decisive routine is `round_clear_advance_campaign` (`$183B0`):
+The decisive routine is `$183B0 (round_clear_advance_campaign)`:
 
 ```asm
 cmpi.w #7,level
@@ -253,7 +253,7 @@ The eight rounds are therefore represented by `level = 0..7`. For levels `0..6`,
 
 ### 6.3 Ending selection
 
-On round 8 (`level == 7`), execution falls through to `round_clear_select_ending` (`$183C4`):
+On round 8 (`level == 7`), execution falls through to `$183C4 (round_clear_select_ending)`:
 
 ```asm
 moveq #$24,d0
@@ -264,7 +264,7 @@ set_state:
 move.w d0,game_state
 ```
 
-This directly proves the meaning of `$FFDE10`:
+This directly proves the meaning of `$FFDE10 (bad_ending_selected)`:
 
 - zero selects `game_state = $24`, the good ending;
 - nonzero selects `game_state = $1C`, the bad ending.
@@ -282,14 +282,14 @@ move.b #1,mr_x_offer_flag
 move.b #1,stop_clock
 ```
 
-From that point onward, `mr_x_offer_update` (`$11B4C`), which runs every gameplay frame, stops returning immediately and begins processing `mr_x_offer_state` (`$FFDE04`).
+From that point onward, `$11B4C (mr_x_offer_update)`, which runs every gameplay frame, stops returning immediately and begins processing `$FFDE04 (mr_x_offer_state)`.
 
 ### 7.2 State-machine structure
 
 The offer state is used in two ways:
 
-- as a byte index into `mr_x_offer_control_table` (`$120AA`), which determines whether control is blocked, enabled, or waiting for a choice;
-- doubled to index `mr_x_offer_jt` (`$11B94`).
+- as a byte index into `$120AA (mr_x_offer_control_table)`, which determines whether control is blocked, enabled, or waiting for a choice;
+- doubled to index `$11B94 (mr_x_offer_jt)`.
 
 The observable phases include:
 
@@ -299,19 +299,19 @@ The observable phases include:
 - drawing dialogue one character at a time;
 - allowing left/right selection and confirmation;
 - comparing both players' choices in 2P mode;
-- enabling `half_damage` during a P1-versus-P2 duel;
+- enabling `$FFFA43 (half_damage)` during a P1-versus-P2 duel;
 - returning to normal combat or marking the narrative outcome.
 
-The choices themselves are stored in player-object state, particularly bits in `object+$59`. `$FFDE0E` does not store the answers: it is `mr_x_dialogue_clear_flags`. Routine `$12576` consumes bit 0 to clear the main dialogue area and bit 1 to clear both player-choice tile areas. The connection between accepting the offer and the bad ending is unambiguous.
+The choices themselves are stored in player-object state, particularly bits in `object+$59`. `$FFDE0E (mr_x_dialogue_clear_flags)` does not store the answers. Routine `$12576` consumes bit 0 to clear the main dialogue area and bit 1 to clear both player-choice tile areas. The connection between accepting the offer and the bad ending is unambiguous.
 
 ### 7.3 One-player path
 
-`mr_x_offer_choice_init` (`$11CCA`) begins by clearing `bad_ending_selected`. The player's response then selects one of two branches:
+`$11CCA (mr_x_offer_choice_init)` begins by clearing `$FFDE10 (bad_ending_selected)`. The player's response then selects one of two branches:
 
 - refuse: the scene ends, control is restored, and the fight against Mr. X can finish normally;
-- accept: `mr_x_offer_mark_bad_ending` (`$12074`) writes `1` to `bad_ending_selected` and advances the dialogue state.
+- accept: `$12074 (mr_x_offer_mark_bad_ending)` writes `1` to `$FFDE10 (bad_ending_selected)` and advances the dialogue state.
 
-Combat and stage exit still finish through the normal round-clear mechanism. The result byte is consumed only later at `$183C4`, after the score tally.
+Combat and stage exit still finish through the normal round-clear mechanism. The result byte is consumed only later at `$183C4 (round_clear_select_ending)`, after the score tally.
 
 ### 7.4 Two-player path
 
@@ -319,8 +319,8 @@ The same state machine supports additional cases in 2P mode:
 
 - matching answers can proceed directly to the corresponding branch;
 - conflicting answers activate a P1-versus-P2 confrontation;
-- `half_damage` changes applied strength during this fight;
-- the `player_mode` mask can be modified temporarily while the machine determines which player continues;
+- `$FFFA43 (half_damage)` changes applied strength during this fight;
+- the `$FFFF18 (player_mode)` mask can be modified temporarily while the machine determines which player continues;
 - one branch returns to round 6 by setting `level = 5` before re-entering the normal cycle.
 
 The code clearly establishes this topology. Assigning a definitive narrative name to every answer combination, however, requires a dynamic input matrix. The CSVs therefore name only states and outcomes confirmed by static evidence.
@@ -331,26 +331,26 @@ The code clearly establishes this topology. Assigning a definitive narrative nam
 
 ### 8.1 Good ending: states `$24/$26`
 
-`init_ending_good`:
+`$91D4 (init_ending_good)`:
 
 - clears object RAM;
-- loads the ending assets through `good_ending_sequence_init` (`$B3C6`);
+- loads the ending assets through `$B3C6 (good_ending_sequence_init)`;
 - queues music ID `$91`;
 - advances to state `$26`.
 
-`game_mode_ending_good` uses `story_scene_timeline_update`, the same timed-scene infrastructure used by the opening. Once the scene is sufficiently advanced, Start can skip to the top-ten screen (`$0C`). Without input, configuration 1 in `story_scene_config_table` also ends at `$0C` when its timeline index passes `$12`.
+`$9214 (game_mode_ending_good)` uses `$B6DE (story_scene_timeline_update)`, the same timed-scene infrastructure used by the opening. Once the scene is sufficiently advanced, Start can skip to the top-ten screen (`$0C`). Without input, configuration 1 in `$3F680 (story_scene_config_table)` also ends at `$0C` when its timeline index passes `$12`.
 
 ### 8.2 Bad ending: states `$1C/$1E`
 
-`bad_ending_sequence_init` (`$87C6`):
+`$87C6 (bad_ending_sequence_init)`:
 
 - clears the object area;
 - queues music ID `$8F`;
 - selects portrait art based on the surviving player and character;
-- initializes the state machine at `$F910`;
+- initializes the state machine at `$FFF910 (bad_ending_substate)`;
 - creates the first scene object.
 
-`bad_ending_sequence_update` (`$8890`) dispatches this machine through the relative table at `$88A0`, updates ending objects, and accepts Start during the final phases. The last fade writes `game_state = 0`, returning to the Sega-logo loop.
+`$8890 (bad_ending_sequence_update)` dispatches this machine through the relative table at `$88A0`, updates ending objects, and accepts Start during the final phases. The last fade writes `game_state = 0`, returning to the Sega-logo loop.
 
 The bad ending therefore has a separate implementation from the generic timeline used by the opening and the good ending.
 
@@ -398,28 +398,28 @@ void advanceCampaignAfterTally() {
 
 ## 10. Essential data map
 
-| Address | Symbol | Role |
-|---:|---|---|
-| `$FFFF00` | `game_state` | global mode |
-| `$FFFF02` | `level` | current round, `0..7` |
-| `$FFFF04` | `wave` | current enemy group within the round |
-| `$FFFF18` | `player_mode` | active-player mask |
-| `$FFFF2A` | `demo_mode` | distinguishes attract mode from campaign play |
-| `$FFFA1F` | `level_intro_active` | blocks gameplay during the initial fade |
-| `$FFFA30/$31/$33` | `story_scene_step/last_step/next_state` | opening and good-ending timeline |
-| `$FFFA71` | `fade_out_flag` | transition out of gameplay |
-| `$FFFA72` | `level_flow_flags` | internal loading and flow gates |
-| `$FFFA73` | `end_of_level_flag` | playable round completed |
-| `$FFFB06` | `story_scene_timer` | delay between timeline entries |
-| `$FFFB48` | `level_intro_substate` | “ROUND n” presentation |
-| `$FFFB4A` | `level_intro_timer` | round-presentation timing |
-| `$FFFB4C` | `round_clear_substate` | score tally and campaign advancement |
-| `$FFFB4E` | `round_clear_timer` | short tally delay |
-| `$FFDE00` | `mr_x_offer_flag` | activates the final offer |
-| `$FFDE04` | `mr_x_offer_state` | offer state-machine index |
-| `$FFDE0E` | `mr_x_dialogue_clear_flags` | requests clearing dialogue areas |
-| `$FFDE10` | `bad_ending_selected` | final result consumed after round 8 |
-| `$FFF910` | `bad_ending_substate` | bad-ending-specific state machine |
+| Reference | Role |
+|---|---|
+| `$FFFF00 (game_state)` | global mode |
+| `$FFFF02 (level)` | current round, `0..7` |
+| `$FFFF04 (wave)` | current enemy group within the round |
+| `$FFFF18 (player_mode)` | active-player mask |
+| `$FFFF2A (demo_mode)` | distinguishes attract mode from campaign play |
+| `$FFFA1F (level_intro_active)` | blocks gameplay during the initial fade |
+| `$FFFA30 (story_scene_step)` / `$FFFA31 (story_scene_last_step)` / `$FFFA33 (story_scene_next_state)` | opening and good-ending timeline |
+| `$FFFA71 (fade_out_flag)` | transition out of gameplay |
+| `$FFFA72 (level_flow_flags)` | internal loading and flow gates |
+| `$FFFA73 (end_of_level_flag)` | playable round completed |
+| `$FFFB06 (story_scene_timer)` | delay between timeline entries |
+| `$FFFB48 (level_intro_substate)` | “ROUND n” presentation |
+| `$FFFB4A (level_intro_timer)` | round-presentation timing |
+| `$FFFB4C (round_clear_substate)` | score tally and campaign advancement |
+| `$FFFB4E (round_clear_timer)` | short tally delay |
+| `$FFDE00 (mr_x_offer_flag)` | activates the final offer |
+| `$FFDE04 (mr_x_offer_state)` | offer state-machine index |
+| `$FFDE0E (mr_x_dialogue_clear_flags)` | requests clearing dialogue areas |
+| `$FFDE10 (bad_ending_selected)` | final result consumed after round 8 |
+| `$FFF910 (bad_ending_substate)` | bad-ending-specific state machine |
 
 ---
 
@@ -433,14 +433,14 @@ The first connection was made while the opening was already running:
 
 | Field | Observed value | Static interpretation |
 |---|---:|---|
-| `game_state` (`$FFFF00`) | `$0006` | `game_mode_intro` |
-| `story_scene_step` (`$FFFA30`) | `$05` | current timeline entry |
-| `story_scene_last_step` (`$FFFA31`) | `$16` | last opening entry loaded from config 0 |
-| `story_scene_next_state` (`$FFFA33`) | `$00` | configured completion state |
-| `story_scene_timer` (`$FFFB06`) | `$01EA` | 490 frames remaining for the current object |
-| `story_scene_script_ptr` (`$FFFC24`) | `$0003F690` | opening timeline selected by `$3F680` |
+| `$FFFF00 (game_state)` | `$0006` | `$904E (game_mode_intro)` |
+| `$FFFA30 (story_scene_step)` | `$05` | current timeline entry |
+| `$FFFA31 (story_scene_last_step)` | `$16` | last opening entry loaded from config 0 |
+| `$FFFA33 (story_scene_next_state)` | `$00` | configured completion state |
+| `$FFFB06 (story_scene_timer)` | `$01EA` | 490 frames remaining for the current object |
+| `$FFFC24 (story_scene_script_ptr)` | `$0003F690` | opening timeline selected by `$3F680 (story_scene_config_table)` |
 
-Samples were then taken every 60 VSyncs. During timeline step 5, `story_scene_timer` decreased from 490 to 9. Once it expired, `story_scene_step` advanced first to 6 and then to 7; the next long-duration object loaded a timer of 888. This behavior directly matches `story_scene_timeline_update` at `$B6DE`: wait for `$FB06` to reach zero, increment `$FFFA30`, read the next eight-byte script record, and install its timer and object parameters.
+Samples were then taken every 60 VSyncs. During timeline step 5, `$FFFB06 (story_scene_timer)` decreased from 490 to 9. Once it expired, `$FFFA30 (story_scene_step)` advanced first to 6 and then to 7; the next long-duration object loaded a timer of 888. This behavior directly matches `$B6DE (story_scene_timeline_update)`: wait for `$FFFB06 (story_scene_timer)` to reach zero, increment `$FFFA30 (story_scene_step)`, read the next eight-byte script record, and install its timer and object parameters.
 
 ### 11.2 Visual and VDP evidence
 
@@ -457,7 +457,7 @@ The captures showed three distinct phases:
 2. the horizontally moving city panorama after the text disappeared;
 3. a black transition frame while the timeline advanced to the next scene object.
 
-Every sampled framebuffer had a different SHA-256 digest, including while `story_scene_step` remained at 5. The scene therefore continued animating during the per-object wait rather than remaining visually static until the next timeline entry.
+Every sampled framebuffer had a different SHA-256 digest, including while `$FFFA30 (story_scene_step)` remained at 5. The scene therefore continued animating during the per-object wait rather than remaining visually static until the next timeline entry.
 
 ### 11.3 Natural completion route
 
@@ -469,7 +469,7 @@ demo_mode  = $01
 level      = $0000
 ```
 
-The runtime log also reached `start_round_setup`. This confirms the complete natural route described in section 3: opening state `$06` uses config 0 with next state `$00`; `game_mode_intro` recognizes that completion value, enables `demo_mode`, supplies the scripted input pointers, and enters attract-mode gameplay on level 0.
+The runtime log also reached `$E5C (start_round_setup)`. This confirms the complete natural route described in section 3: opening state `$06` uses config 0 with next state `$00`; `$904E (game_mode_intro)` recognizes that completion value, enables `$FFFF2A (demo_mode)`, supplies the scripted input pointers, and enters attract-mode gameplay on level 0.
 
 The dynamic run therefore confirms the manuscript's central claims about the narrative animation: its global state, timeline variables, timer behavior, script pointer, changing visual output, and natural transition into attract mode.
 
@@ -477,14 +477,14 @@ The dynamic run therefore confirms the manuscript's central claims about the nar
 
 ## 12. Conclusions
 
-- The campaign's persistent unit of progress is `level`; `wave` describes only progress within a round.
+- The campaign's persistent unit of progress is `$FFFF02 (level)`; `$FFFF04 (wave)` describes only progress within a round.
 - Normal advancement between rounds belongs to the round-clear screen, not to the logic that defeats the boss.
-- The round introduction and score tally have independent state machines at `$FB48` and `$FB4C`.
-- Attract mode reuses gameplay but is isolated by `demo_mode` and never follows normal campaign progression.
-- Mr. X's offer runs inside `game_mode_ingame`; it is not a separate global `game_state`.
-- The final narrative choice is reduced to one byte, `bad_ending_selected`, read at a single routing point after round 8.
+- The round introduction and score tally have independent state machines at `$FFFB48 (level_intro_substate)` and `$FFFB4C (round_clear_substate)`.
+- Attract mode reuses gameplay but is isolated by `$FFFF2A (demo_mode)` and never follows normal campaign progression.
+- Mr. X's offer runs inside `$1087A (game_mode_ingame)`; it is not a separate global `$FFFF00 (game_state)`.
+- The final narrative choice is reduced to one byte, `$FFDE10 (bad_ending_selected)`, read at a single routing point after round 8.
 - The recompiled C++ deliberately preserves this ROM/RAM architecture, so understanding story mode still requires tracing the original addresses and jump tables.
 
 ## 13. Future work
 
-A dynamic analysis can complete the 2P matrix for Mr. X's offer. The ideal test would record, for every combination of answers, the per-frame values of `$FFDE04`, `$FFDE10`, P1/P2 `object+$59`, `$FFFF18`, `$FFFF34`, `$FFFF36`, and `game_state`. This would make it possible to name the two remaining flags with 100% confidence and document exactly when the special route returns to round 6.
+A dynamic analysis can complete the 2P matrix for Mr. X's offer. The ideal test would record, for every combination of answers, the per-frame values of `$FFDE04 (mr_x_offer_state)`, `$FFDE10 (bad_ending_selected)`, P1/P2 `object+$59`, `$FFFF18 (player_mode)`, `$FFFF34`, `$FFFF36`, and `$FFFF00 (game_state)`. This would make it possible to name the two remaining flags with 100% confidence and document exactly when the special route returns to round 6.

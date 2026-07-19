@@ -10,15 +10,15 @@ not ordinary enemies:
 
 | Type | Boss family | Confirming rounds | Handler |
 |---:|---|---|---:|
-| `$55` | Souther | 2, 6, 8 | `$0158C4` |
-| `$56` | Antonio | 1, 8 | `$015E70` |
-| `$57` | Bongo | 4, 6, 8 | `$016CE4` |
-| `$58` | Onihime/Yasha | 5, 8 | `$0174E0` |
-| `$30` | Abadede | 3, 8 | `$0143D0` |
+| `$55` | Souther | 2, 6, 8 | `$158C4 (onihime_yasha_update)` |
+| `$56` | Antonio | 1, 8 | `$15E70 (souther_update)` |
+| `$57` | Bongo | 4, 6, 8 | `$16CE4 (antonio_update)` |
+| `$58` | Onihime/Yasha | 5, 8 | `$174E0 (bongo_update)` |
+| `$30` | Abadede | 3, 8 | `$143D0 (abadede_update)` |
 
 Those handlers are discussed only at the boundary of shared infrastructure. Earlier inference from their sophisticated target selection was insufficient to classify them as ordinary enemies; ELC placement is decisive.
 
-The ordinary roster is the contiguous type range `$20-$2A`. `$009350` subtracts `$20` and accepts exactly eleven values, and the palette/metadata pass at `$000810` applies the same range. The ordinary subsystem is more data-driven than the later boss handlers: type and variant select statistic, palette, animation and behavior tables around `$026FCE-$027032`.
+The ordinary roster is the contiguous type range `$20-$2A`. `$9350 (is_nonordinary_enemy_type)` subtracts `$20` and accepts exactly eleven values, and the palette/metadata pass at `$810 (prepare_next_spawn_section)` applies the same range. The ordinary subsystem is more data-driven than the later boss handlers: type and variant select statistic, palette, animation and behavior tables around `$026FCE-$027032`.
 
 ## Ordinary-enemy lifecycle
 
@@ -33,33 +33,33 @@ spawn type $20-$2A
     -> remove object, release palette/active-enemy accounting
 ```
 
-`$00937A` is the activation entry. Once the object is eligible, `$00938C` derives `type_index=type-$20`, initializes combat/animation metadata, selects a target, and enters the normal state.
+`$937A (ordinary_enemy_activate)` is the activation entry. Once the object is eligible, `$938C (ordinary_enemy_init_type_data)` derives `type_index=type-$20`, initializes combat/animation metadata, selects a target, and enters the normal state.
 
 Primary state is a **word** at object offset `$30`, normally encoded in `$0100` increments. This differs from the byte-sized state conventions in several boss families.
 
 ## Object layout used by ordinary enemies
 
-Objects are 128 bytes in the table beginning at `$FFB900`.
+Objects are 128 bytes in the table beginning at `$FFB900 (object_table)`.
 
 | Offset | Width | Meaning | Evidence |
 |---:|---:|---|---|
-| `$00` | B | Type `$20-$2A` | `$9350`, `$938C` |
+| `$00` | B | Type `$20-$2A` | `$9350 (is_nonordinary_enemy_type)`, `$938C (ordinary_enemy_init_type_data)` |
 | `$01` | B | Visibility, collision and airborne flags | hit/death paths |
 | `$04` | L | Animation-set pointer | selected from `$27032` |
 | `$08` | W | Animation/action index | `$969E/$96C0` |
 | `$09` | B | Facing flags; bit 1 is left/right | `$96C0`, `$9E4C` |
 | `$10/$14/$18` | L each | X, lane/depth, and vertical position | movement helpers |
-| `$1C/$20/$24` | L each | X, lane, and vertical velocity | `$973E`, `$9F96`, `$A00E` |
+| `$1C/$20/$24` | L each | X, lane, and vertical velocity | `$973E`, `$9F96 (ordinary_enemy_advance_x_bounded)`, `$A00E (ordinary_enemy_advance_lane_bounded)` |
 | `$30` | W | Primary state (`$0100`, `$0300`...) | reaction paths |
 | `$31` | B | Fine-grained reaction/physics flags | `$991A-$9D16` |
-| `$32` | W | Health/energy | `$93CE`, `$9BC6`, `$A13A` |
-| `$33` | B | Type/variant combat statistic; mirrored at `$38` | `$93CE` |
-| `$34` | B | Contact/attack damage | `$93CE`, damage consumers |
+| `$32` | W | Health/energy | `$93CE (ordinary_enemy_init_combat_values)`, `$9BC6`, `$A13A` |
+| `$33` | B | Type/variant combat statistic; mirrored at `$38` | `$93CE (ordinary_enemy_init_combat_values)` |
+| `$34` | B | Contact/attack damage | `$93CE (ordinary_enemy_init_combat_values)`, damage consumers |
 | `$37` | B | Hit/throw/death flags | shared collision paths |
-| `$39` | B | Score/palette/accounting selector | `$93B4`, `$9E26` |
+| `$39` | B | Score/palette/accounting selector | `$93B4`, `$9E26 (ordinary_enemy_award_score)` |
 | `$3E` | W | Current collision/attacker object pointer | `$969E`, `$9BC6` |
 | `$40-$41` | B/B | Spawn/variant metadata | `$945A`, visibility gates |
-| `$42` | W | Current target player pointer | `$96EC` |
+| `$42` | W | Current target player pointer | `$96EC (ordinary_enemy_select_target)` |
 | `$48-$4B` | B each | status, damage/reaction and substate scratch | reaction dispatchers |
 | `$50-$51` | B/B | General action timer/substate scratch | many states |
 | `$60/$62` | W/W | Desired X/lane point for scripted approach | `$9604-$9682` |
@@ -69,10 +69,10 @@ Several offsets are polymorphic by state and type; the table lists only uses dem
 
 ## Type and variant data
 
-`$00938C` performs four data-driven steps:
+`$938C (ordinary_enemy_init_type_data)` performs four data-driven steps:
 
 1. `$00945A` splits spawn byte `$41` into two nibbles and maps each through `$9484`, producing signed/unsigned approach offsets at `$68/$66`.
-2. `$0093CE` indexes six-byte records at `$26FCE` by `type_index*6 + variant`. It loads `$33`, copies it to `$38`, and loads attack damage `$34`. On highest difficulty both receive `+4`.
+2. `$93CE (ordinary_enemy_init_combat_values)` indexes six-byte records at `$26FCE` by `type_index*6 + variant`. It loads `$33`, copies it to `$38`, and loads attack damage `$34`. On highest difficulty both receive `+4`.
 3. `$0093B4` indexes `$27010` to choose `$39`, used by score/palette accounting.
 4. `$009406` selects palette/tile base, while `$27032[type_index]` supplies the animation/behavior resource pointer.
 
@@ -81,14 +81,14 @@ Thus archetype differences are not eleven completely separate top-level function
 | Type range | Classification | Proven differentiation |
 |---|---|---|
 | `$20-$2A` | Ordinary enemies | Eleven type records; type/variant stats, palette and animation-set pointer |
-| `$30` | Abadede boss | Separate byte-state handler `$143D0` |
+| `$30` | Abadede boss | Separate byte-state handler `$143D0 (abadede_update)` |
 | `$55-$58` | Souther/Antonio/Bongo/Onihime-Yasha bosses | Separate boss-family handlers and target selectors |
 
 Mapping each `$20-$2A` value to a retail name requires correlating ELC type, art/palette and framebuffer output; names should not be guessed from code order.
 
 ## Target selection
 
-`$0096EC` is the common ordinary-enemy selector. It writes the player object pointer to `$42(a0)`:
+`$96EC (ordinary_enemy_select_target)` is the common ordinary-enemy selector. It writes the player object pointer to `$42(a0)`:
 
 - no active player: enter state `$0400` and set the relevant state flag;
 - 1P: select the active player's object;
@@ -105,13 +105,13 @@ function ordinary_enemy_select_target(enemy):
     enemy.target_ptr = target
 ```
 
-There is no global threat table. Targeting is nearest-X and can be recalculated by behavior states. Boss selectors at `$129F8`, `$15946`, `$16294`, `$16D40`, and `$1753A` are separate and often add pair-role, facing or lane biases.
+There is no global threat table. Targeting is nearest-X and can be recalculated by behavior states. Boss selectors at `$129F8`, `$15946 (onihime_yasha_select_target)`, `$16294 (souther_select_target)`, `$16D40 (antonio_select_target)`, and `$1753A (bongo_select_target)` are separate and often add pair-role, facing or lane biases.
 
 ## Navigation and spacing
 
-`$009604-$009682` moves toward desired X/lane coordinates stored at `$60/$62`. `$009648/$009654` derive those coordinates from the target and type-derived offsets `$66/$68`, reflecting offsets at lane boundaries. `$00982C` converts a vector to fixed-point X/lane velocity using the direction table at `$2705E`; on Easy, high speed values are reduced.
+`$009604-$009682` moves toward desired X/lane coordinates stored at `$60/$62`. `$009648/$009654` derive those coordinates from the target and type-derived offsets `$66/$68`, reflecting offsets at lane boundaries. `$982C (ordinary_enemy_vector_to_velocity)` converts a vector to fixed-point X/lane velocity using the direction table at `$2705E`; on Easy, high speed values are reduced.
 
-`$0098E8` computes an inexpensive distance metric:
+`$98E8 (ordinary_enemy_distance_metric)` computes an inexpensive distance metric:
 
 ```text
 major = max(abs(dx), abs(dlane))
@@ -121,9 +121,9 @@ distance ~= 3/8 * major + minor
 
 Movement is constrained by collision and arena helpers:
 
-- `$009F96` advances X but rejects stage bounds (with special bounds for rounds 7/8);
-- `$00A00E` advances lane and constrains it normally to `$02-$70`, with a wider round-7 special case;
-- `$009E68` probes ground/obstacles, resolves small side steps and transitions to state `$0700` when blocked;
+- `$9F96 (ordinary_enemy_advance_x_bounded)` advances X but rejects stage bounds (with special bounds for rounds 7/8);
+- `$A00E (ordinary_enemy_advance_lane_bounded)` advances lane and constrains it normally to `$02-$70`, with a wider round-7 special case;
+- `$9E68 (ordinary_enemy_move_with_collision)` probes ground/obstacles, resolves small side steps and transitions to state `$0700` when blocked;
 - `$009F22/$009F56/$009F6A/$009FE6` perform forward/side obstruction checks before allowing movement.
 
 This is steering plus collision probes, not graph search. Enemies approach a target-relative point, stop or sidestep when probes fail, and let animation/state callbacks decide when to attack or retreat.
@@ -141,16 +141,16 @@ Randomness is explicit rather than ambient. `$0104D8` is used in reaction/landin
 
 Proven difficulty effects are:
 
-- spawn filtering by low two bits of ELC metadata in `object_manager_loop`;
-- `$93CE` adds four to ordinary-enemy combat values `$33/$34` on the highest difficulty;
-- `$982C` reduces large movement speed on Easy;
+- spawn filtering by low two bits of ELC metadata in `$784 (object_manager_loop)`;
+- `$93CE (ordinary_enemy_init_combat_values)` adds four to ordinary-enemy combat values `$33/$34` on the highest difficulty;
+- `$982C (ordinary_enemy_vector_to_velocity)` reduces large movement speed on Easy;
 - type/variant tables may already encode different baseline health/damage.
 
 ## Collision, reactions, grabs, and death
 
-`$00991A` initializes a generic hit/knockback reaction, clears attack damage, selects facing from the attacker, and dispatches by reaction subtype `$4A`. `$0099A2` advances airborne physics and landing, using `$973E` for vertical motion and `$9F22` for obstacle response.
+`$991A (ordinary_enemy_begin_hit_reaction)` initializes a generic hit/knockback reaction, clears attack damage, selects facing from the attacker, and dispatches by reaction subtype `$4A`. `$99A2 (ordinary_enemy_update_airborne_reaction)` advances airborne physics and landing, using `$973E` for vertical motion and `$9F22` for obstacle response.
 
-`$009B88` is a common contact-damage/stun path. It obtains the attacker through `$3E`, subtracts attacker damage `$34` from health `$32`, and chooses:
+`$9B88 (ordinary_enemy_apply_contact_damage)` is a common contact-damage/stun path. It obtains the attacker through `$3E`, subtracts attacker damage `$34` from health `$32`, and chooses:
 
 - continue timed stun;
 - `$0300` for damaging/airborne reaction or lethal transition;
@@ -163,9 +163,9 @@ Death accounting is centralized:
 
 - `$00950E` and `$009566` can force all ordinary enemies into scripted death/removal states;
 - `$0097E6/$00997E` detect offscreen/fall deaths and select sounds;
-- `$009DC0` decrements palette/enemy counters;
-- `$009E26` awards score to P1 or P2 using `$39`;
-- `$009E3E` clears all 128 bytes of the object.
+- `$9DC0 (ordinary_enemy_release_accounting)` decrements palette/enemy counters;
+- `$9E26 (ordinary_enemy_award_score)` awards score to P1 or P2 using `$39`;
+- `$9E3E (clear_object_128)` clears all 128 bytes of the object.
 
 ## Group behavior
 
@@ -177,7 +177,7 @@ The ordinary subsystem has no proven formation controller. Its group-level behav
 - player interaction bytes `$7C/$7D`, which prevent incompatible simultaneous grab/contact states;
 - ELC timing and difficulty filters, which control when a group enters play.
 
-The explicit same-type pair roles at boss helper `$17F2E` belong to types `$55-$58` and must not be generalized to ordinary enemies.
+The explicit same-type pair roles at boss helper `$17F2E (boss_link_same_type_pair)` belong to types `$55-$58` and must not be generalized to ordinary enemies.
 
 ## Shared infrastructure and boss boundary
 
@@ -227,7 +227,7 @@ These duplicate-checked entries were integrated into the shared CSV files.
 
 ### `addresses.csv`
 
-No new absolute RAM symbol is necessary. The important fields are offsets in each `$80`-byte object, and adding first-slot aliases would misleadingly imply that only `$FFB900` carries them. The existing `object_table` entry should instead be corrected to:
+No new absolute RAM symbol is necessary. The important fields are offsets in each `$80`-byte object, and adding first-slot aliases would misleadingly imply that only `$FFB900 (object_table)` carries them. The existing `$FFB900 (object_table)` entry should instead be corrected to:
 
 ```csv
 FFB900, object_table, "100% - Start of 32-slot, $80-byte gameplay object table; ordinary enemies use types $20-$2A, with type at +$00, primary state W at +$30, health W at +$32 and target pointer W at +$42"
@@ -270,9 +270,9 @@ There is no single `Boss` class. There are three related implementation
 strata:
 
 1. **Abadede and Mr. X use older bespoke objects.** Abadede is type `$30`,
-   dispatched to `$143D0`, and owns helper type `$31`. Mr. X uses the older
+   dispatched to `$143D0 (abadede_update)`, and owns helper type `$31`. Mr. X uses the older
    `$1306A-$13EBC` subsystem (type `$35` by the dispatcher table); its terminal
-   initialization at `$13E4C` explicitly registers the final encounter with
+   initialization at `$13E4C (mr_x_final_encounter_init)` explicitly registers the final encounter with
    the HUD/stage-clear system.
 2. **Antonio, Souther, Bongo, and the twins share a later boss framework.**
    Types `$55-$58` have separate tactical state tables, but share target,
@@ -281,9 +281,9 @@ strata:
 3. **The level engine remains authoritative over progression.** Boss objects
    do not load the next round themselves. The ELC pipeline locks the arena,
    loads the required art, spawns the boss, and waits for encounter state to
-   drain. Boss death updates counters or final-HUD pointers; `stage_clear_monitor`
-   at `$117FC` converts the resulting late-phase condition into
-   `end_of_level_flag`.
+   drain. Boss death updates counters or final-HUD pointers;
+   `$117FC (stage_clear_monitor)` converts the resulting late-phase condition into
+   `$FFFA73 (end_of_level_flag)`.
 
 The types `$20-$2A` are ordinary/auxiliary objects from an earlier enemy
 framework. Their common state tables and tracked-entity count matter to the
@@ -292,18 +292,18 @@ because they use the same health offset and occur in late waves.
 
 ### Object dispatch and boss identity
 
-The global object dispatcher at `$AD8E` indexes the word table at `$B236`.
+The global object dispatcher at `$AD8E (update_select_objects)` indexes the word table at `$B236`.
 Several entries are trampolines because the real handler lies outside the
 signed 16-bit address range.
 
 | Retail boss | Object type | Top-level update | Shared family | Important helper objects |
 |---|---:|---:|---|---|
-| Antonio | `$56` | `$16CE4` | later boss framework | `$96` linked boomerang/attack object |
-| Souther | `$55` | `$15E70` | later boss framework | `$98/$99` linked claw/afterimage attack objects |
-| Abadede | `$30` | `$143D0` | bespoke older framework | `$31` linked body/attack component; `$39` conditional effect |
-| Bongo | `$57` | `$174E0` | later boss framework | `$97` linked flame/attack object |
-| Onihime/Yasha | `$58` | `$158C4` | later boss framework | pairing metadata in the two boss objects |
-| Mr. X | `$35` | `$1306A` | bespoke final-boss framework | attack/effect objects in the `$33-$38` family |
+| Antonio | `$56` | `$16CE4 (antonio_update)` | later boss framework | `$96` linked boomerang/attack object |
+| Souther | `$55` | `$15E70 (souther_update)` | later boss framework | `$98/$99` linked claw/afterimage attack objects |
+| Abadede | `$30` | `$143D0 (abadede_update)` | bespoke older framework | `$31` linked body/attack component; `$39` conditional effect |
+| Bongo | `$57` | `$174E0 (bongo_update)` | later boss framework | `$97` linked flame/attack object |
+| Onihime/Yasha | `$58` | `$158C4 (onihime_yasha_update)` | later boss framework | pairing metadata in the two boss objects |
+| Mr. X | `$35` | `$1306A (mr_x_boss_update)` | bespoke final-boss framework | attack/effect objects in the `$33-$38` family |
 
 The type-to-name mapping for `$55-$58` is 100% as a sequence and 95% for each
 individual retail label: the ELC streams place the types in exactly the known
@@ -318,8 +318,8 @@ through the office controller rather than a simple six-byte ELC boss record.
 
 #### ELC records, resource residency, and the late phase
 
-At round initialization `$E5C` Nemesis-decompresses the selected ELC stream to
-`$FF6800`. The level pipeline consumes its six-byte entity records, filters them
+At round initialization `$E5C (start_round_setup)` Nemesis-decompresses the selected ELC stream to
+`$FF6800 (elc_buffer)`. The level pipeline consumes its six-byte entity records, filters them
 by difficulty and player count, and loads art before materializing an object.
 Bosses therefore use the same data-driven entrance mechanism as other
 encounters; they are not hard-coded at the end of every round.
@@ -338,20 +338,20 @@ The Round 8 stream repeats the same structural pattern for `$56`, `$55`, `$30`,
 qualifier. Bytes copied to object `+$40`, `+$41`, and `+$49` choose partner
 roles, palette/stat variants, and encounter-specific behavior.
 
-When the pipeline reaches the late phase, `$FFFA05` bit 6 is set. This has
+When the pipeline reaches the late phase, `$FFFA05 (level_spawn_flow_flags)` bit 6 is set. This has
 several effects:
 
-- `play_level_music` selects boss music (`$87`, or `$90` in Round 8);
+- `$11B12 (play_level_music)` selects boss music (`$87`, or `$90` in Round 8);
 - camera progression stops opening new corridors;
 - boss initializers register HUD pointers through `$F502/$F508`;
 - the level pipeline changes from spawning/scanning to waiting for completion;
-- `stage_clear_monitor` begins considering the stage clear condition.
+- `$117FC (stage_clear_monitor)` begins considering the stage clear condition.
 
 #### Arena and camera locking
 
-The camera is constrained by the two X boundaries at `$FFE01A` (maximum) and
-`$FFE01E` (minimum). Normal waves open one side of the corridor through
-`$19570`; the transition state at `$6A6` waits until the camera has reached the
+The camera is constrained by the two X boundaries at `$FFE01A (camera_x_max)` (maximum) and
+`$FFE01E (camera_x_min)` (minimum). Normal waves open one side of the corridor through
+`$19570 (advance_wave_camera_boundary)`; the transition state at `$6A6 (update_camera_scroll_if_needed)` waits until the camera has reached the
 new bound before normalizing active entities. A boss arena is therefore a
 camera-boundary condition plus a spawn phase, not a rectangle owned by the
 boss object.
@@ -392,7 +392,7 @@ fields are:
 
 #### Statistics and difficulty
 
-`$17EDC` indexes four bytes by `type-$55`: one base-damage table at `$17F26`
+`$17EDC (boss_init_combat_stats)` indexes four bytes by `type-$55`: one base-damage table at `$17F26`
 and one health table at `$17F2A`. Difficulty transforms them as follows:
 
 | Boss type | Base damage | Base health |
@@ -455,7 +455,7 @@ function update_later_boss(boss):
 
 #### Damage, vulnerability, and death
 
-`$17C36` is the shared received-damage path. Collision code leaves damage in
+`$17C36 (boss_apply_pending_damage)` is the shared received-damage path. Collision code leaves damage in
 `+$6C` and the attacker pointer in `+$70`; the routine subtracts it from health
 `+$32`, clears movement, and chooses hitstun, knockback, or lethal reaction.
 Attack states can temporarily suppress or redirect this path through flags and
@@ -465,17 +465,17 @@ or counter jump attacks.
 The airborne/bounce path at `$16400` returns a living boss to active AI. A
 defeated boss proceeds to `$16512`, which counts down, blinks/removes the
 sprite, awards score via `$16542`, clears its partner relationship through
-`$17F9C`, and finally clears the object slot.
+`$17F9C (boss_unlink_pair)`, and finally clears the object slot.
 
-Pairing is significant for Round 5/6/8. `$17F2E` scans for another object of
+Pairing is significant for Round 5/6/8. `$17F2E (boss_link_same_type_pair)` scans for another object of
 the same type and writes reciprocal roles (`+$5D=1/2`) and partner pointers
 (`+$5E`). Target selectors use those roles to split attention across P1/P2.
 Death unlinks the survivor so it can return to unpaired target selection.
 
-### Antonio (`$56`, `$16CE4`)
+### Antonio (`$56`, `$16CE4 (antonio_update)`)
 
 Antonio uses the family-C table rooted near `$16CF4`. Initialization at
-`$16D0A` selects a player, initializes stats through `$17EDC`, loads animations
+`$16D0A` selects a player, initializes stats through `$17EDC (boss_init_combat_stats)`, loads animations
 from `$2E8B4`, and discovers a same-type partner if the ELC supplied one.
 
 The tactical code keeps wider spacing than the close-range bosses and selects
@@ -485,13 +485,13 @@ parent's animation phase and facing. The link is the code-side implementation
 of the visible boomerang choreography: the attack object follows Antonio during
 wind-up/catch phases and becomes independently active during the throw.
 
-The target selector at `$16D40` has explicit pair-role thresholds in 2P. This
+The target selector at `$16D40 (antonio_select_target)` has explicit pair-role thresholds in 2P. This
 is used by the optional extra/variant record as well as by repeated Round 8
 encounters; it is not evidence for a story-level second Antonio in every mode.
 
-### Souther (`$55`, `$15E70`)
+### Souther (`$55`, `$15E70 (souther_update)`)
 
-Souther's selector at `$16294` is the most elaborate of the four shared
+Souther's selector at `$16294 (souther_select_target)` is the most elaborate of the four shared
 families. It considers both players' action states, X/lane distance, facing,
 pair role, and a target-hold counter. This supports the characteristic response
 to a player who commits to a jump or approaches from a vulnerable side.
@@ -506,40 +506,40 @@ Round 6 deliberately supplies two Souther records. Pair roles split targeting
 and reduce both bosses choosing the same player in 2P. The same logic makes a
 single surviving Souther behave normally after its partner dies.
 
-### Abadede (`$30`, `$143D0`)
+### Abadede (`$30`, `$143D0 (abadede_update)`)
 
 Abadede predates the `$55-$58` framework. His state byte still lives at `+$30`
 and health at `+$32`, but he dispatches through the relative state table near
 `$14466` and uses target pointer `+$5C` rather than `+$72`.
 
-Initialization at `$144E0`:
+Initialization at `$144E0 (abadede_init)`:
 
 - clears a global coordination bit;
 - creates linked type `$31` and stores it at `+$50`;
 - conditionally creates type `$39` for a variant;
 - loads the `$34B94` animation set;
-- calls `$1456A` for difficulty/variant health and damage;
+- calls `$1456A (abadede_init_combat_stats)` for difficulty/variant health and damage;
 - selects a player through `$129F8`;
 - seeds strong X/lane velocities and faces the target.
 
 The base `(health, damage)` pairs at `$145BC` are Easy `($20,$10)`, Normal
-`($20,$20)`, Hard `($20,$40)`, and Hardest `($34,$40)`. `$1456A` can then add
+`($20,$20)`, Hard `($20,$40)`, and Hardest `($34,$40)`. `$1456A (abadede_init_combat_stats)` can then add
 variant bonuses from ELC fields, so a repeated Abadede need not have exactly
 the canonical Round 3 values.
 
 The core behavior is a charge/clothesline cycle. `$1401E` flips velocity signs
 toward the selected player, while `$14048` updates facing. Collision dispatcher
-`$13ED8` routes contact outcomes: a clean hit marks the player interaction,
+`$13ED8 (bespoke_boss_collision_dispatch)` routes contact outcomes: a clean hit marks the player interaction,
 received attacks subtract the attacker's `+$34` from `+$32`, and lethal damage
 selects state `$0E`.
 
 Abadede also has explicit multi-instance coordination. `$14486` scans all
 object slots for another type `$30`; if one is active outside selected reaction
-states, `$FA53` is used to coordinate forced transitions. This explains why
+states, `$FFFA53 (boss_forced_reaction_flags)` is used to coordinate forced transitions. This explains why
 Round 8 and two-player variants do not reduce to two completely independent
 charge loops.
 
-### Bongo (`$57`, `$174E0`)
+### Bongo (`$57`, `$174E0 (bongo_update)`)
 
 Bongo's family-D state machine circles in the lane, corrects screen-edge
 position, and then commits to a multi-stage acceleration/charge. The attack
@@ -551,16 +551,16 @@ and facing and implements the flame/contact portion of the attack. Parent and
 linked object exchange animation-phase information so the hit region appears
 only during the appropriate breath/charge frames.
 
-The target selector `$1753A` alternates players more aggressively than
+The target selector `$1753A (bongo_select_target)` alternates players more aggressively than
 Antonio's and uses pair roles to avoid duplicate targets. Round 6 uses Bongo as
 a mid-round boss-strength encounter; Round 7 reuses the family in the elevator
 gauntlet; Round 8 repeats it as the fourth boss-rush family.
 
-### Onihime and Yasha (`$58`, `$158C4`)
+### Onihime and Yasha (`$58`, `$158C4 (onihime_yasha_update)`)
 
 The twins are two objects of the same type rather than a controller with two
-hard-coded child actors. ELC metadata causes `$17F2E` to pair them and assign
-reciprocal roles. Their family-A selector at `$15946` normally chooses the
+hard-coded child actors. ELC metadata causes `$17F2E (boss_link_same_type_pair)` to pair them and assign
+reciprocal roles. Their family-A selector at `$15946 (onihime_yasha_select_target)` normally chooses the
 nearest usable player but uses the pair role to bias the two bosses apart.
 
 Their state table contains close-range approach, rapid jump/airborne attacks,
@@ -570,7 +570,7 @@ velocity and upward vertical velocity; later states wait for the stored ground
 height before recovering.
 
 The two-object design gives the desired phase change for free: after one twin
-dies, `$17F9C` clears the survivor's pair role and pointer, so its selector no
+dies, `$17F9C (boss_unlink_pair)` clears the survivor's pair role and pointer, so its selector no
 longer tries to maintain split targeting. There is no separate low-health
 enrage variable in the inspected code; the apparent second phase is the
 survivor operating without pair constraints.
@@ -581,9 +581,9 @@ survivor operating without pair constraints.
 
 Round 8 differs from every other round. The ELC boss rush first reintroduces
 the five earlier families. The office controller then sets
-`mr_x_offer_flag` (`$FFDE00`) and `stop_clock` (`$FFFA79`).
-`mr_x_offer_update` at `$11B4C` runs every gameplay frame and dispatches the
-dialogue/choice machine through `$11B94`.
+`$FFDE00 (mr_x_offer_flag)` and `$FFFA79 (stop_clock)`.
+`$11B4C (mr_x_offer_update)` runs every gameplay frame and dispatches the
+dialogue/choice machine through `$11B94 (mr_x_offer_jt)`.
 
 The offer can:
 
@@ -599,7 +599,7 @@ mode. The boss object and level pipeline continue to exist beneath it.
 
 #### Mr. X body and attack state machine
 
-The final boss uses the bespoke handler at `$1306A` (dispatcher type `$35`).
+The final boss uses the bespoke handler at `$1306A (mr_x_boss_update)` (dispatcher type `$35`).
 Its relative state table at `$130B8` reaches movement, charge, firing,
 hit-reaction, and death states through `$130D6-$13E3E`. It uses:
 
@@ -607,14 +607,14 @@ hit-reaction, and death states through `$130D6-$13E3E`. It uses:
 - `+$32` for health and `+$34` for outgoing damage;
 - `$129F8/$12A4E/$12A78` for target selection and range tests;
 - `$1401E/$14048` for velocity steering and facing;
-- `$13ED8` for collision-result dispatch;
+- `$13ED8 (bespoke_boss_collision_dispatch)` for collision-result dispatch;
 - effect/projectile objects in the neighboring `$33-$38` type family for the
   machine-gun/impact choreography.
 
-`$13EBC` selects health and damage from a difficulty table. The common
+`$13EBC (mr_x_init_combat_stats)` selects health and damage from a difficulty table. The common
 collision reaction at `$13F9A` subtracts the attacker's `+$34`; health at or
 below zero selects the terminal state. Unlike the shared later-boss death
-path, Mr. X's terminal initialization `$13E4C` explicitly:
+path, Mr. X's terminal initialization `$13E4C (mr_x_final_encounter_init)` explicitly:
 
 | Difficulty | Health | Damage |
 |---|---:|---:|
@@ -631,7 +631,7 @@ $FFFA56 = 0
 initialize difficulty stats and final animation
 ```
 
-This is why `stage_clear_monitor` has a special branch for `$FA77`: final-stage
+This is why `$117FC (stage_clear_monitor)` has a special branch for `$FFFA77 (final_boss_presentation_active)`: final-stage
 completion is coupled to the registered Mr. X object and presentation state,
 not merely to the generic tracked-enemy count.
 
@@ -641,12 +641,12 @@ not merely to the generic tracked-enemy count.
 |---:|---|---|
 | 1 | Antonio, type `$56` | ELC contains adjacent 1P/2P-qualified variant records. |
 | 2 | Souther, type `$55` | Counter/target logic reacts to player action and facing, not only distance. |
-| 3 | Abadede, type `$30` + linked `$31` | Bespoke charge framework; does not use `$17EDC`. |
+| 3 | Abadede, type `$30` + linked `$31` | Bespoke charge framework; does not use `$17EDC (boss_init_combat_stats)`. |
 | 4 | Bongo, type `$57` + linked `$97` | Flame/charge link is synchronized to parent animation. |
 | 5 | Onihime/Yasha, two type `$58` objects | Same-type pairing splits targets; survivor becomes unpaired automatically. |
 | 6 | Bongo encounter, then two Southers | Multiple boss families inside one round; only the final drain closes the stage. |
-| 7 | No canonical terminal boss | Elevator/gauntlet progression uses special camera logic and pre-created controller objects `$50-$53`; completion is the level-index-6 special case in `$117FC`. |
-| 8 | `$56 -> $55 -> $30 -> $57 -> $58`, then Mr. X | Boss rush shares one late-phase pipeline; office offer interrupts control/clock; final completion uses `$FA77` and Mr. X HUD pointers. |
+| 7 | No canonical terminal boss | Elevator/gauntlet progression uses special camera logic and pre-created controller objects `$50-$53`; completion is the level-index-6 special case in `$117FC (stage_clear_monitor)`. |
+| 8 | `$56 -> $55 -> $30 -> $57 -> $58`, then Mr. X | Boss rush shares one late-phase pipeline; office offer interrupts control/clock; final completion uses `$FFFA77 (final_boss_presentation_active)` and Mr. X HUD pointers. |
 
 ### Progression counters and stage clear
 
@@ -654,8 +654,8 @@ Two completion mechanisms coexist.
 
 #### Generic tracked entities
 
-The ELC loader classifies the older `$20-$2A` objects through `$9350`. Tracked
-objects increment `$FFFB1E` when spawned, set an object flag, and decrement the
+The ELC loader classifies the older `$20-$2A` objects through `$9350 (is_nonordinary_enemy_type)`. Tracked
+objects increment `$FFFB1E (active_progression_entity_count)` when spawned, set an object flag, and decrement the
 counter in the common death path at `$9D8C`. When the counter reaches zero,
 level-flow flags can be cleared and the next ELC section or pipeline state can
 run. This is especially important for adds around boss encounters: killing the
@@ -663,15 +663,15 @@ visual boss alone is not sufficient if a tracked add remains.
 
 #### Registered boss health and final completion
 
-The `$55-$58` initializer `$17F2E` registers one or two boss pointers at
-`$FFF502/$FFF508` while late-phase bit 6 is set. `$F50F` identifies the display
-variant. `stage_clear_monitor` uses these pointers to render/observe health and
+The `$55-$58` initializer `$17F2E (boss_link_same_type_pair)` registers one or two boss pointers at
+`$FFF502/$FFF508` while late-phase bit 6 is set. `$FFF50F (boss_pair_display_variant)` identifies the display
+variant. `$117FC (stage_clear_monitor)` uses these pointers to render/observe health and
 to decide when presentation state can advance.
 
-For normal rounds, `$FFFA05` bit 6 is the gate that says a late/boss phase is
+For normal rounds, `$FFFA05 (level_spawn_flow_flags)` bit 6 is the gate that says a late/boss phase is
 eligible to finish. Round 7 bypasses the normal boss expectation and directly
-sets `end_of_level_flag` once its special gauntlet condition is met. Round 8
-uses `$FA77` and the Mr. X registration path.
+sets `$FFFA73 (end_of_level_flag)` once its special gauntlet condition is met. Round 8
+uses `$FFFA77 (final_boss_presentation_active)` and the Mr. X registration path.
 
 ```text
 function maybe_finish_encounter():
@@ -696,7 +696,7 @@ function maybe_finish_encounter():
 ```
 
 The exact ordering is split across the end-of-frame level dispatcher and
-`stage_clear_monitor`, but the ownership boundary is clear: boss AI removes or
+`$117FC (stage_clear_monitor)`, but the ownership boundary is clear: boss AI removes or
 registers combat objects; the engine advances the campaign.
 
 ### Confidence and unresolved details
@@ -710,7 +710,7 @@ registers combat objects; the engine advances the campaign.
 - Round 6 multi-boss structure, Round 7 no-boss exception, and Round 8 boss
   rush plus offer state machine.
 - Arena locking belongs to the level camera/pipeline rather than boss objects.
-- Generic `$FFFB1E` draining and late-phase/HUD pointer coupling.
+- Generic `$FFFB1E (active_progression_entity_count)` draining and late-phase/HUD pointer coupling.
 
 #### Medium confidence (80-95%)
 
@@ -739,8 +739,8 @@ registers combat objects; the engine advances the campaign.
 ### Boss analysis-data update ledger
 
 The following duplicate-checked names were integrated into the shared CSV files.
-All entries below were new except `$117FC`, whose existing
-`stage_clear_monitor` description was upgraded.
+All entries below were new except `$117FC (stage_clear_monitor)`, whose existing
+`$117FC (stage_clear_monitor)` description was upgraded.
 
 #### `labels.csv`
 
