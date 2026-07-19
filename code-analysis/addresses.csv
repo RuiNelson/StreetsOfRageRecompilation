@@ -58,6 +58,9 @@ FF8000, nemesis_dec_buffer, "100% - Nemesis decompression scratch buffer"
 FFDA00, sprite_mappings_buffer, "100% - Sprite mapping data buffer"
 FFDCD0, art_array_cue, "100% - List of art and VRAM addresses (indexed by level)"
 FFDE00, mr_x_offer_flag, "100% - B - When set, triggers Mr X's offer-to-join cutscene"
+FFDE04, mr_x_offer_state, "100% - W - State-machine index for Mr X's final-stage offer; selects the word-offset table at $11B94"
+FFDE0E, mr_x_dialogue_clear_flags, "100% - B - Dialogue redraw flags: sub_12576 consumes bit 0 to clear the main text area and bit 1 to clear both player-choice tile areas"
+FFDE10, bad_ending_selected, "100% - B - Set by the accept-Mr-X branch at $12074; round-clear routing sends level 7 to game_state $1C when nonzero, otherwise $24"
 
 ; --- Camera / Scene ---
 FFE002, cam_x, "100% - W - Camera X position"
@@ -129,6 +132,7 @@ FFFA6C, pal_id_enemy, "100% - B - ID of the palette currently used by the active
 FFFA6D, pal_count, "100% - B - Number of enemies currently using the active palette"
 
 ; --- Art / HUD Flags ---
+FFFA1F, level_intro_active, "100% - B - Set while the round-intro fade/object pass is active; game_mode_ingame waits for fade-in completion before clearing it"
 FFFA4E, write_art_pointer, "100% - B - Current art-write state pointer; controls Write_Art sequencing"
 FFFA43, half_damage, "100% - B - When set, all damage is halved (used during P1 vs P2 fights)"
 FFFA46, pause_text_flag, "100% - B - Pause screen text display flags (bit 7 = pause active)"
@@ -136,6 +140,7 @@ FFFA47, p1_start_button_buffer, "100% - B - P1 button buffer for Start detection
 FFFA48, p2_start_button_buffer, "100% - B - P2 button buffer for Start detection (pause / join)"
 FFFA52, time_over_flag, "100% - B - When set to 1, triggers KO sound effect (time-over sequence)"
 FFFA71, fade_out_flag, "100% - B - Triggers a fade-out effect when set"
+FFFA72, level_flow_flags, "100% - B - Level-flow phase bits consumed by level_flow_handler ($464): art/music/setup gates in bits 0-7"
 FFFA73, end_of_level_flag, "100% - B - Set when the level is complete"
 FFFA79, stop_clock, "100% - B - When set, pauses the game timer countdown"
 FFFA7B, cheat_flag, "100% - B - Set when entering OPTIONS while P2 holds A+B+C+Start ($FC08 XOR $78==0); enables lives/level rows. Cleared by init_game_start_screen"
@@ -152,6 +157,20 @@ FFF906, char_select_idle_anim, "100% - B - Idle animation selector written from 
 FFF908, char_select_confirm_count, "100% - W - Number of players who confirmed a character; need 1 (1P) or 2 (2P)"
 FFF90A, char_select_exit_delay, "100% - W - Frames to wait after all confirms before fade-out; set to $12"
 
+; --- Story/campaign progression state ---
+FFFA30, story_scene_step, "100% - B - Current entry in the shared intro/good-ending timeline; incremented by story_scene_timeline_update"
+FFFA31, story_scene_last_step, "100% - B - Last timeline entry; loaded from story_scene_config_table ($3F680)"
+FFFA33, story_scene_next_state, "100% - B - game_state written when the shared story timeline finishes (intro config=$00, good ending config=$0C)"
+FFFB06, story_scene_timer, "100% - W - Per-entry delay for the shared intro/good-ending timeline; next object is emitted when it reaches zero"
+FFFB48, level_intro_substate, "100% - W - Even byte offset into level_intro_jt ($11A5C); drives fade-in, ROUND banner motion, delay, fade-out, then game_state=$14"
+FFFB4A, level_intro_timer, "100% - W - Delay timer used by level-intro substates ($60 before banner exit, then $30 before gameplay)"
+FFFB4C, round_clear_substate, "100% - W - Even byte offset into round_clear_jt ($18350); drives score tally and campaign routing"
+FFFB4E, round_clear_timer, "100% - B - Short round-clear delay counter, initialised to $20"
+FFFC24, story_scene_script_ptr, "100% - L - Pointer to the active 8-byte-entry intro/good-ending object timeline"
+FFF910, bad_ending_substate, "100% - W - Even offset into the bad-ending jump table at $88A0"
+FFF912, bad_ending_script_index, "100% - W - Index into the current bad-ending text/animation script"
+FFF91C, bad_ending_timer, "100% - W - Delay counter used by several bad-ending substates"
+
 ; --- Score ---
 FFFF08, score_p1, "100% - L - Player 1 score"
 FFFF10, score_p2, "100% - L - Player 2 score"
@@ -159,6 +178,7 @@ FFFF10, score_p2, "100% - L - Player 2 score"
 ; --- Player Extras ---
 FFFF26, lives_via_points_ptr_p1, "100% - W - P1 bonus-life score threshold pointer"
 FFFF27, lives_via_points_ptr_p2, "100% - W - P2 bonus-life score threshold pointer"
+FFFF2A, demo_mode, "100% - B - Nonzero enables attract-mode scripted input; bit 7 is set when Start aborts the demo and selects the return-to-logo route"
 FFFF2C, demo_ai_input_p1, "100% - L - RAM address of P1 demo AI joypad input stream"
 FFFF30, demo_ai_input_p2, "100% - L - RAM address of P2 demo AI joypad input stream"
 FFFF38, player_mode_copy, "100% - B - Working copy of PlayerMode (1 = 1P, 3 = 2P)"
