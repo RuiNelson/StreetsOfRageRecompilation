@@ -4,14 +4,35 @@
 from __future__ import annotations
 
 import argparse
+import binascii
 import json
+import struct
 import sys
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Sequence
 
 
 DEFAULT_MAX_OUTPUT = 16 * 1024 * 1024
+DEFAULT_TILE_PALETTE = (
+    (0x00, 0x00, 0x00),
+    (0x24, 0x24, 0x3A),
+    (0x3C, 0x4A, 0x78),
+    (0x58, 0x72, 0xA5),
+    (0x6A, 0xA9, 0xD6),
+    (0x7D, 0xE0, 0xDC),
+    (0x55, 0xB8, 0x6A),
+    (0xA2, 0xD4, 0x59),
+    (0xF1, 0xDF, 0x62),
+    (0xF2, 0xA6, 0x4B),
+    (0xD9, 0x62, 0x48),
+    (0xA8, 0x3E, 0x55),
+    (0xC4, 0x59, 0x91),
+    (0xDD, 0x84, 0xB5),
+    (0xC9, 0xC9, 0xD4),
+    (0xFF, 0xFF, 0xFF),
+)
 
 
 class DecodeError(ValueError):
@@ -22,6 +43,67 @@ class DecodeError(ValueError):
 class DecodeResult:
     data: bytes
     consumed: int
+
+
+def render_4bpp_tiles_png(
+    data: bytes,
+    *,
+    columns: int = 16,
+    scale: int = 2,
+    palette: Sequence[tuple[int, int, int]] = DEFAULT_TILE_PALETTE,
+) -> tuple[bytes, int, int]:
+    """Render Mega Drive 8x8, 4-bpp tiles as an indexed PNG tile sheet."""
+
+    if not data or len(data) % 32:
+        raise DecodeError(
+            "PNG rendering requires a non-empty whole number of 32-byte tiles"
+        )
+    if columns <= 0 or scale <= 0:
+        raise DecodeError("PNG columns and scale must be greater than zero")
+    if len(palette) != 16 or any(len(color) != 3 for color in palette):
+        raise DecodeError("PNG rendering requires exactly 16 RGB palette entries")
+
+    tile_count = len(data) // 32
+    tile_columns = min(columns, tile_count)
+    tile_rows = (tile_count + tile_columns - 1) // tile_columns
+    source_width = tile_columns * 8
+    source_height = tile_rows * 8
+    rows = [bytearray(source_width) for _ in range(source_height)]
+
+    for tile_index in range(tile_count):
+        tile_x = (tile_index % tile_columns) * 8
+        tile_y = (tile_index // tile_columns) * 8
+        tile = data[tile_index * 32 : (tile_index + 1) * 32]
+        for y in range(8):
+            for byte_index, packed in enumerate(tile[y * 4 : y * 4 + 4]):
+                rows[tile_y + y][tile_x + byte_index * 2] = packed >> 4
+                rows[tile_y + y][tile_x + byte_index * 2 + 1] = packed & 0x0F
+
+    width = source_width * scale
+    height = source_height * scale
+    raw = bytearray()
+    for row in rows:
+        scaled_row = bytearray()
+        for pixel in row:
+            scaled_row.extend([pixel] * scale)
+        scanline = b"\x00" + scaled_row
+        for _ in range(scale):
+            raw.extend(scanline)
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        checksum = binascii.crc32(kind + payload) & 0xFFFFFFFF
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", checksum)
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 3, 0, 0, 0)
+    palette_bytes = bytes(component for color in palette for component in color)
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"PLTE", palette_bytes)
+        + chunk(b"IDAT", zlib.compress(bytes(raw), level=9))
+        + chunk(b"IEND", b"")
+    )
+    return png, width, height
 
 
 class _ByteReader:
@@ -347,6 +429,23 @@ def build_argument_parser() -> argparse.ArgumentParser:
         default=DEFAULT_MAX_OUTPUT,
         help="maximum decoded size (default: 16 MiB)",
     )
+    parser.add_argument(
+        "--png",
+        action="store_true",
+        help="write decoded bytes as a Mega Drive 4-bpp tile-sheet PNG",
+    )
+    parser.add_argument(
+        "--columns",
+        type=_positive_integer,
+        default=16,
+        help="tiles per PNG row (default: 16)",
+    )
+    parser.add_argument(
+        "--scale",
+        type=_positive_integer,
+        default=2,
+        help="nearest-neighbour PNG scale (default: 2)",
+    )
     parser.add_argument("--json", action="store_true", help="print metadata as JSON")
     return parser
 
@@ -364,8 +463,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.format == "enigma":
             options.update(base_tile=args.base_tile, plane_header=args.plane_header)
         result = decoder(rom, args.offset, **options)
+        output_data = result.data
+        png_dimensions = None
+        if args.png:
+            output_data, width, height = render_4bpp_tiles_png(
+                result.data, columns=args.columns, scale=args.scale
+            )
+            png_dimensions = [width, height]
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_bytes(result.data)
+        args.output.write_bytes(output_data)
     except (DecodeError, OSError) as error:
         parser.exit(1, f"error: {error}\n")
 
@@ -374,15 +480,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         "offset": args.offset,
         "consumed": result.consumed,
         "output_size": len(result.data),
+        "file_size": len(output_data),
         "output": str(args.output),
     }
+    if png_dimensions is not None:
+        metadata["png_dimensions"] = png_dimensions
     if args.json:
         print(json.dumps(metadata, sort_keys=True))
     else:
-        print(
+        summary = (
             f"{args.format}: 0x{args.offset:X} -> {args.output} "
-            f"({result.consumed} compressed bytes, {len(result.data)} decoded bytes)"
+            f"({result.consumed} compressed bytes, {len(result.data)} decoded bytes"
         )
+        if png_dimensions is not None:
+            summary += f", {png_dimensions[0]}x{png_dimensions[1]} PNG"
+        print(summary + ")")
     return 0
 
 

@@ -211,12 +211,17 @@ python3 tools/decompress.py nemesis 0x1B046 /tmp/enemy-cues.bin
 python3 tools/decompress.py kosinski 0x71C6C /tmp/character-select.bin
 python3 tools/decompress.py enigma 0x7228E /tmp/ui-map.bin \
   --plane-header --base-tile 0x0001
+python3 tools/decompress.py nemesis 0x722A2 /tmp/art.png --png
 ```
 
 The default input is `rom/SOR.bin`; select another dump with `--rom PATH`.
 Offsets and tile bases accept decimal, `0x...`, or `$...` notation. The command
 reports compressed bytes consumed and decoded bytes written; `--json` provides
-the same metadata for scripts.
+the same metadata for scripts. `--png` renders complete 32-byte Mega Drive
+4-bpp tiles as a diagnostic tile sheet; use `--columns N` to change its layout
+and `--scale N` for nearest-neighbour enlargement. This is intended for art
+streams—Enigma tilemaps still need their corresponding tileset to form a full
+scene.
 
 ### Discovery
 

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import struct
 import sys
 import unittest
+import zlib
 from pathlib import Path
 
 
@@ -23,6 +25,33 @@ def _pack_msb(bits: str) -> bytes:
 def _pack_lsb(bits: list[int]) -> bytes:
     value = sum(bit << index for index, bit in enumerate(bits))
     return value.to_bytes(2, "little")
+
+
+class PngRenderingTests(unittest.TestCase):
+    def test_renders_genesis_nibbles_as_scaled_indexed_png(self) -> None:
+        tile = bytes.fromhex("01234567" * 8)
+        png, width, height = sor_decompress.render_4bpp_tiles_png(
+            tile, columns=1, scale=2
+        )
+        self.assertEqual((width, height), (16, 16))
+        self.assertTrue(png.startswith(b"\x89PNG\r\n\x1a\n"))
+        self.assertEqual(struct.unpack(">II", png[16:24]), (16, 16))
+
+        position = 8
+        image_data = bytearray()
+        while position < len(png):
+            length = int.from_bytes(png[position : position + 4], "big")
+            kind = png[position + 4 : position + 8]
+            payload = png[position + 8 : position + 8 + length]
+            if kind == b"IDAT":
+                image_data.extend(payload)
+            position += 12 + length
+        first_row = zlib.decompress(image_data)[:17]
+        self.assertEqual(first_row, bytes.fromhex("00 00000101020203030404050506060707"))
+
+    def test_rejects_partial_tiles(self) -> None:
+        with self.assertRaises(sor_decompress.DecodeError):
+            sor_decompress.render_4bpp_tiles_png(bytes(31))
 
 
 class NemesisTests(unittest.TestCase):
