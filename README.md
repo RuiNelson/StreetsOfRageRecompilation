@@ -153,6 +153,7 @@ logs a short `[cheat] …` line via the async host `Logger`.
 | Alt/Option + `L` | +1 P1 life (`$FFFFFF20`) |
 | Alt/Option + `S` | +1 P1 special attack (`$FFFFFF21`) |
 | Alt/Option + `P` | Toggle P1 punch power ×12 |
+| Alt/Option + `K` | Kill all instantiated enemies, including bosses |
 | Alt/Option + `1`–`8` | Jump to level 1–8 (sets level/wave and forces the level-intro game state) |
 | Alt/Option + `G` | Start good ending (`game_state` → `$0024` / `init_ending_good`) |
 | Alt/Option + `B` | Start bad ending (`game_state` → `$001C` / `init_ending_bad`) |
@@ -161,6 +162,12 @@ Lives and specials simply increment a RAM byte (capped at `0xFF`). Level warp
 writes the selected stage, clears the wave counter, and switches game state to
 the level intro so the cart reloads that stage. Ending warps set the
 corresponding init game-state word so the main loop runs `init_ending_*`.
+
+Enemy kill scans the 32 instantiated-object slots and sends ordinary enemies,
+bespoke bosses, and shared-framework bosses through their respective lethal
+reaction states. It leaves players, pickups, weapons, scenery, and boss helper
+objects untouched; normal enemy accounting and boss cleanup then advance the
+encounter as usual.
 
 Punch power is implemented in `SorCheats` and hooked from the hand-written
 attack-strength routine (`$0041EA`). When enabled, only the player-1 object

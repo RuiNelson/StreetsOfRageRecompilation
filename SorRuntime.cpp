@@ -7,13 +7,38 @@ namespace {
 constexpr m_long kGameState        = 0xFFFFFF00u;
 constexpr m_long kLevel            = 0xFFFFFF02u;
 constexpr m_long kWave             = 0xFFFFFF04u;
+constexpr m_long kP1Object         = 0xFFFFB800u;
+constexpr m_long kP2Object         = 0xFFFFB880u;
 constexpr m_long kP1Lives          = 0xFFFFFF20u;
 constexpr m_long kP1SpecialAttacks = 0xFFFFFF21u;
+constexpr m_long kObjectTable      = 0xFFFFB900u;
 constexpr m_word kLevelIntroState  = 0x0028u;
 // Even values are init states; the loop then advances to the update mode (+2).
 constexpr m_word kEndingBadInit    = 0x001Cu; // init_ending_bad
 constexpr m_word kEndingGoodInit   = 0x0024u; // init_ending_good
 constexpr int    kLevelCount       = 8;
+constexpr int    kObjectSlotCount  = 32;
+constexpr m_long kObjectSlotSize   = 0x80u;
+
+constexpr m_long kObjectPrimaryStateOffset = 0x30u;
+constexpr m_long kObjectHealthOffset       = 0x32u;
+
+constexpr bool isOrdinaryEnemy(m_byte type) {
+    return type >= 0x20u && type <= 0x2Au;
+}
+
+constexpr bool isBespokeBoss(m_byte type) {
+    return type == 0x30u || type == 0x35u; // Abadede or Mr. X
+}
+
+constexpr bool isSharedFrameworkBoss(m_byte type) {
+    return type >= 0x55u && type <= 0x58u;
+}
+
+static_assert(isOrdinaryEnemy(0x20u) && isOrdinaryEnemy(0x2Au));
+static_assert(!isOrdinaryEnemy(0x1Fu) && !isOrdinaryEnemy(0x2Bu));
+static_assert(isBespokeBoss(0x30u) && isBespokeBoss(0x35u));
+static_assert(isSharedFrameworkBoss(0x55u) && isSharedFrameworkBoss(0x58u));
 
 int levelFromTopRowNumber(SDL_Keycode key) {
     switch (key) {
@@ -45,6 +70,57 @@ void incrementByte(SystemMemory &memory, m_long address, const char *label) {
     Logger::log("[cheat] %s: %u -> %u", label, static_cast<unsigned>(before), static_cast<unsigned>(after));
 }
 
+m_word activePlayerObject(SystemMemory &memory) {
+    if (memory.readByte(kP1Object) == 1u)
+        return static_cast<m_word>(kP1Object);
+    if (memory.readByte(kP2Object) == 1u)
+        return static_cast<m_word>(kP2Object);
+    return static_cast<m_word>(kP1Object);
+}
+
+int killInstantiatedEnemies(SystemMemory &memory) {
+    const m_word attacker = activePlayerObject(memory);
+    int killed = 0;
+
+    for (int slot = 0; slot < kObjectSlotCount; ++slot) {
+        const m_long object = kObjectTable + static_cast<m_long>(slot) * kObjectSlotSize;
+        const m_byte type = memory.readByte(object);
+
+        if (isOrdinaryEnemy(type)) {
+            // Match the cartridge's forced-death sweep: enter the airborne/death
+            // reaction with negative health and retain a player for score credit.
+            memory.writeByte(object + 0x37u, memory.readByte(object + 0x37u) | 0x02u);
+            memory.writeWord(object + kObjectHealthOffset, 0xFFFFu);
+            memory.writeWord(object + kObjectPrimaryStateOffset, 0x0300u);
+            memory.writeWord(object + 0x3Eu, attacker);
+            ++killed;
+            continue;
+        }
+
+        if (isBespokeBoss(type)) {
+            // The shared Abadede/Mr. X collision path selects state $0E on a
+            // lethal hit. Clear its collision substate as that path does.
+            memory.writeWord(object + kObjectHealthOffset, 0u);
+            memory.writeByte(object + 0x5Bu, 0u);
+            memory.writeByte(object + kObjectPrimaryStateOffset, 0x0Eu);
+            ++killed;
+            continue;
+        }
+
+        if (isSharedFrameworkBoss(type)) {
+            // Feed an unavoidable lethal pending hit through the normal shared
+            // boss damage path so pairing, score, HUD, and cleanup still run.
+            memory.writeWord(object + kObjectHealthOffset, 0u);
+            memory.writeByte(object + 0x6Cu, 1u);
+            memory.writeByte(object + 0x6Du, 0u);
+            memory.writeWord(object + 0x70u, attacker);
+            ++killed;
+        }
+    }
+
+    return killed;
+}
+
 } // namespace
 
 void SorRuntime::handleOptionHotkey(OptionHotkeyCode keyCode) {
@@ -64,6 +140,13 @@ void SorRuntime::handleOptionHotkey(OptionHotkeyCode keyCode) {
             Logger::log("[cheat] P1 punch power x%u: %s",
                         static_cast<unsigned>(SorCheats::kPunchPowerMultiplier),
                         enabled ? "on" : "off");
+            return;
+        }
+        case SDLK_K: {
+            const int killed = killInstantiatedEnemies(memory());
+            Logger::log("[cheat] killed %d instantiated enem%s",
+                        killed,
+                        killed == 1 ? "y" : "ies");
             return;
         }
         case SDLK_G:
