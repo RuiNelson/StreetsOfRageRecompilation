@@ -8,9 +8,12 @@ The code makes a useful distinction that is easy to lose in a visual description
 
 - a **consumable pickup** is linked to a player and immediately converted into health, a life, a police special, or score;
 - a **weapon object** remains in the object table, records its holder, and follows the holder's animation until dropped or thrown;
-- a **breakable prop** receives ordinary attack collisions and emits debris, but does not itself contain a generic reward/drop field.
+- a **breakable prop** receives ordinary attack collisions and emits debris; telephone booths, crates, and similar props can visibly contain pickups or weapons, although the local prop object does not carry a universal reward-type field.
 
-Some visual names, especially the assignment of object types `$0A` and `$0B` to bat versus pipe, are medium-confidence. Their mechanics are identical enough that static code identifies them as two long melee weapons but does not spell out their art names.
+Gameplay observation confirms the five carried weapon classes as knife, bottle,
+steel pipe, baseball bat, and pepper spray. The only remaining visual ambiguity is
+which of object types `$0A` and `$0B` is the pipe and which is the bat; their code
+is nearly identical and the assembly does not name the art.
 
 ## Object-type map
 
@@ -18,11 +21,11 @@ The global object dispatcher at `$B236` indexes a word table by object type. The
 
 | Object type | Handler | Role |
 |---:|---:|---|
-| `$08` | `$5C1E` | Knife-like carried/thrown weapon; damage 5 and a three-use counter. |
+| `$08` | `$5C1E` | Knife; damage 5, limited use count, and a straight-line attack-button throw. |
 | `$09` | `$6114` | Bottle; damage 3, breaks and emits three shard objects. |
 | `$0A` | `$61F6` | Long melee weapon A (bat/pipe); damage 4. |
 | `$0B` | `$6226` | Long melee weapon B (pipe/bat); damage 4. |
-| `$0C` | `$6256` | Pepper shaker / pepper-effect weapon; damage 2 and effect-emission states. |
+| `$0C` | `$6256` | Thrown pepper spray; damage 2, immobilizing reaction, and smoke/effect-emission states. |
 | `$11` | `$6AF4` | Breakable prop/container family; emits ten debris objects of the same type with fragment subtypes. |
 | `$19` | `$6C84` | Second breakable prop family; launches/bounces when struck, then despawns. |
 | `$1E` | `$61BE` | Bottle-shard/debris projectile emitted by type `$09`. |
@@ -34,6 +37,26 @@ The global object dispatcher at `$B236` indexes a word table by object type. The
 | `$4F` | `$6968` | Extra police-special pickup. |
 
 The six pickup handlers are tiny wrappers. Each chooses an item-effect index in object `+$50`, installs its art/animation pointer, and then enters the shared pickup logic at `$699E`.
+
+## Confirmed visible behavior and code interpretation
+
+The following player-visible behavior is confirmed and resolves several points
+that static code alone leaves visually anonymous:
+
+- pressing attack with the knife throws it horizontally in a straight line;
+- the steel pipe and baseball bat are distinct weapons backed by the two almost
+  identical long-weapon handlers `$61F6/$6226`;
+- pepper spray is thrown, produces smoke/powder objects, and leaves the struck
+  enemy locked in a reaction state for a short period;
+- enemies can carry weapon objects; knocking an armed enemy down detaches the
+  weapon, which falls to the floor and can then be collected by the player;
+- weapons have finite durability, with ground impacts contributing to wear;
+- telephone booths, crates, and other breakable scenery can reveal items or
+  weapons when destroyed.
+
+The assembly explains these behaviors through object links and coordinated
+level records rather than through a player inventory or a generic container
+class.
 
 ## Shared pickup object layout
 
@@ -155,7 +178,13 @@ The common weapon positioning code at `$5E2E` distinguishes a player holder (`ho
 - facing bit;
 - ROM attachment tables at `$5FC8` and `$60A0`;
 
-to place and flip the weapon sprite in the character's hand each frame. Enemy-held weapons use a more generic attachment table but the same holder pointer. Therefore weapons are independent objects even while they look like part of a character sprite.
+to place and flip the weapon sprite in the character's hand each frame.
+Enemy-held weapons use a more generic attachment table but the same holder
+pointer. When an armed enemy enters a knockdown/drop transition, the ownership
+command detaches the weapon, gives it ballistic motion, and eventually clears
+`+$51` after it settles. The object is then eligible for the same `$3136` pickup
+scan used for weapons originally placed on the ground. Therefore weapons are
+independent objects even while they look like part of a character sprite.
 
 ### Ownership state transitions
 
@@ -170,21 +199,35 @@ reserved/held (weapon +$52 = holder; player +$5E = weapon)
     |
     +---- normal weapon attack ---> follows holder animation; damage box active on selected frames
     |
-    +---- drop command -----------> detach, apply small ballistic motion, settle on ground
+    +---- holder knocked down ----> detach, apply small ballistic motion, settle on ground
+    |
+    +---- explicit drop command --> same detached/ground path
     |
     `---- throw command ----------> detach, apply X/Z velocity, become collision projectile
                                         |
                                         +--> hit/break/despawn
-                                        `--> land and become reusable if weapon type permits
+                                        `--> ground impact consumes wear; become reusable if durability remains
 ```
 
 The byte at weapon `+$51` is a command/state handshake rather than a simple Boolean. Values observed around `$5D84/$5E2E` mean approximately: 0 free/settling, 1 held/used, 2 dropped, and 3 thrown. The exact moment at which the player state machine writes each value varies by weapon action.
 
+Durability is not represented by one universal field for all five weapon types.
+The knife has an explicit counter at `+$50`; the bottle has a one-way intact to
+shattered transition; and the pipe/bat/pepper families encode wear through their
+state and landing transitions. The common result is the visible rule: repeated
+use and especially impacts with the floor eventually retire the weapon object.
+
 ## Individual weapon families
 
-### Type `$08`: knife-like weapon
+### Type `$08`: knife
 
 The handler at `$5C1E` initializes damage `+$34 = 5`, the highest of the ordinary carried weapons here. It supports ground settling, holder attachment, a directed throw with X velocity, collision bounce, and eventual deletion.
+
+The player action path at `$21E6-$222E` checks whether the carried object is type
+`$08` (or the pepper weapon `$0C`). On the attack animation's release frame it
+writes command 3 to weapon `+$51` and clears the player's carried-weapon type.
+`$5D84` then detaches the knife and assigns signed horizontal velocity according
+to facing. This is the straight-line knife throw produced by the attack button.
 
 Object `+$50` is a use counter. While it is below 3, a new held-use phase increments it. At 3 it enters a terminal state, hides/disables normal collision, starts a `$10`-frame timer in `+$56`, and deletes itself when the timer expires. Static code therefore gives this weapon three counted uses; whether a particular pickup/throw animation consumes a count can be confirmed by watching `+$50` during play.
 
@@ -196,15 +239,20 @@ The type `$1E` children use the small debris handler at `$61BE`: they move under
 
 ### Types `$0A` and `$0B`: long melee weapons
 
-The two handlers at `$61F6` and `$6226` differ mainly in art data (`$6FA9A` versus `$6FB5A`) and both initialize damage 4. They reuse the common ownership, attachment, drop, throw, and collision code without a local durability counter or shatter sequence.
+The two handlers at `$61F6` and `$6226` differ mainly in art data (`$6FA9A` versus `$6FB5A`) and both initialize damage 4. They are the steel pipe and baseball bat. They reuse the common ownership, attachment, drop, throw, collision, and landing paths rather than carrying the knife's explicit three-use counter or the bottle's shatter flag.
 
-The object order and art organization strongly indicate the baseball bat and metal pipe, but assigning `$0A` to one and `$0B` to the other is only medium confidence without rendering the two art streams. Mechanically the distinction is small in this code region: both provide the same outgoing damage and persistent/reusable behavior.
+Assigning `$0A` to one visible weapon and `$0B` to the other remains medium confidence without rendering the two art streams. Mechanically the distinction is small: both provide the same outgoing damage, can be dropped and collected again while durability remains, and wear through closely related impact/landing state transitions.
 
-### Type `$0C`: pepper weapon/effect
+### Type `$0C`: pepper spray and smoke
 
 The `$6256` handler initializes damage 2. Its initial animation/state depends on object `+$08`, and a used/thrown instance can become a short-lived effect emitter. The terminal path sets a timer, spawns additional type-`$0C` objects with special animation selectors (`+$08 = 4` or `6`), and emits a sequence of effect objects from a ROM position table before deleting the source.
 
-This behavior, coupled with the low damage and multiple emitted sprites, identifies the pepper shaker/powder family more strongly than a conventional impact weapon. A framebuffer trace would still be useful to name each subtype (shaker, powder puff, and lingering effect) exactly.
+The player release path treats `$0C` like the knife and throws it from the
+holder. On impact, `$6328-$63C2` converts the source into a timed emitter and
+creates additional type-`$0C` objects with animation selectors 4 and 6. These
+are the visible pepper cloud/smoke sequence. The collision reaction written to
+the enemy keeps it in a non-controllable reaction state while the effect runs,
+which is the observed temporary immobilization rather than ordinary knockback.
 
 ## Collision, damage, and credit
 
@@ -237,17 +285,27 @@ On an accepted damaging collision (`$6B34`) the intact object:
 
 `$6C84/$6C96` initializes another collision-enabled prop. A valid attack chooses horizontal launch velocity from a small table, gives it upward velocity `$FFF7`, disables its intact collision, and enters a bouncing/despawn state. It does not emit the ten-fragment cloud used by type `$11`.
 
-### Are rewards stored inside containers?
+### How breakable containers reveal rewards
 
-Neither breakable handler contains a generic item-type field, reward table lookup, or call to one of the six pickup constructors. Type `$11` spawns debris only; type `$19` changes its own physics only. Therefore the static code does **not** support a universal "container owns drop X" model.
+Telephone booths, crates, and similar breakable props visibly contain items or
+weapons. The important code-level qualification is that neither local breakable
+handler contains a generic item-type field, reward-table lookup, or call to one
+of the six pickup constructors. Type `$11` emits its debris and type `$19`
+changes its own physics.
 
-Where a visible pickup appears to come from a breakable prop, the likely level-engine arrangement is that the pickup is separately described or co-located and its visibility/activation is coordinated by object/script flags. This should be confirmed per level descriptor, but it is important not to invent a drop pointer in the prop structure.
+The container/reward relationship is therefore implemented outside the local
+prop structure: the level's ELC/object records can place a hidden or inactive
+pickup/weapon at the same location and coordinate its visibility or collision
+with the prop's destruction. Operationally the reward is inside the container;
+structurally it is most likely a separate object or script record, not a generic
+`drop_type` member of types `$11/$19`. The remaining task is to pair individual
+container and reward records in each decoded level stream.
 
 ## Spawning, despawning, and level behavior
 
 Items and weapons enter through the ordinary level object stream and share the global 128-byte object pool. Initializers call `$6AA6`, which ORs level-specific flag bits into object `+$01`; this accounts for round-dependent orientation/priority behavior without separate item classes.
 
-The common off-screen cleanup at `$6A70` compares object X to the camera. In ordinary rounds, objects sufficiently behind the camera are deleted. Round 8 reverses/changes the boundary because its scrolling direction and arena behavior differ. Weapon-specific falling states also delete objects that cannot settle or whose terminal timer expires.
+The common off-screen cleanup at `$6A70` compares object X to the camera. In ordinary rounds, objects sufficiently behind the camera are deleted. Round 8 reverses/changes the boundary because its scrolling direction and arena behavior differ. Weapon-specific falling states also consume durability and delete objects that cannot settle, have exhausted their wear state, or reach a terminal timer.
 
 There is no separate inventory array. At most one carried object is represented by the player's `+$5E/+$60` pair, while every ground or airborne weapon continues to consume a normal object-table slot.
 
@@ -297,15 +355,20 @@ void apply_pickup_effect(Player *p, unsigned effect) {
 
 | Address | Current symbol | Analytical role |
 |---:|---|---|
-| `$3136` | `sub_00003136` | Finds weapons and consumable pickups in the player's close-interaction box. |
-| `$5C1E` | `sub_00005C1E` | Type-$08 knife-like weapon dispatcher. |
-| `$5E2E` | `loc_00005E2E` | Shared held/drop/throw ownership and attachment logic. |
+| `$21E6` | `player_release_thrown_weapon` | Commands a carried knife or pepper spray to detach on the attack-animation release frame. |
+| `$3136` | `find_close_interaction_target` | Finds grabbable enemies, weapons, and consumable pickups in the player's close-interaction box. |
+| `$5C1E` | `knife_weapon_dispatcher` | Type-$08 knife dispatcher and counted-use lifecycle. |
+| `$5D84` | `launch_released_weapon` | Detaches and launches a command-3 weapon according to holder facing. |
+| `$5E2E` | `update_held_weapon` | Shared held/drop/throw ownership and attachment logic. |
 | `$6114` | `sub_00006114` | Type-$09 bottle dispatcher. |
 | `$614E` | `sub_0000614E` | Bottle break and three-shard spawn. |
 | `$61BE` | `sub_000061BE` | Type-$1E bottle-shard/debris dispatcher. |
 | `$61F6` | `sub_000061F6` | Type-$0A long melee weapon dispatcher. |
 | `$6226` | `sub_00006226` | Type-$0B long melee weapon dispatcher. |
-| `$6256` | `sub_00006256` | Type-$0C pepper weapon/effect dispatcher. |
+| `$6256` | `pepper_spray_weapon_dispatcher` | Type-$0C thrown pepper-spray and smoke/effect dispatcher. |
+| `$62DA` | `throw_pepper_spray` | Applies the pepper-spray throw position and X/Z velocity. |
+| `$6328` | `begin_pepper_smoke_emission` | Converts an impact into the first smoke/effect object. |
+| `$6372` | `emit_pepper_smoke_sequence` | Emits the remaining smoke/effect sequence. |
 | `$69CC` | `sub_000069CC` | Converts a reserved pickup into an effect on its collector, then deletes it. |
 | `$69E6` | `sub_000069E6` | Dispatches pickup effect index 0..5. |
 | `$6A04` | `sub_00006A04` | Full/small health pickup effects. |
@@ -321,8 +384,8 @@ void apply_pickup_effect(Player *p, unsigned effect) {
 
 ## Uncertainties and recommended traces
 
-1. Render art streams `$6FA9A` and `$6FB5A` to assign object types `$0A/$0B` definitively to baseball bat versus pipe.
-2. Watch type `$08` `+$50` across pickup, melee use, throw, enemy hit, and ground recovery to state exactly which events consume one of its three uses.
-3. Capture type `$0C` states with object `+$08` values 0, 4, and 6 to distinguish the shaker sprite from powder/projectile subtypes.
-4. Trace a visually hidden reward behind a type `$11` or `$19` prop back to its level descriptor. Static prop handlers have no drop pointer, so the coordination must occur outside their local break routines.
-5. Name weapon interaction values `+$51 = 0..3` only after a per-frame trace across player pickup, enemy pickup, drop, and throw; the high-level phases are clear, but some values are momentary commands rather than durable states.
+1. Render art streams `$6FA9A` and `$6FB5A` to assign object types `$0A/$0B` definitively to baseball bat versus steel pipe.
+2. Trace the pipe and bat landing states to count their exact remaining-use rules after each floor impact.
+3. Map every type-`$0C` animation selector to the thrown canister, smoke/powder cloud, and lingering immobilization frames.
+4. Pair each hidden reward with its telephone booth, crate, or other container in the decoded ELC streams.
+5. Name weapon interaction values `+$51 = 0..3` only after a per-frame trace across player pickup, enemy pickup, knockdown drop, and throw; the high-level phases are clear, but some values are momentary commands rather than durable states.
