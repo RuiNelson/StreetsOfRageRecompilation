@@ -9,6 +9,10 @@ namespace {
 constexpr m_long kVBlankMailbox = 0xFFFFFA00u;
 constexpr m_long kHalfDamage    = 0xFFFFFA43u;
 
+// Main game-state word and the long jump table at $3BA (ROM).
+constexpr m_long kGameState      = 0xFFFFFF00u;
+constexpr m_long kStateJumpTable = 0x000003BAu;
+
 // Attack-strength lookup table in ROM (word offsets from the table base).
 constexpr m_long kAttackStrengthTable = 0x0000423Cu;
 
@@ -23,6 +27,70 @@ constexpr m_long kObjMoveIndex    = 0x50; // byte: row selector inside the move 
 constexpr m_word kStatusIrqEnabled = 0x2500u;
 
 } // namespace
+
+// ---------------------------------------------------------------------------
+// $0003A2 — game_infinite_loop
+//
+// Core frame loop: index the $3BA jump table by game_state, jsr the handler,
+// then sync_z80_1 (VBlank mailbox). IRQ service is not needed between those
+// few setup opcodes — handlers and sync_z80_1 already deliver IRQs. Also owns
+// the mid-entry at $412 (boot checksum-fail: clear CRAM and hang).
+// ---------------------------------------------------------------------------
+void Sor::game_infinite_loop(m_long entry_) {
+    // Soft 68000 jsr/rts. Mirrors CALL / CALL_DISPATCH in generated code: push
+    // return PC, call, abort if the callee unwound past this frame.
+    const auto call68k = [this](auto &&fn, m_long retPc) -> bool {
+        const m_long spBefore = cpu().ssp;
+        cpu().ssp -= 4;
+        memory().writeLong(cpu().ssp, retPc);
+        fn();
+        return (cpu().ssp & 0x00FFFFFFu) <= (spBefore & 0x00FFFFFFu);
+    };
+
+    if (entry_ == 0x0412u) {
+        // Checksum mismatch path from init ($348 bne.w $412).
+        traceEnter(0x0412u);
+
+        if (!call68k([this] { init_joypad(); }, 0x0418u))
+            return;
+
+        cpu().a[1] = 0x00C00000u; // vdp_data
+        cpu().d[1] = 0x000E000Eu;
+        memory().writeLong(0x00C00004u, 0xC0000000u); // CRAM write address
+        if (!call68k([this] { memfill_long_64(); }, 0x0434u))
+            return;
+
+        // Host-friendly stand-in for `bra.s *`: sleep on IRQs/quit, do not spin.
+        while (!shouldQuit()) {
+            waitForInterrupt();
+            if (irqLevel() > cpu().interruptMask())
+                serviceIRQ();
+        }
+        return;
+    }
+
+    traceEnter(0x03A2u);
+
+    while (!shouldQuit()) {
+        // moveq #0,d0 / move.w (game_state).w,d0 / add.w d0,d0
+        const m_word state       = memory().readWord(kGameState);
+        const m_word tableOffset = static_cast<m_word>(state + state);
+
+        // move.l $3BA(pc,d0.w),d0 / movea.l d0,a0  (SEX_W on the word offset)
+        const m_long handler =
+            memory().readLong(kStateJumpTable + static_cast<m_long>(static_cast<std::int16_t>(tableOffset)));
+        cpu().d[0] = handler;
+        cpu().a[0] = handler;
+
+        // jsr (a0) — state init/update handler
+        if (!call68k([this, handler] { dispatch(handler); }, 0x03B2u))
+            return;
+
+        // jsr sync_z80_1 — waits on VBlank mailbox; services IRQs there
+        if (!call68k([this] { sync_z80_1(); }, 0x03B8u))
+            return;
+    }
+}
 
 // ---------------------------------------------------------------------------
 // $0041EA — compute attack strength for the object in a0

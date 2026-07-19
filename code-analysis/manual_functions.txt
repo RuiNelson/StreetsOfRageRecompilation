@@ -1,5 +1,6 @@
 # Functions whose declarations/call sites remain generated, but whose bodies
 # are provided by hand-written C++ in SorManualFunctions.cpp / SoRSound.cpp.
+0003A2 # game_infinite_loop
 010502 # sync_z80_1
 010514 # sync_z80_2
 0041EA # calculate player attack strength (P1 punch-power cheat hook)
