@@ -88,6 +88,28 @@ invoke `build/sor` directly once it exists. Default controls live in
 `controls.yaml` (P1: arrows + Z/X/C/V; P2: WASD + J/K/L/O). Rebind them with
 `--configControls` or by editing that file.
 
+### Jump directly to gameplay
+
+With a `--runSor` process already running, use the reusable remote-control
+script to skip the boot/menu/character-select presentation while preserving
+the real level initialization:
+
+```bash
+python3 tools/reach_gameplay.py axel
+python3 tools/reach_gameplay.py adam
+python3 tools/reach_gameplay.py blaze --host 127.0.0.1 --port 6969
+```
+
+The script cold-restarts, observes RAM to synchronize each real screen, and
+uses only one-frame P1 joypad presses to skip the story/title, choose 1P, and
+select the requested character. It does not write RAM or skip the level intro,
+so normal campaign, player, sound, and music initialization still runs. It
+returns only after observing the spawn-complete sound command `$A1`, then
+verifying gameplay state `$16`, the in-game character ID, active player object,
+full health, and an initialized music voice bank. The
+Python client is discovered from the sibling `MegaDriveEnvironment` checkout,
+so no package installation or `PYTHONPATH` setup is needed.
+
 ## Command-line arguments
 
 The `sor` executable is both the game host and a small test harness for
