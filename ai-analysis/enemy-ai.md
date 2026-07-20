@@ -90,6 +90,26 @@ Thus archetype differences are not eleven completely separate top-level function
 
 Mapping each `$20-$2A` value to a retail name requires correlating ELC type, art/palette and framebuffer output; names should not be guessed from code order.
 
+Direct Nemesis decoding of all eight ELC streams gives a useful constraint on
+that future mapping. The regular wave blocks contain these ordinary type IDs
+after stripping the two-player qualifier bit:
+
+| Round | Ordinary types present in regular blocks |
+|---:|---|
+| 1 | `$20,$21,$22,$23,$24,$25,$26` |
+| 2 | `$20,$21,$22,$23,$24,$25,$26,$27` |
+| 3 | `$20,$21,$22,$23,$24,$25,$26,$2A` |
+| 4 | `$20,$21,$22,$23,$24,$25,$26,$27` |
+| 5 | `$20,$21,$22,$23,$24,$25,$26,$27,$2A` |
+| 6 | `$20,$21,$22,$23,$24,$25,$26,$27` |
+| 7 | `$20,$21,$22,$23,$24,$25,$26` |
+| 8 | `$20,$21,$22,$23,$24,$25,$26,$27,$2A` |
+
+Types `$28/$29` do not occur in any regular ELC wave block in this ROM;
+`$2A` occurs only in Rounds 3, 5, and 8. This is a ROM-distribution fact, not a
+retail-name assignment, and it avoids treating all eleven table slots as
+equally used by the level scripts.
+
 ## Target selection
 
 `$96EC (ordinary_enemy_select_target)` is the common ordinary-enemy selector. It writes the player object pointer to `$42(a0)`:
@@ -751,8 +771,9 @@ registers combat objects; the engine advances the campaign.
    names (boomerang, claw trail, flame, or invisible hitbox) to every state.
 3. Decode every family primary/tactical table into named moves without relying
    on visible retail descriptions.
-4. Test all 2P Mr. X offer answer combinations and document which route returns
-   to Round 6 versus the final fight/bad ending.
+4. Match each raw `object+$59` selection bit to the exact displayed answer text
+   in both Mr. X prompts; the static route matrix itself is now decoded in the
+   story-flow manuscript.
 
 ### Boss analysis-data update ledger
 

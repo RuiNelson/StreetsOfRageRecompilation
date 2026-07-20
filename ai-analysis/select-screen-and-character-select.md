@@ -368,8 +368,17 @@ Each frame during interactive select:
 3. Process animated character-preview objects in the object table
 4. `$10514 (sync_z80_2)` (VBlank wait)
 
-Type **6** = cursor selection logic (`$1916 (char_select_player_input)`).
-Type **7** = animated full-body character preview / DMA frames.
+The ROM words at `$B242/$B244` are `$18D4/$1A12`, proving the exact entries:
+
+- type **6** → `$18D4 (char_select_cursor_dispatcher)`, which merges the
+  owning player's already-sampled held buttons into object `+$54` and dispatches
+  setup/input through `$18F6` (`$18FA/$1916`);
+- type **7** → `$1A12 (char_select_character_preview_dispatcher)`, the
+  animated full-body preview state machine whose state-zero target is `$1A44
+  (char_select_character_preview_setup)`.
+
+`$18D4 (char_select_cursor_dispatcher)` does not read joypad hardware directly;
+the hardware sampling has already populated `$FFFC00/$FFFC02`.
 
 ### 7.5 Cursor input — `$1916 (char_select_player_input)`
 
@@ -585,4 +594,3 @@ Downstream consumers:
 ## 12. Open follow-ups
 
 - Trace `$106EA (init_levelstart)` / `$1077C (game_mode_levelstart)` (`$28`/`$2A`) end-to-end: how `$FFFF02 (level)`, character IDs, and difficulty are applied to the first wave spawn.
-- Name the full object-type jump table at `$B236` (types 6 and 7 handlers).

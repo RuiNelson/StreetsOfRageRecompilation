@@ -233,16 +233,16 @@ spread across code, and each table describes a different subsystem.
 relative offset to the table base, and calls `$81A4 (nemesisdec_ram)` with destination
 `$FF6800 (elc_buffer)`. The eight compressed stream starts are:
 
-| Round | Compressed source |
-|---:|---:|
-| 1 | `$1B046` |
-| 2 | `$1B1D8` |
-| 3 | `$1B3F4` |
-| 4 | `$1B5D0` |
-| 5 | `$1B7DE` |
-| 6 | `$1BA8C` |
-| 7 | `$1BD12` |
-| 8 | `$1BEBE` |
+| Round | Compressed source | Decoded bytes |
+|---:|---:|---:|
+| 1 | `$1B046` | `$1C0` |
+| 2 | `$1B1D8` | `$280` |
+| 3 | `$1B3F4` | `$240` |
+| 4 | `$1B5D0` | `$240` |
+| 5 | `$1B7DE` | 800 |
+| 6 | `$1BA8C` | `$2E0` |
+| 7 | `$1BD12` | `$1E0` |
+| 8 | `$1BEBE` | `$380` |
 
 The decompressed buffer contains entity records and control framing. It is not
 background map data. This is proved by the destination `$FF6800 (elc_buffer)`, the immediate
@@ -423,6 +423,36 @@ payload pointer, advances `$FFFC14 (display_list_head)` by that length, and filt
 six-byte records in place until a byte `$99` terminator. This creates a current
 section and a pointer to the following section without allocating another
 buffer.
+
+ROM decoding proves the higher-level framing. A regular wave block is exactly:
+
+```text
+three signed count-minus-one batches
+timed (delay, six-byte record) list, terminated by word $0099
+word byte_length
+six-byte deferred records, terminated by bytes $99,$00
+```
+
+The byte after the length-delimited section begins the next wave's first
+counted batch. This parses without guessing through four complete blocks in
+Rounds 1-4 and six in Rounds 5-8. Round 7's counted batches are all `$FFFF`
+(empty), so its entities come entirely from timed and deferred records. Round 8
+then has a separately consumed final-scene/boss tail after its six regular
+blocks.
+
+The ROM census below records `batch/timed/deferred` counts for each regular
+block and provides a compact consistency check:
+
+| Round | Per-block record counts |
+|---:|---|
+| 1 | `6/2/2, 10/3/3, 12/3/3, 10/3/2` |
+| 2 | `15/2/3, 22/2/2, 16/2/4, 16/2/3` |
+| 3 | `13/2/3, 11/3/4, 18/3/3, 9/2/2` |
+| 4 | `9/3/2, 14/3/3, 17/3/2, 13/3/3` |
+| 5 | `15/6/0, 12/8/6, 11/0/2, 11/1/1, 7/8/0, 13/0/5` |
+| 6 | `8/3/4, 11/2/2, 10/3/3, 10/2/2, 9/3/3, 11/3/4` |
+| 7 | `0/5/5, 0/4/8, 0/4/6, 0/4/7, 0/6/10, 0/0/0` |
+| 8 | `9/2/3, 12/2/4, 14/2/4, 12/2/4, 12/2/4, 11/2/6` |
 
 The `$936 -> $B76` states scan this filtered section and enforce limited
 palette/art residency. If a required resource is not resident, the record is
@@ -860,21 +890,17 @@ recorded in `labels.csv`.
 
 ## 12. Remaining uncertainties and useful next experiments
 
-1. **ELC framing after the timed section.** The length-prefixed and `$99`-ended
-   behavior is clear in code, but a fully decoded dump of all eight decompressed
-   streams would let every control word be named and every spawn assigned to a
-   screen.
-2. **Resource descriptor field names.** `$F46` combines nibbles, table families,
+1. **Resource descriptor field names.** `$F46` combines nibbles, table families,
    and overlapping words. Runtime logging of calls to `$10538/$1053E` would
    distinguish palette lists, tile art, and mappings precisely.
-3. **Round 7 repeated descriptor offsets.** A trace of `$FFFF04 (wave)`, pipeline state,
+2. **Round 7 repeated descriptor offsets.** A trace of `$FFFF04 (wave)`, pipeline state,
    camera state, and `$FFFA14..16` during the elevator/vertical sequence would
    prove why offset `$0E` and `$2C` are reused.
-4. **Late-stage flags.** `$FFFA05 (level_spawn_flow_flags)` is clearly a level-flow bitset, but some bits
+3. **Late-stage flags.** `$FFFA05 (level_spawn_flow_flags)` is clearly a level-flow bitset, but some bits
    combine “boss phase,” “resource drain,” and “special scene” behavior. Naming
    individual bits should follow producer/consumer traces rather than one call
    site.
-5. **Background resource formats.** The camera structure and streaming algorithm
+4. **Background resource formats.** The camera structure and streaming algorithm
    are established, but the exact packed format below `$5F5B8/$5F788` deserves a
    separate graphics-engine manuscript.
 

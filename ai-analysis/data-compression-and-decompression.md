@@ -405,7 +405,17 @@ ROM-validated source sizes show why more than one codec is useful:
 
 For Kosinski columns both sides are bytes. For Enigma columns the left side is compressed bytes consumed and the right side is decoded 16-bit words.
 
-There is one unresolved detail at `$0198AA`: after each first-stage Kosinski decode, the assembly performs a fixed 151 calls to the 38-long VDP copy cascade, larger than many individual decoded streams. The control flow is unambiguous, but the intended padding/retained-buffer semantics should be confirmed with a VRAM trace before assigning exact visual regions to every byte beyond each stream's terminator.
+The fixed upload at `$0198AA` is deliberately independent of the Kosinski
+terminator. `d7=$0096` gives 151 DBF iterations and
+`$10496 (vdp_copy_long_38)` writes 38 longwords per iteration, so each pass
+uploads exactly 22,952 bytes (`$59A8`) from `$FF8000
+(decompression_scratch_buffer)`. The decoded prefixes in the table above range
+from 704 to 12,224 bytes, and this routine does not clear the scratch suffix.
+Bytes after the terminator are therefore retained scratch contents, not codec
+padding. Only the decoded prefix is semantically valid; the oversized transfer
+is a fixed VRAM-region refresh whose unused tail must not be interpreted as
+part of the compressed asset. The second art command begins at a per-level VRAM
+address chosen to follow the first asset's useful tile range.
 
 `$0199C6` performs a further level-dependent Kosinski decode into `$FF8000 (decompression_scratch_buffer)`, then copies selected 16-byte chunks into the large plane buffers at `$FF0000`/`$FF2000`. This is the bridge from compressed block definitions to the runtime level layout assembled for scrolling.
 
@@ -453,6 +463,8 @@ section remain separate visual/asset-identification questions.
 - The fixed eight-record incremental art queue and its unchecked producer contract.
 - Nemesis repeat tokens can continue across a 32-bit tile-row boundary.
 - ROM-derived compressed and output sizes in the tables.
+- The `$0198AA` level-art upload is always `$59A8` bytes and may copy a stale
+  scratch-buffer suffix after the decoded prefix.
 - Correction of `$8192 (nemesisdec_vram)` from `$018192` to `$8192 (nemesisdec_vram)`.
 
 ### Medium confidence (75-90%)
@@ -464,8 +476,7 @@ section remain separate visual/asset-identification questions.
 ### Open questions
 
 1. Which exact VRAM tile ranges correspond to every ID in the Nemesis table at `$00A662`?
-2. What padding or retained-buffer assumption explains the fixed-size VDP copy at `$0198AA` after variable-length Kosinski output?
-3. Which data fields in `$FFDD14` and `$FFDD18` merit semantic names beyond saved decoder scratch state?
+2. Which data fields in `$FFDD14` and `$FFDD18` merit semantic names beyond saved decoder scratch state?
 
 ## Analysis-data update ledger
 

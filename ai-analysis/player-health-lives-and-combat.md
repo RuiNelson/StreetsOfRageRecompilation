@@ -234,7 +234,7 @@ On respawn, `$1E0E (player_spawn_or_respawn)`:
 - separates P2 vertically by `$20`;
 - selects character animation data;
 - restores health to `$50`;
-- grants `RAM[$FFFF35] + 1` police specials (normally 1 because `$FFFF35 (respawn_specials_minus_one)` is initialized to zero);
+- grants `RAM[$FFFF35] + 1` police specials (normally 1 because `$FFFF35 (respawn_specials_continue_override)` is cleared and has no static writer);
 - grants zero specials on level index 7;
 - returns to an active neutral state.
 
@@ -418,7 +418,16 @@ connection.
 
 ## Remaining uncertainties and useful runtime checks
 
-1. `$FFFF35 (respawn_specials_minus_one)` is read as "additional respawn specials" and is normally zero; no writer appears in the static code. A watchpoint would establish whether an undocumented mode or RAM side effect ever changes it.
+1. `$FFFF35 (respawn_specials_continue_override)` has a second, nonzero-only
+   use in `$565C (reset_player_after_continue)`: zero selects the normal
+   `2*lives_setting+1` reset, while nonzero branches to `$5952
+   (apply_continue_override_threshold)` and indexes `$5970
+   (continue_override_threshold_table)`, whose four bytes are
+   `$00,$01,$07,$09`. At the only caller, `a1` is the selected player's
+   `lives_via_points_ptr`, so the nonzero branch suppresses the normal lives
+   reset and instead changes the bonus-life threshold index. The ROM has no
+   static writer, so this is unreachable in ordinary cleared-RAM play; its
+   intended developer/debug contract remains unknown.
 2. Several `+$58/+$59` bits combine invulnerability, combo continuation, grab state, and temporary locks. They should be named only after per-state traces, not globally from one call site.
 3. The time-over path enters a global timed display state before resuming object updates. The indirect branch at `$109D4` should be traced in 1P, P2-only, and 2P modes to document exactly when each active player is forced into the fatal state.
 4. The police event has two caller-index-dependent object scripts. The high-level behavior and attribution are clear, but naming every spawned object (car, officer, projectile, blast marker) would benefit from framebuffer/object-table capture during both P1 and P2 calls.

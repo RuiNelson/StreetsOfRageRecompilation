@@ -6,6 +6,7 @@
 ; Mega Drive special addresses
 
 ; Z80 sound space (68000 maps Z80 addresses here)
+A0019B, z80_resident_pcm_directory, "100% - 9 five-byte PCM records loaded with the Z80 driver: little-endian sample offset and length plus playback-delay byte; commands $81-$89"
 A04000, ym2612_a0, "100% - B - YM2612 Channel 1 Address"
 A04001, ym2612_d0, "100% - B - YM2612 Channel 1 Data"
 A04002, ym2612_a1, "100% - B - YM2612 Channel 2 Address"
@@ -51,6 +52,9 @@ C0001C, vdp_disable, "100% - VDP Disable/Debug Register"
 C0001E, vdp_disable_, "100% - VDP Disable/Debug Register (Mirror)"
 
 ; Streets of Rage specific
+
+005970, continue_override_threshold_table, "100% - B[4] - Values $00,$01,$07,$09 indexed by $FFFF35 on the nonstandard continue-reset path; result replaces the active player's bonus-life threshold index"
+078000, z80_banked_pcm_directory, "100% - 8 five-byte PCM records visible to the Z80 at banked address $8000: little-endian sample offset and length plus playback-delay byte; commands $8A-$91"
 
 ; --- Buffers ---
 FF6800, elc_buffer, "100% - Enemy load cue buffer; unpacked here before the level starts"
@@ -224,7 +228,7 @@ FFFF27, lives_via_points_ptr_p2, "100% - W - P2 bonus-life score threshold point
 FFFF2A, demo_mode, "100% - B - Nonzero enables attract-mode scripted input; bit 7 is set when Start aborts the demo and selects the return-to-logo route"
 FFFF2C, demo_ai_input_p1, "100% - L - RAM address of P1 demo AI joypad input stream"
 FFFF30, demo_ai_input_p2, "100% - L - RAM address of P2 demo AI joypad input stream"
-FFFF35, respawn_specials_minus_one, "85% - B - Value plus 1 becomes specials granted on ordinary respawn; initialized/read as zero in known paths"
+FFFF35, respawn_specials_continue_override, "95% - B - Normally zero with no static writer; respawn grants value+1 specials, while nonzero suppresses continue lives reset and writes ROM[$5970+value] to the player's bonus-life threshold index"
 FFFF38, player_mode_copy, "100% - B - Working copy of PlayerMode (1 = 1P, 3 = 2P)"
 
 FFB800, p1_object, "95% - B - Player 1 object RAM slot (state/type byte at base); type 6 = menu/char-select cursor"

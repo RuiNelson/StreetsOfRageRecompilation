@@ -300,12 +300,16 @@ and booth debris, while type `$19`
 changes its own physics.
 
 The container/reward relationship is therefore implemented outside the local
-prop structure: the level's ELC/object records can place a hidden or inactive
-pickup/weapon at the same location and coordinate its visibility or collision
-with the prop's destruction. Operationally the reward is inside the container;
-structurally it is most likely a separate object or script record, not a generic
-`drop_type` member of types `$11/$19`. The remaining task is to pair individual
-container and reward records in each decoded level stream.
+prop structure. A complete parse of the regular wave blocks in all eight
+Nemesis-decoded ELC streams finds type `$11` props in Round 1 and type `$19`
+props in Round 2, but no direct records of weapon types `$08-$0C` or pickup
+types `$3F/$40/$47/$4B/$4C/$4F`. This disproves the simple hypothesis that a
+regular ELC block always places a collectible record beside its container.
+
+Operationally the reward is inside the container, but statically it must enter
+through another controller/conversion path or a separately consumed special
+tail. The local `$11/$19` handlers still have no universal `drop_type` member,
+and the decoded ROM data narrows where the missing producer can be sought.
 
 ## Spawning, despawning, and level behavior
 
@@ -412,5 +416,6 @@ dispatcher and remains correctly listed below.
 ## Uncertainties and recommended traces
 
 1. Map every type-`$0C` animation selector to the thrown canister, smoke/powder cloud, and lingering immobilization frames.
-2. Pair each hidden reward with its telephone booth, crate, or other container in the decoded ELC streams.
+2. Trace the producer that creates or converts hidden rewards; the regular ELC
+   wave records contain the props but no direct collectible-type records.
 3. Name weapon interaction values `+$51 = 0..3` only after a per-frame trace across player pickup, enemy pickup, knockdown drop, and throw; the high-level phases are clear, but some values are momentary commands rather than durable states.

@@ -325,14 +325,30 @@ Combat and stage exit still finish through the normal round-clear mechanism. The
 
 The same state machine supports additional cases in 2P mode:
 
-- matching answers can proceed directly to the corresponding branch;
-- conflicting answers activate a P1-versus-P2 confrontation;
+- matching answers proceed directly to the corresponding branch;
+- conflicting raw selection bits activate a P1-versus-P2 confrontation;
 - `$FFFA43 (duel_damage_modifier)` triples the low damage nibble (modulo 16)
   and selects alternate player-reaction values during this fight;
 - the `$FFFF18 (player_mode)` mask can be modified temporarily while the machine determines which player continues;
 - one branch returns to round 6 by setting `level = 5` before re-entering the normal cycle.
 
-The code clearly establishes this topology. Assigning a definitive narrative name to every answer combination, however, requires a dynamic input matrix. The CSVs therefore name only states and outcomes confirmed by static evidence.
+The ROM jump and control tables establish the raw route matrix completely.
+`$11F74 (mr_x_offer_compare_2p_choices)` performs the equal/different test, and
+`$120EC (mr_x_offer_player_choice_input)` owns per-player selection and confirm.
+`object+$59` bit 3 is the selected side in each choice UI:
+
+| Phase | P1 bit 3 | P2 bit 3 | Static route |
+|---|---:|---:|---|
+| Initial 2P choice | 0 | 0 | state `$0B`; set `$FF34/$FF36`, fade, then `$108F8` restarts at `level=5` / `game_state=$28` |
+| Initial 2P choice | 1 | 1 | state `$12`, then `$18/$41`; release the clock and continue the final fight |
+| Initial 2P choice | 0 | 1 | state `$22`; enable the player duel |
+| Initial 2P choice | 1 | 0 | state `$22`; enable the player duel |
+| Post-duel choice | 0 | — | state `$34->$0B`; Round 6 restart route |
+| Post-duel choice | 1 | — | state `$3B->$3C`; `$12074 (mr_x_offer_mark_bad_ending)` sets `$FFDE10 (bad_ending_selected)` |
+
+The remaining dynamic/visual task is only to attach the exact localized answer
+text to raw bit 3 in each prompt; route destinations no longer depend on a
+runtime matrix.
 
 The transition from office scene to combat is also explicit. Object type `$33`
 dispatches through `$12B5C (mr_x_office_controller_update)`. Once bit 3 of
@@ -504,4 +520,6 @@ The dynamic run therefore confirms the manuscript's central claims about the nar
 
 ## 13. Future work
 
-A dynamic analysis can complete the 2P matrix for Mr. X's offer. The ideal test would record, for every combination of answers, the per-frame values of `$FFDE04 (mr_x_offer_state)`, `$FFDE10 (bad_ending_selected)`, P1/P2 `object+$59`, `$FFFF18 (player_mode)`, `$FFFF34`, `$FFFF36`, and `$FFFF00 (game_state)`. This would make it possible to name the two remaining flags with 100% confidence and document exactly when the special route returns to round 6.
+Capture both choice prompts in each ROM language/region and associate the
+displayed left/right words with `object+$59` bit 3. The assembly and ROM tables
+already determine every route destination and the exact Round 6 restart point.

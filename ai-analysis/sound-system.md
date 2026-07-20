@@ -151,7 +151,42 @@ Compact PCM player, not a multi-channel sequencer:
 | `$1FFD` bit 7 | `$A01FFD (z80_dac_busy)` | Busy while Z80 owns DAC |
 | `$1FFF` | `$A01FFF (z80_dac_command)` | Command byte from 68000 |
 
-Typical start: clear busy, program bank register `$6000` from `$1FF8`–`$1FFB`, loop on `$1FFF` — commands **`≥ $81`** enable DAC (YM reg `$2B = $80`), index sample with `SUB $81`, stream from banked ROM.
+Typical start: clear busy, program bank register `$6000` from `$1FF8`–`$1FFB`, loop on `$1FFF` — commands **`≥ $81`** enable DAC (YM reg `$2B = $80`), index sample with `SUB $81`, and stream from either resident Z80 RAM or the banked ROM window.
+
+The upper bound is also explicit: the Z80 accepts `$81-$91` and rejects
+commands `>=$92`. Each directory record is five bytes: little-endian sample
+offset, little-endian byte length, and a delay-loop byte that controls playback
+rate. Commands `$81-$89` use the resident table at `$A0019B
+(z80_resident_pcm_directory)`; `$8A-$91` switch to the table at Z80 `$8000`,
+mapped from ROM `$78000 (z80_banked_pcm_directory)` by the seeded bank value.
+
+| Z80 command | Location | Sample offset | Length | Delay |
+|---:|---|---:|---:|---:|
+| `$81` | resident | `$01C8` | `$0393` | `$04` |
+| `$82` | resident | `$055B` | `$04FA` | `$01` |
+| `$83` | resident | `$0A55` | `$03F3` | `$0C` |
+| `$84` | resident | `$0E48` | `$07B8` | `$01` |
+| `$85` | resident | `$1600` | `$0000` | `$01` |
+| `$86` | resident | `$1600` | `$0508` | `$20` |
+| `$87` | resident | `$1600` | `$0508` | `$1A` |
+| `$88` | resident | `$1B08` | `$03BF` | `$12` |
+| `$89` | resident | `$1B08` | `$03BF` | `$16` |
+| `$8A` | banked | `$0028` | `$0758` | `$0E` |
+| `$8B` | banked | `$0028` | `$0758` | `$10` |
+| `$8C` | banked | `$0780` | `$01C8` | `$30` |
+| `$8D` | banked | `$0780` | `$01C8` | `$20` |
+| `$8E` | banked | `$0948` | `$0298` | `$25` |
+| `$8F` | banked | `$0948` | `$0298` | `$18` |
+| `$90` | banked | `$0BE0` | `$045D` | `$15` |
+| `$91` | banked | `$103D` | `$0565` | `$15` |
+
+The repeated offset/length pairs with different delay bytes are pitch/rate
+variants of the same PCM bytes. The record boundaries also chain exactly
+(`$01C8+$0393=$055B`, through resident end `$1EC7`, and `$0028+$0758=$0780`,
+through banked end `$15A2`), independently validating the five-byte parse.
+`$85` is a zero-length entry. The 68000 direct
+PCM mapping `(ID+$B6) & $FF` therefore makes IDs `$D0-$DB` playable as commands
+`$86-$91`; `$DC-$DF` become `$92-$95` and are ignored by this Z80 driver.
 
 The host emulator (`MegaDriveEnvironment` Z80 core) models the 68000 driver hammering BUSREQ while waiting on `$A01FFD (z80_dac_busy)` — a real hardware handshake.
 
@@ -411,8 +446,11 @@ Deep sequence helpers remain largely unnamed `sub_072xxx` / `sub_073xxx` in gene
 
 ## 13. Open follow-ups
 
-1. **Name every ID** `$81`–`$CF` (and PCM `$D0`–`$DF`) from call sites and auditory testing.
-2. **Extract the Z80 sample directory** (offsets/lengths after `SUB $81`) and map PCM IDs to game events.
+1. **Name every ID** `$81`–`$CF` and playable PCM `$D0`–`$DB` from call sites
+   and auditory testing; audit whether `$DC-$DF` are ever posted despite being
+   rejected by the Z80 command bound.
+2. Map the now-decoded PCM directory entries to audible event names; several
+   entries intentionally share bytes at different playback rates.
 3. **Instrument bank format** behind the music header’s voice-bank pointer / `$FFF014 (sound_music_voice_bank)`.
 4. Assign musical names to the remaining `$F2-$F6/$FE` parameter fields by tracing real sequence streams.
 5. Safe, incremental **native port** of `sound_ym2612_*` / engine (with correct BUSREQ pacing) if desired.
