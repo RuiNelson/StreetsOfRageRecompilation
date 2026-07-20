@@ -8,6 +8,7 @@
 #include <runtime_tests/sound/AudioHeadlessTest.hpp>
 #include <runtime_tests/sound/TestSound.hpp>
 #include <runtime_tests/vdp_tests/TestVDP.hpp>
+#include <cstdint>
 #include <string>
 
 int main(int argc, char *argv[]) {
@@ -26,6 +27,7 @@ int main(int argc, char *argv[]) {
     bool        sorFastFlag           = false;
     bool        silentFlag            = false;
     int         sorVSyncMode          = 0; // 0 = internal timer (default); 1/2/3 = VSync/VSync2/VSync3
+    int         remoteAccessPort      = 6969;
     std::string sorRomPath            = "rom/SOR.bin";
     std::string sorAuxAddrFile; // if set, record unknown dispatch targets here
     std::string audioWavPath;
@@ -57,6 +59,9 @@ int main(int argc, char *argv[]) {
         ->capture_default_str()
         ->check(CLI::Range(0, 3));
     app.add_option("--rom", sorRomPath, "ROM path for --runSor")->capture_default_str();
+    app.add_option("--port", remoteAccessPort, "With --runSor: remote access TCP port (0 disables)")
+        ->capture_default_str()
+        ->check(CLI::Range(0, 65535));
     app.add_option("--auxAddrFile",
                    sorAuxAddrFile,
                    "With --runSor: on an indirect dispatch to an unknown address, append it to "
@@ -101,7 +106,10 @@ int main(int argc, char *argv[]) {
         tester.boot();
     }
     if (runSorFlag) {
-        SorRuntime sor(sorRomPath, static_cast<VDP::Synchronization>(sorVSyncMode));
+        SorRuntime sor(sorRomPath,
+                       static_cast<VDP::Synchronization>(sorVSyncMode),
+                       VDP::Integer,
+                       static_cast<std::uint16_t>(remoteAccessPort));
         configureEnvironment(sor);
         sor.setDebugLog(sorDebugFlag);
         sor.setFastMode(sorFastFlag);
