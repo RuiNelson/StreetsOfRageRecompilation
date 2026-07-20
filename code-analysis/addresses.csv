@@ -171,7 +171,7 @@ FFFA42, police_special_sweep_timer, "100% - B - P2-pattern type-$29 sweep delay:
 FFFA43, duel_damage_modifier, "100% - B - Forced-duel flag; triples the attack descriptor's low damage nibble modulo 16 and selects alternate player reaction values"
 FFFA44, screen_shake_active, "98% - B - Enables signed alternating camera shake while the countdown is nonzero"
 FFFA45, screen_shake_timer, "98% - B - Camera-shake countdown; parity selects +3/-3 displacement"
-FFFA46, pause_text_flag, "100% - B - Pause screen text display flags (bit 7 = pause active)"
+FFFA46, pause_text_flag, "100% - B - Pause screen text flags; 0 = running, 3 = paused (bits 0/1 select the PAUSE text tiles)"
 FFFA47, p1_start_button_buffer, "100% - B - P1 button buffer for Start detection (pause / join)"
 FFFA48, p2_start_button_buffer, "100% - B - P2 button buffer for Start detection (pause / join)"
 FFFA51, police_special_impact_flags, "100% - B - Bit 0 latches the first P2 shell impact; bit 1 latches P1 blast-chain launch so shared sounds/effects occur once"
