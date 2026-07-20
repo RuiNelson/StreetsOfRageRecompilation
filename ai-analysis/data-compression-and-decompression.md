@@ -181,17 +181,22 @@ IDs for the three possible resident VRAM destinations:
 
 | Visual family | Internal types | Cue IDs | Nemesis source | Decoded tiles | Cue destinations |
 |---|---|---:|---:|---:|---|
-| Garcia | `$20-$23,$29` | `$0B-$0D` | `$20172 (garcia_nemesis_art)` | 295 | `$7100,$4B80,$2600` |
+| Garcia | `$20-$23` | `$0B-$0D` | `$20172 (garcia_nemesis_art)` | 295 | `$7100,$4B80,$2600` |
 | Signal | `$24` | `$0E-$10` | `$21708 (signal_nemesis_art)` | 257 | `$7100,$4B80,$2600` |
 | Haku-Ro | `$25,$2A` | `$11-$13` | `$22BFE (haku_ro_nemesis_art)` | 296 | `$7100,$4B80,$2600` |
 | Nora | `$26` | `$14-$16` | `$245E0 (nora_nemesis_art)` | 261 | `$7100,$4B80,$2600` |
-| Jack | `$27,$28` | `$17-$19` | `$258F8 (jack_nemesis_art)` | 298 | `$7100,$4B80,$2600` |
+| Jack + type-`$28` projectile helper | `$27,$28` | `$17-$19` | `$258F8 (jack_nemesis_art)` | 298 | `$7100,$4B80,$2600` |
 
 All three cue IDs in a row point to the same compressed bytes; only the VRAM
 destination changes. The names come from visual inspection of PNG tile sheets
 produced by `tools/decompress.py`; the cue IDs, source pointers, output sizes,
 type grouping, and destinations come directly from the ROM tables and Nemesis
 headers.
+
+Type `$29` contains art-family byte `$81`, but it is not another Garcia. Its
+normal animation pointer and combat record are null, and its object handler is
+the police-special sweep controller; the high-bit family byte keeps it on the
+special fixed-residency path rather than loading Garcia art as a combatant.
 
 `$1087A (game_mode_ingame)` calls `$84BA (begin_incremental_nemesis_decode)` once per update to start pending work; VBlank calls `$8510 (continue_incremental_nemesis_decode)` to make bounded progress. This separation is the important scheduling property: table construction and stream setup occur in game time, while VDP writes occur in the safe display interval.
 

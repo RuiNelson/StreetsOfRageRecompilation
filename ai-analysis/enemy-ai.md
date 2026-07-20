@@ -21,7 +21,7 @@ boundary; the boss part later covers them directly. Earlier inference from their
 sophisticated target selection was insufficient to classify them as ordinary
 enemies; ELC placement is decisive.
 
-The common ordinary-type dispatch range is the contiguous `$20-$2A`. `$9350 (is_nonordinary_enemy_type)` subtracts `$20` and accepts exactly eleven values, and the palette/metadata pass at `$810 (prepare_next_spawn_section)` applies the same bounds. The tables show, however, that only `$20-$27` and `$2A` are complete combatant entries; `$28/$29` are exceptional slots with zero health data, and `$29` also has a null animation pointer. The ordinary subsystem is more data-driven than the later boss handlers: type and variant select health, damage, palette, animation, and behavior tables around `$026FCE-$027032`.
+The common ordinary-type dispatch range is the contiguous `$20-$2A`. `$9350 (is_nonordinary_enemy_type)` subtracts `$20` and accepts exactly eleven values, and the palette/metadata pass at `$810 (prepare_next_spawn_section)` applies the same bounds. Only `$20-$27` and `$2A` are complete combatants: `$28` is Jack's axe/torch projectile helper, while `$29` is the police-special enemy-sweep controller. Their zero health records and `$29`'s null animation pointer are therefore intentional. The ordinary subsystem is more data-driven than the later boss handlers: type and variant select health, damage, palette, animation, and behavior tables around `$026FCE-$027032`.
 
 ## Ordinary-enemy lifecycle
 
@@ -85,7 +85,7 @@ Thus archetype differences are not eleven completely separate top-level function
 | Type range | Classification | Proven differentiation |
 |---|---|---|
 | `$20-$27`, `$2A` | Normal ordinary-enemy entries | Nine complete type records; type/variant health, damage, palette and animation-set pointer |
-| `$28/$29` | Exceptional slots inside the accepted range | Zero health records; `$29` also has a null animation pointer and both are absent from regular ELC blocks |
+| `$28/$29` | Dedicated helper slots inside the accepted range | `$28` is Jack's thrown projectile; `$29` is the police-special ordinary-enemy sweep controller |
 | `$30` | Abadede boss | Separate byte-state handler `$143D0 (abadede_update)` |
 | `$55-$58` | Souther/Antonio/Bongo/Onihime-Yasha bosses | Separate boss-family handlers and target selectors |
 
@@ -97,11 +97,11 @@ result gives this mapping:
 
 | Internal type(s) | Art-family byte | Nemesis stream | Visual identity | Distinguishing behaviour |
 |---|---:|---:|---|---|
-| `$20-$23`, `$29` | `$01` (`$81` for `$29`) | `$20172 (garcia_nemesis_art)` | Garcia | Most common basic enemy |
+| `$20-$23` | `$01` | `$20172 (garcia_nemesis_art)` | Garcia | Most common basic enemy |
 | `$24` | `$02` | `$21708 (signal_nemesis_art)` | Signal | Sliding attacks; gets behind and throws the player |
 | `$25`, `$2A` | `$03` | `$22BFE (haku_ro_nemesis_art)` | Haku-Ro | Highly mobile ninja |
 | `$26` | `$04` | `$245E0 (nora_nemesis_art)` | Nora | Whip attacks; some variants feign injury before resuming combat |
-| `$27`, `$28` | `$05` (`$85` for `$28`) | `$258F8 (jack_nemesis_art)` | Jack | Juggles axes or torches, then may stop and throw them |
+| `$27`, helper `$28` | `$05` (`$85` for `$28`) | `$258F8 (jack_nemesis_art)` | Jack plus thrown axe/torch art | Jack juggles the projectile and may stop and throw it |
 
 This is a **visual-family mapping**, not proof that every internal ID in a
 shared row behaves identically. The type tables make the differences explicit:
@@ -116,16 +116,19 @@ shared row behaves identically. The type tables make the differences explicit:
 | `$25` | Haku-Ro | `$2402C (haku_ro_animation_set)` | `$04,$07,$09` | `$0C,$0C,$10` |
 | `$26` | Nora | `$242F8 (nora_animation_set)` | `$07,$0B,$0E` | `$08,$08,$08` |
 | `$27` | Jack | `$2556C (jack_animation_set)` | `$09,$0E,$11` | `$0C,$10,$14` |
-| `$28` | Jack-family special slot | `$2556C (jack_animation_set)` | `$00,$00,$00` | `$0C,$10,$14` |
-| `$29` | Garcia-family reserved slot | null | `$00,$00,$00` | `$00,$00,$00` |
+| `$28` | Jack axe/torch projectile helper | `$2556C (jack_animation_set)` | `$00,$00,$00` | `$0C,$10,$14` |
+| `$29` | Police-special sweep controller | null | `$00,$00,$00` | `$00,$00,$00` |
 | `$2A` | Haku-Ro | `$2402C (haku_ro_animation_set)` | `$07,$0B,$0E` | `$0C,$0C,$10` |
 
 The exact duplicate animation pointers prove that `$20-$23` share the Garcia
-animation resource, `$25/$2A` share Haku-Ro, and `$27/$28` share Jack. `$29`
-cannot enter the normal initialized animation path safely because its pointer
-is null; `$28` also has zero initial-health bytes. Together with their absence
-from every regular ELC block, this makes `$28/$29` special/reserved table slots,
-not normal roster variants. Their exact exceptional purpose remains open.
+animation resource, `$25/$2A` share Haku-Ro, and Jack's type `$27` plus its
+type-`$28` projectile share the Jack resource. `$FC1C` creates type `$28` from
+Jack, copies its target and damage, and the `$FC66-$FE3E` path launches,
+collides, returns, or removes the axe/torch helper. Type `$29` is created by
+`$9566 (prepare_ordinary_enemies_for_police_special)` and dispatches directly
+to `$100B6 (police_special_enemy_sweep_update)`, so it needs neither the normal
+animation pointer nor combat values. Neither helper belongs in regular ELC
+waves.
 
 The high bit on types `$28/$29` has engine meaning: `$810
 (prepare_next_spawn_section)` excludes those entries from the ordinary
@@ -227,7 +230,7 @@ Proven difficulty effects are:
 
 Death accounting is centralized:
 
-- `$00950E` and `$009566` can force all ordinary enemies into scripted death/removal states;
+- `$00950E` and `$9566 (prepare_ordinary_enemies_for_police_special)` can force all ordinary enemies into scripted death/removal states;
 - `$0097E6/$00997E` detect offscreen/fall deaths and select sounds;
 - `$9DC0 (ordinary_enemy_release_accounting)` decrements palette/enemy counters;
 - `$9E26 (ordinary_enemy_award_score)` awards score to P1 or P2 using `$39`;
@@ -264,7 +267,7 @@ Medium confidence (75-90%): later purpose of the initial-health mirror `$38` and
 
 Open questions:
 
-1. Separate Garcia types `$20-$23` and Haku-Ro types `$25/$2A` into exact behavioural variants, and identify the exceptional purpose of `$28/$29`.
+1. Separate Garcia types `$20-$23` and Haku-Ro types `$25/$2A` into exact behavioural variants.
 2. Name every behavior callback reachable from the eleven pointers at `$27032 (ordinary_enemy_animation_set_pointer_table)`.
 3. Fully enumerate collision result `d7` from `$AA22`.
 4. Determine the later purpose, if any, of the initial-health mirror at object byte `$38`.
@@ -545,6 +548,28 @@ Pairing is significant for Round 5/6/8. `$17F2E (boss_link_same_type_pair)` scan
 the same type and writes reciprocal roles (`+$5D=1/2`) and partner pointers
 (`+$5E`). Target selectors use those roles to split attention across P1/P2.
 Death unlinks the survivor so it can return to unpaired target selection.
+
+#### Police-special damage
+
+Police attacks do not reach bosses through the ordinary type-`$29` sweep.
+Antonio, Souther, Bongo, and Onihime/Yasha call `$16AEC
+(later_boss_enter_police_special_reaction)` before their primary-state
+dispatch. On the one-frame `$FFFA1B (police_special_start_pulse)`, the helper
+clears the per-boss latch; while the event is active, each living boss enters
+shared state `$0A` exactly once, records the calling player at `+$70`, sets a
+20-step effect counter, and starts a delay of 300 updates for P1 or 390 for P2.
+
+The state-table target `$16A60 (later_boss_police_special_reaction)` was absent
+from the earlier static-disassembly entry list. Adding it proves the result:
+after the caller-specific delay it subtracts exactly 10 from health `+$32` and
+enters the normal knockdown path, or the normal lethal path when health falls
+to zero. The 20 at `+$76` is an initial effect/animation countdown, not damage.
+
+Abadede implements the same fixed 10 damage independently in `$143D0
+(abadede_update)`: he latches the active event, waits for it to end, subtracts
+10 once, preserves P1/P2 attribution in his lethal flags, and forces state 6.
+Mr. X has no police-special reaction because normal Round-8 initialization
+sets both player special counters to zero.
 
 ### Antonio (`$56`, `$16CE4 (antonio_update)`)
 

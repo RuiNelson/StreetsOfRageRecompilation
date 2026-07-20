@@ -23,7 +23,7 @@ The three face buttons, after the optional control-layout remap, are represented
 - bit 6: police special;
 - bit 7: Start.
 
-The police special is a global scripted event. It consumes one player-specific special counter, records the caller, freezes or suppresses several normal systems, spawns the police vehicle and bombardment objects, and marks enemies for the special-hit response. It is disabled in level index 7 (Round 8).
+The police special is a global scripted event. It consumes one player-specific special counter, records the caller, freezes or suppresses several normal systems, runs a reversible camera excursion, spawns the police vehicle and one of two slot-dependent bombardment patterns, kills eligible ordinary enemies, and deals a fixed 10 damage to supported bosses. Round 8 normally has no usable calls because player initialization forces both counters to zero there; the activation gate itself does not contain a Round-8 test.
 
 ## Player object layout
 
@@ -238,7 +238,12 @@ On respawn, `$1E0E (player_spawn_or_respawn)`:
 - grants zero specials on level index 7;
 - returns to an active neutral state.
 
-At the beginning of a round, `$107F2 (spawn_round_players)` creates each active player and sets their special counter to 2. The spawn routine subsequently enforces the Round 8 no-special rule. Therefore round entry and post-death respawn intentionally grant different special counts: normally 2 at round start, 1 after losing a life.
+At the beginning of a round, `$107F2 (spawn_round_players)` creates each active
+player and transiently seeds the special counter with 2. Its immediate
+`$AD8E (update_select_objects)` call dispatches the zero-state player to `$1E0E
+(player_spawn_or_respawn)`, which replaces that seed with the same effective
+allowance as a respawn: normally 1, or 0 in Round 8. Round entry and post-death
+respawn therefore converge on the same playable resource value.
 
 ## Lives and extra lives
 
@@ -291,18 +296,33 @@ The continue UI is implemented by the dead player's object (`type $0F`) in the `
 - choosing **Yes** subtracts one continue, recreates an active player object with the selected character, restores the corresponding player-mode bit, and clears the player's extra-life threshold index;
 - `$565C (reset_player_after_continue)` clears that player's score and restores lives from `2*lives_setting+1` before normal spawn logic restores health and specials.
 
-P2 also has an in-game join path at `$115CC (update_join_and_continue_hud)`: if P2 is inactive, a second controller is present, Round 8 is not active, and no police special is running, Start can create P2 directly with two specials. A small table chooses a character relative to P1's character. This is separate from accepting a continue.
+P2 also has an in-game join path at `$115CC (update_join_and_continue_hud)`: if P2 is inactive, a second controller is present, Round 8 is not active, and no police special is running, Start can create P2 directly. The join path transiently writes 2 to the special byte, but the new type-1 player's next object update runs `$1E0E (player_spawn_or_respawn)` and replaces it with the normal playable value of 1. A small table chooses a character relative to P1's character. This is separate from accepting a continue.
 
 The bytes at `$FFFF22 (p1_out_or_continue_flag)` and `$FFFF25 (p2_out_or_continue_flag)` are persistent per-player out/continue-display flags. They drive the flashing join/continue HUD and are consulted by round-clear and join logic. Their precise UI-state naming is clearer than treating them as lives or continues themselves.
 
 ## Police special attacks
 
-### Activation gate
+### Resource provisioning and the activation gate
 
-The active-player update calls `$3FCC (try_activate_police_special)` every frame;
-the call itself does not mean that a special was requested. Its first test is
-logical face-button bit 6, and it immediately rejects activation when that bit
-is clear or any of the following is true:
+`$107F2 (spawn_round_players)` writes 2 to each active player's counter before
+running the first object update. Because level-start initialization has just
+cleared work RAM, each new type-1 player enters state zero and immediately
+executes `$1E0E (player_spawn_or_respawn)`, which replaces that transient seed:
+
+- normally: `$FFFF35 (respawn_specials_continue_override) + 1`, hence 1 in ordinary play;
+- Round 8 (`level == 7`): 0;
+- later pickups: add one through the packed-BCD helper without re-running spawn.
+
+The same overwrite occurs on the next object update after P2's join path seeds
+2. Thus 2 is a transient creation seed visible in the setup code, not the
+normal initial playable allowance. The persistent counters are one-byte packed
+BCD, although activation uses `SUBQ.B #1`; the ordinary one-digit range makes
+both representations agree.
+
+The active-player update calls `$3FCC (try_activate_police_special)` every
+frame; the call itself does not mean that a special was requested. Its first
+test is the **pressed-edge** byte's logical face-button bit 6, and it immediately
+rejects activation when that bit is clear or any of the following is true:
 
 - player health is zero;
 - the round-intro sequence is active;
@@ -315,21 +335,143 @@ On success it:
 
 1. decrements the correct player's special byte;
 2. stores caller index 0/1 at `$FFFA1C (police_special_caller)`;
-3. releases the player's held/grabbed object;
-4. clears several special-event hit and timer flags;
-5. snapshots the palette;
-6. sets `$FFFA1A (police_special_active)` to `$0101`, making the event globally active;
-7. applies level-specific setup to the scrolling/background state.
+3. clears the blast, impact, sweep, and screen-shake state;
+4. calls `$9566 (prepare_ordinary_enemies_for_police_special)`;
+5. snapshots all 128 palette bytes at `$FFDD80 (police_special_palette_snapshot)`;
+6. writes word `$0101` at `$FFFA1A (police_special_active)`, setting both the active byte and the adjacent one-frame start pulse;
+7. applies Round-3, Round-5, or Round-7 camera/background exceptions.
 
-The routine returns without activating on level index 7, and spawn logic forces the counters to zero there. This is the code-level reason the police special is unavailable in Round 8.
+There is no character-ID branch. Axel, Adam, and Blaze use the same police
+logic; only the caller's **player slot** selects the later P1/P2 pattern.
 
-### Scripted event and damage delivery
+Round 8 is disabled by resource provisioning, not by this gate. If its counter
+were made nonzero externally, the shown activation code would accept it. Round
+7 does have direct gate checks for its pending-wave and vertical-camera phase
+flags, preventing a call during incompatible elevator transitions.
 
-The object routines around `$599E-$673A` implement the special sequence. They select different object/animation tables based on caller index `$FFFA1C (police_special_caller)`, spawn the police vehicle/launcher, projectiles, explosions, and delayed effect objects, and manage special sound and palette state. `$FFFA1A (police_special_active)` suppresses the game clock, ordinary player/player collision, repeated specials, and several normal object behaviors while the sequence is running.
+### Enemy preparation and guaranteed controller
 
-The global hit sweep at `$100B6` applies a special reaction to eligible enemy objects. For caller 0 it can process the enemy table broadly as the blast line reaches them; for caller 1 it uses P2 as the credited source and, in one phase, advances through enemy slots at a controlled cadence. The result written to enemies is reaction state `$0300` with the caller's player object stored as the responsible source, preserving score attribution.
+`$9566 (prepare_ordinary_enemies_for_police_special)` saves camera X, scans the
+32 ordinary object slots, and selects active types accepted by the `$20-$2A`
+common classifier that have a nonnull animation pointer. Each selected object
+receives:
 
-The final special objects clear `$FFFA1A (police_special_active)` at `$653E` or `$672C`, returning control to normal systems. Round-clear scoring snapshots the sum of unused special counters and converts it into a special bonus.
+```text
+primary state = $0400
+health        = $FFFF
+subtype       = low two bits of X
+```
+
+Health `$FFFF` is deliberate: the later `$0300` reaction is lethal without a
+numeric blast-damage calculation. The routine then allocates a type `$29`
+controller in the 24-slot extended object area beginning at `$FFC900`. If no
+slot is free it forcibly writes type `$29` into the first slot, guaranteeing
+that the sweep exists.
+
+This resolves the exceptional `$29` entry in the ordinary type tables. Its
+null animation pointer and zero combat record are intentional because its
+object dispatcher jumps directly to `$100B6 (police_special_enemy_sweep_update)`;
+it is not a Garcia combatant.
+
+### Camera, police vehicle, and art restoration
+
+The adjacent byte `$FFFA1B (police_special_start_pulse)` is exactly a one-frame
+pulse. `$192A4 (begin_police_special_camera_excursion)` consumes it to snapshot
+the camera structure and switch to a special camera path; the main object pass
+clears bit 0 after that first update. Round 7 uses a separate vertical-camera
+setup, while other rounds temporarily move the camera backwards and flatten
+selected Y/parallax accumulators. Round 3 and Round 5 have additional
+background constants.
+
+When the excursion reaches its entry threshold, camera code creates the type
+`$05` actor. `$597C (police_vehicle_dispatcher)` and `$599E
+(police_vehicle_initialize)` load common police art cue 0 plus cue `$09` for P1
+or `$0A` for P2, then choreograph the vehicle/launcher and its linked type-`$05`
+children. The sequence saves links in object `+$50`, synchronizes positions,
+and emits its sounds at animation/timer boundaries rather than from the input
+routine.
+
+On the return path, `$18E3C (restore_police_special_palette_and_art)` waits for
+the incremental art queue to drain, copies the 128-byte palette snapshot back,
+and requeues the resident ordinary-enemy art selected by the current palette
+slot. This is why activation snapshots a full palette even though the damaging
+objects themselves do not read it.
+
+### Two caller-slot bombardment patterns
+
+After the camera returns, it creates type `$0E` for caller 0 (P1) or type `$0D`
+for caller 1 (P2). This selection depends only on `$FFFA1C
+(police_special_caller)`, not the chosen character.
+
+#### P1: propagating type-`$0E` blast
+
+`$654E (p1_police_blast_dispatcher)` starts a root at camera X plus `$80`, lane
+`$60`, and waits `$28` frames before launch. `$6618
+(p1_police_blast_propagate)` creates two type-`$0E` children moving in opposite
+directions; each child advances the propagation index and creates the next one
+until index `$0F`.
+
+`$66C4 (p1_police_blast_wave_update)` uses a compact direction/animation table.
+When a child with index `$0B` reaches animation `$0C`, it writes its lane minus
+12 to `$FFFB40 (police_special_blast_lane)` and sets `$FFFA41
+(police_special_blast_active)`. The terminal object waits `$18` frames and
+`$672C (p1_police_special_finish)` clears the global active flag.
+
+#### P2: falling type-`$0D` shells
+
+`$63F6 (p2_police_bombardment_dispatcher)` waits `$28` frames, then `$6448
+(p2_police_shell_emitter)` creates exactly `$30` (48) falling type-`$0D`
+children at two-frame intervals. Their spawn positions cycle through a
+16-entry table three times. Each shell starts with X velocity 8 and vertical
+velocity `$0E`; `$64F2 (p2_police_shell_impact)` applies gravity until ground
+collision.
+
+The first impact latches bit 0 of `$FFFA51 (police_special_impact_flags)`, starts
+screen shake for `$74` frames, and sets `$FFFA41
+(police_special_blast_active)`. After all 48 emissions the controller waits
+`$38` frames; `$653E (p2_police_special_finish)` then clears the global active
+flag.
+
+### Ordinary-enemy sweep and attribution
+
+Type `$29` handles P1 and P2 differently but always writes the calling player's
+object pointer to enemy `+$3E`, preserving score credit.
+
+For P1, once `$FFFB40 (police_special_blast_lane)` is nonzero, it scans all 32
+ordinary slots each update and forces enemies behind the moving lane front into
+state `$0300`. Once the global blast flag is set it performs a final whole-table
+pass, with a frame-3 exception for one animation family, then deletes itself.
+
+For P2, the controller initializes its cursor to `$FFB900 (object_table)` and a
+delay of `$30`. After the first shell enables the blast it waits until that byte
+underflows, then forces one eligible ordinary enemy into state `$0300`, advances
+the cursor, and reloads the delay to 4. This produces one reaction every five
+controller updates until the scan reaches `$FFC900`, when the controller deletes
+itself.
+
+### Boss damage
+
+Boss damage bypasses the type-`$29` ordinary sweep:
+
+- Abadede (`$30`) latches that a police event occurred, waits for
+  `$FFFA1A (police_special_active)` to clear, subtracts exactly 10 health once,
+  and forces his normal hit/death state while retaining caller attribution.
+- Antonio, Souther, Bongo, and Onihime/Yasha (`$55-$58`) enter shared state
+  `$0A` once per start pulse through `$16AEC
+  (later_boss_enter_police_special_reaction)`. The state records P1/P2, runs a
+  300-update delay for P1 or 390 for P2, uses a 20-step initial effect counter,
+  then `$16A60 (later_boss_police_special_reaction)` subtracts exactly 10 health
+  and enters the normal knockdown/death path.
+- Mr. X has no corresponding path; ordinary play cannot call police in Round 8
+  because the player counters are initialized to zero.
+
+Thus ordinary enemies are made lethally vulnerable before the visual sweep,
+whereas supported bosses receive a fixed 10-point scripted hit.
+
+While the event is active, the level pipeline, round clock, player-versus-player
+collision, P2 join/continue updates, and several normal object behaviors return
+early. Round-clear initialization later snapshots the sum of unused active-player
+special counters for the special bonus.
 
 ### Special pickups
 
@@ -379,7 +521,7 @@ adjust_player_health: health = clamp(health - damage, 0, 80), redraw bar
 
 | Reference | Analytical role |
 | --- | --- |
-| `$1E0E (player_spawn_or_respawn)` | Spawn/respawn active player; restore health and specials. |
+| `$1E0E (player_spawn_or_respawn)` | Spawn/respawn active player; restore full health and normally one special, or zero in Round 8. |
 | `$2B48 (resolve_player_death)` | Resolve completed death into respawn or continue object. |
 | `$3028 (player_normal_attack_input)` | Normal-attack entry and combo continuation. |
 | `$3136 (find_close_interaction_target)` | Find/reserve a nearby free weapon or consumable pickup. |
@@ -395,10 +537,18 @@ adjust_player_health: health = clamp(health - damage, 0, 80), redraw bar
 | `$5334 (confirm_player_continue)` | Confirm per-player continue selection. |
 | `$565C (reset_player_after_continue)` | Reset score and configured lives after continue. |
 | `$568A (remap_player_gameplay_input)` | Copy/remap controller input into player object. |
-| `$107F2 (spawn_round_players)` | Create active players at round start and grant two specials. |
+| `$597C (police_vehicle_dispatcher)` | Dispatch the shared type-`$05` police vehicle/launcher choreography. |
+| `$63F6 (p2_police_bombardment_dispatcher)` | Dispatch P2's type-`$0D` 48-shell bombardment. |
+| `$654E (p1_police_blast_dispatcher)` | Dispatch P1's propagating type-`$0E` blast chain. |
+| `$9566 (prepare_ordinary_enemies_for_police_special)` | Mark ordinary enemies lethally vulnerable and guarantee the type-`$29` controller. |
+| `$100B6 (police_special_enemy_sweep_update)` | Apply caller-specific sweep timing and force ordinary enemies into credited lethal reaction. |
+| `$107F2 (spawn_round_players)` | Create active players and seed 2 before same-frame player initialization writes the playable allowance. |
 | `$10C88 (update_game_clock)` | Run round clock unless paused/special-active; start time-over. |
 | `$10DCA (add_bcd_resource_value)` | Packed-BCD resource adjustment helper. |
 | `$115CC (update_join_and_continue_hud)` | P2 join and per-player continue/out HUD logic. |
+| `$16A60 (later_boss_police_special_reaction)` | Finish the shared late-boss police reaction by subtracting 10 health. |
+| `$16AEC (later_boss_enter_police_special_reaction)` | Enter the shared type-`$55-$58` police-special state once per event. |
+| `$192A4 (begin_police_special_camera_excursion)` | Snapshot camera state on the one-frame start pulse and select the excursion path. |
 
 ## Label-confidence audit and corrected legacy names
 
@@ -421,13 +571,12 @@ connection.
 1. `$FFFF35 (respawn_specials_continue_override)` has a second, nonzero-only
    use in `$565C (reset_player_after_continue)`: zero selects the normal
    `2*lives_setting+1` reset, while nonzero branches to `$5952
-   (apply_continue_override_threshold)` and indexes `$5970
-   (continue_override_threshold_table)`, whose four bytes are
-   `$00,$01,$07,$09`. At the only caller, `a1` is the selected player's
+   (apply_continue_override_threshold)` and indexes the four-byte table at
+   `$5970 (continue_override_threshold_table)`, whose bytes are `$00,$01,$07,$09`. At the only caller, `a1` is the selected player's
    `lives_via_points_ptr`, so the nonzero branch suppresses the normal lives
    reset and instead changes the bonus-life threshold index. The ROM has no
    static writer, so this is unreachable in ordinary cleared-RAM play; its
    intended developer/debug contract remains unknown.
 2. Several `+$58/+$59` bits combine invulnerability, combo continuation, grab state, and temporary locks. They should be named only after per-state traces, not globally from one call site.
 3. The time-over path enters a global timed display state before resuming object updates. The indirect branch at `$109D4` should be traced in 1P, P2-only, and 2P modes to document exactly when each active player is forced into the fatal state.
-4. The police event has two caller-index-dependent object scripts. The high-level behavior and attribution are clear, but naming every spawned object (car, officer, projectile, blast marker) would benefit from framebuffer/object-table capture during both P1 and P2 calls.
+4. The mechanics of both caller-index scripts are now statically complete. A framebuffer/object-table capture would only refine the retail visual names of individual type-`$05/$0D/$0E` child actors; it is not needed for timing, damage, or attribution.
