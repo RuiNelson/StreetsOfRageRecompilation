@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Offline Nemesis, Enigma, and Kosinski decompressor for the SoR ROM."""
+"""Offline Nemesis, Enigma, and Kosinski decompressor for the SoR ROM.
+
+This models the blocking codecs. The eight-record Nemesis art queue and its
+five-tile VBlank budget are runtime scheduling concerns, not stream semantics.
+"""
 
 from __future__ import annotations
 
@@ -243,10 +247,11 @@ def decompress_nemesis(
                 previous_row = row
             output.extend(row.to_bytes(4, "big"))
             rows_remaining -= 1
-            if not rows_remaining:
-                break
+            # A repeat token can continue in the next 32-bit row.
             row = 0
             nibbles = 0
+            if not rows_remaining:
+                break
 
     return DecodeResult(bytes(output), reader.pos - offset)
 

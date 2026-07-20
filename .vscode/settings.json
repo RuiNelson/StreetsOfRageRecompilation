@@ -1,7 +1,7 @@
 {
     "cmake.configureOnOpen": true,
     "cmake.buildDirectory": "${workspaceFolder}/build",
-    "cmake.sourceDirectory": "/Users/nelson/developer/SoR_Recompiled/src",
+    "cmake.sourceDirectory": "${workspaceFolder}",
     "cmake.preferredGenerators": [
         "Unix Makefiles"
     ],

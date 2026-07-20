@@ -7,14 +7,13 @@
             "request": "launch",
             "program": "${workspaceFolder}/build/sor",
             "args": [
-                "-testFontSDL",
-                "--testVDP",
-                "-configControls",
-                "-testControllers",
-                "../../rom/SOR.bin"
+                "--runSor",
+                "--rom",
+                "${workspaceFolder}/rom/SOR.bin",
+                "--silent"
             ],
             "cwd": "${workspaceFolder}/build",
-            "stopAtEntry": true,
+            "stopAtEntry": false,
             "preLaunchTask": "cmake build",
             "MIMode": "lldb"
         }
