@@ -154,7 +154,7 @@ logs a short `[cheat] …` line via the async host `Logger`.
 | Alt/Option + `S` | +1 P1 special attack (`$FFFFFF21`) |
 | Alt/Option + `P` | Toggle P1 punch power ×12 |
 | Alt/Option + `K` | Kill all instantiated enemies, including bosses |
-| Alt/Option + `W` | Give each active player a different random weapon |
+| Alt/Option + `W` | Spawn a random weapon on the ground near each active player |
 | Alt/Option + `1`–`8` | Jump to level 1–8 (sets level/wave and forces the level-intro game state) |
 | Alt/Option + `G` | Start good ending (`game_state` → `$0024` / `init_ending_good`) |
 | Alt/Option + `B` | Start bad ending (`game_state` → `$001C` / `init_ending_bad`) |
@@ -170,10 +170,11 @@ reaction states. It leaves players, pickups, weapons, scenery, and boss helper
 objects untouched; normal enemy accounting and boss cleanup then advance the
 encounter as usual.
 
-Random weapons use the five normal carried-weapon types (`$08`–`$0C`). Each
-active player gets a weapon different from the one currently held. The cheat
-reuses an existing carried-weapon slot or allocates a free object slot for an
-unarmed player, then establishes the normal player/weapon ownership links.
+Random weapons use the five normal carried-weapon types (`$08`–`$0C`). The
+cheat allocates a free object slot for each active player and spawns the weapon
+unowned on the ground beside them. Existing carried weapons and player/weapon
+ownership links are left untouched, so the spawned weapon must be picked up
+normally.
 
 Punch power is implemented in `SorCheats` and hooked from the hand-written
 attack-strength routine (`$0041EA`). When enabled, only the player-1 object

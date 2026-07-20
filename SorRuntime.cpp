@@ -24,10 +24,6 @@ constexpr m_long kObjectSlotSize   = 0x80u;
 
 constexpr m_long kObjectPrimaryStateOffset = 0x30u;
 constexpr m_long kObjectHealthOffset       = 0x32u;
-constexpr m_long kPlayerWeaponPointerOffset = 0x5Eu;
-constexpr m_long kPlayerWeaponTypeOffset    = 0x60u;
-constexpr m_long kWeaponCommandOffset       = 0x51u;
-constexpr m_long kWeaponHolderOffset        = 0x52u;
 constexpr m_byte kFirstWeaponType           = 0x08u;
 constexpr m_byte kLastWeaponType            = 0x0Cu;
 
@@ -135,14 +131,6 @@ int killInstantiatedEnemies(SystemMemory &memory) {
     return killed;
 }
 
-m_long objectAddressFromPointer(m_word pointer) {
-    const m_long address = 0xFFFF0000u | static_cast<m_long>(pointer);
-    const m_long tableEnd = kObjectTable + kObjectSlotCount * kObjectSlotSize;
-    if (address < kObjectTable || address >= tableEnd || (address - kObjectTable) % kObjectSlotSize != 0u)
-        return 0u;
-    return address;
-}
-
 m_long findFreeObjectSlot(SystemMemory &memory) {
     for (int slot = 0; slot < kObjectSlotCount; ++slot) {
         const m_long object = kObjectTable + static_cast<m_long>(slot) * kObjectSlotSize;
@@ -157,46 +145,29 @@ void clearObjectSlot(SystemMemory &memory, m_long object) {
         memory.writeLong(object + offset, 0u);
 }
 
-m_byte randomWeaponType(m_byte currentType) {
+m_byte randomWeaponType() {
     static std::mt19937 generator{std::random_device{}()};
-
-    if (!isWeapon(currentType)) {
-        std::uniform_int_distribution<unsigned> distribution(kFirstWeaponType, kLastWeaponType);
-        return static_cast<m_byte>(distribution(generator));
-    }
-
-    // Pick among the other four weapons so every activation visibly changes it.
-    std::uniform_int_distribution<unsigned> distribution(kFirstWeaponType, kLastWeaponType - 1u);
-    m_byte selected = static_cast<m_byte>(distribution(generator));
-    if (selected >= currentType)
-        ++selected;
-    return selected;
+    std::uniform_int_distribution<unsigned> distribution(kFirstWeaponType, kLastWeaponType);
+    return static_cast<m_byte>(distribution(generator));
 }
 
-m_byte giveRandomWeapon(SystemMemory &memory, m_long player) {
+m_byte spawnRandomWeaponOnGround(SystemMemory &memory, m_long player, int xOffset) {
     if (memory.readByte(player) != 1u)
         return 0u;
 
-    const m_byte currentType = memory.readByte(player + kPlayerWeaponTypeOffset);
-    m_long weapon = objectAddressFromPointer(memory.readWord(player + kPlayerWeaponPointerOffset));
-    if (weapon == 0u || !isWeapon(currentType) || memory.readByte(weapon) != currentType ||
-        memory.readWord(weapon + kWeaponHolderOffset) != static_cast<m_word>(player)) {
-        weapon = findFreeObjectSlot(memory);
-    }
+    const m_long weapon = findFreeObjectSlot(memory);
     if (weapon == 0u)
         return 0u;
 
-    const m_byte newType = randomWeaponType(currentType);
+    const m_byte newType = randomWeaponType();
     clearObjectSlot(memory, weapon);
 
     memory.writeByte(weapon, newType);
     memory.copyLong(player + 0x10u, weapon + 0x10u);
     memory.copyLong(player + 0x14u, weapon + 0x14u);
-    memory.copyLong(player + 0x18u, weapon + 0x18u);
-    memory.writeByte(weapon + kWeaponCommandOffset, 1u);
-    memory.writeWord(weapon + kWeaponHolderOffset, static_cast<m_word>(player));
-    memory.writeWord(player + kPlayerWeaponPointerOffset, static_cast<m_word>(weapon));
-    memory.writeByte(player + kPlayerWeaponTypeOffset, newType);
+    memory.writeWord(weapon + 0x10u,
+                     static_cast<m_word>(memory.readWord(weapon + 0x10u) + xOffset));
+    memory.writeLong(weapon + 0x18u, 0u);
     return newType;
 }
 
@@ -240,9 +211,9 @@ void SorRuntime::handleOptionHotkey(OptionHotkeyCode keyCode) {
             return;
         }
         case SDLK_W: {
-            const m_byte p1Weapon = giveRandomWeapon(memory(), kP1Object);
-            const m_byte p2Weapon = giveRandomWeapon(memory(), kP2Object);
-            Logger::log("[cheat] random weapons: P1=%s, P2=%s",
+            const m_byte p1Weapon = spawnRandomWeaponOnGround(memory(), kP1Object, 16);
+            const m_byte p2Weapon = spawnRandomWeaponOnGround(memory(), kP2Object, -16);
+            Logger::log("[cheat] spawned random weapons: P1=%s, P2=%s",
                         weaponName(p1Weapon),
                         weaponName(p2Weapon));
             return;
