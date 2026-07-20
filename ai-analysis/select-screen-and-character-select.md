@@ -208,7 +208,7 @@ normal:  $10/$12 → $14/$16 → $18/$1A → $24/$26
 cheat:   … also $1C/$1E (lives) and $20/$22 (level)
 ```
 
-### 6.3 Sound test row (`$FFFFC4 (sound_test_index)` / `$FFFFC4 (sound_test_index)`)
+### 6.3 Sound test row (`$FFFFC4 (sound_test_index)`)
 
 Left/Right wrap the index **`0 … $48`** (73 entries). Face buttons play `options_sound_id_table[$128A + index]` via `$1069E (queue_sound_id)`.
 
@@ -231,7 +231,7 @@ This is **not** the starting level. The list is a BGM / voice / SFX browser. ROM
 
 `$FFFFC4 (sound_test_index)` is only read/written inside this menu.
 
-### 6.4 Difficulty (`$FFFFC6 (difficulty)` / `$FFFFC6 (difficulty)`)
+### 6.4 Difficulty (`$FFFFC6 (difficulty)`)
 
 | Value | On-screen (`$12FE (options_difficulty_strings)`, 7 chars) |
 |-------|------------------------------|
@@ -242,19 +242,23 @@ This is **not** the starting level. The list is a BGM / voice / SFX browser. ROM
 
 Wraps `0 ↔ 3`. Copied to `$FFFB5A (difficulty_copy)` on level load; used for enemy spawn filtering.
 
-### 6.5 Control scheme (`$FFFFC8 (control_scheme)` / `$FFFFC8 (control_scheme)`)
+### 6.5 Control scheme (`$FFFFC8 (control_scheme)`)
 
-Three layouts; on-screen copy at `$1C9FC (options_control_strings)` (blocks of `$50` bytes) describes A/B/C as Special / Attack / Jump variants.
+Three layouts; on-screen copy at `$1C9FC (options_control_strings)` (blocks of
+`$50` bytes) describes the same mapping implemented by
+`$568A (remap_player_gameplay_input)`:
 
-In-game remap is applied in the object input path (`$568A (remap_player_gameplay_input)`):
+| Scheme | A | B | C |
+|---:|---|---|---|
+| `0` | Special | Attack | Jump |
+| `1` | Attack | Jump | Special |
+| `2` | Jump | Special | Attack |
 
-- `0` — default bit layout
-- `1` — shift A/B/C one way
-- `2` — shift the other way
+The raw controller byte uses bit 6 for A, bit 4 for B, and bit 5 for C. Scheme
+1 rotates those bits left and scheme 2 rotates them right into the fixed logical
+roles (bit 4 attack, bit 5 jump, bit 6 special). D-pad and Start are preserved.
 
-D-pad and Start are not remapped by that path.
-
-### 6.6 Lives (cheat) (`$FFFFCA (lives_setting)` / `$FFFFCA (lives_setting)`)
+### 6.6 Lives (cheat) (`$FFFFCA (lives_setting)`)
 
 Input wraps **`0 … 3`**. Applied when leaving character select (and on some respawn paths):
 
@@ -268,7 +272,13 @@ move.b  d0, p2_lives
 
 Continues are always set to **3** in `$17A2 (initialize_player_continues)`. Older comments called this a “9-lives” cheat; the formula observed here yields **1 / 3 / 5 / 7**.
 
-### 6.7 Level (cheat) (`$FFFF02 (level)` / `$FFFF02 (level)`)
+On a cold boot, high work RAM is cleared before
+`$11992 (initialize_power_on_defaults)` writes `lives_setting = 1` and
+`difficulty = 1` (Normal). `$FFFFC8 (control_scheme)` remains at the cleared value 0.
+The ordinary power-on defaults are therefore 3 lives and A/B/C =
+Special/Attack/Jump.
+
+### 6.7 Level (cheat) (`$FFFF02 (level)`)
 
 Left/Right adjust the global `$FFFF02 (level)` word (0 = first round). That value is what `$106EA (init_levelstart)` uses when play begins.
 
@@ -307,8 +317,8 @@ Left/Right adjust the global `$FFFF02 (level)` word (0 = first round). That valu
 
 | Object | Base | Type | Char slot (`+$58`) | X (`+$10`) | Default character |
 |--------|------|------|--------------------|------------|-------------------|
-| P1 | `$FFB800 (p1_object)` `$FFB800 (p1_object)` | 6 | **0** (left) | `$20` | Adam |
-| P2 (if `player_mode == 3`) | `$FFB880 (p2_object)` `$FFB880 (p2_object)` | 6 | **2** (right) | `$E0` | Blaze |
+| P1 | `$FFB800 (p1_object)` | 6 | **0** (left) | `$20` | Adam |
+| P2 (if `player_mode == 3`) | `$FFB880 (p2_object)` | 6 | **2** (right) | `$E0` | Blaze |
 
 5. Spawn **animated full-body character previews** (object type **7**), left → right on screen. The large static face portraits above them are separate screen art, not these objects:
 
@@ -406,7 +416,7 @@ Defaults: P1 starts on slot 0 (**Adam**); P2 starts on slot 2 (**Blaze**).
 
 After lock, movement input is ignored for that player.
 
-### 7.6 Confirm count (`$FFF908 (char_select_confirm_count)` / `$FFF908 (char_select_confirm_count)`)
+### 7.6 Confirm count (`$FFF908 (char_select_confirm_count)`)
 
 - 1P (`player_mode == 1`): need count **1**
 - 2P (`player_mode == 3`): need count **2**
@@ -576,5 +586,3 @@ Downstream consumers:
 
 - Trace `$106EA (init_levelstart)` / `$1077C (game_mode_levelstart)` (`$28`/`$2A`) end-to-end: how `$FFFF02 (level)`, character IDs, and difficulty are applied to the first wave spawn.
 - Name the full object-type jump table at `$B236` (types 6 and 7 handlers).
-- Map control-scheme `1` / `2` to exact A/B/C physical buttons with a live input log.
-- Confirm default power-on values of `$FFFFCA (lives_setting)` / `$FFFFC8 (control_scheme)` before first OPTIONS visit.

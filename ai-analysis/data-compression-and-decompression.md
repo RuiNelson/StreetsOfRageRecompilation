@@ -38,7 +38,8 @@ The common decoder begins at `$0081AE`. Two public entries select the output wri
 | `$8192 (nemesisdec_vram)` | `a0` = compressed stream; VDP command already selected | `a4=$C00000`, no address-register increment |
 | `$81A4 (nemesisdec_ram)` | `a0` = compressed stream; `a4` = RAM destination | `(a4)+` |
 
-The existing `labels.csv` address `$018192` for `$8192 (nemesisdec_vram)` is a typo. There is no decompressor at `$018192`; the relevant entry is `$8192 (nemesisdec_vram)`.
+An earlier analysis row used the erroneous address `$018192`. The CSV now
+records `$8192 (nemesisdec_vram)`; there is no decompressor at `$018192`.
 
 Both entries preserve `d0-a1/a3-a5` with `movem`. The decoder uses a 512-byte lookup table at `$FFF600 (nemesis_decode_table)` (`mem_ram+$F600`), built by `$8280 (nemesis_build_decode_table)`. The RAM entry does **not** take its destination in `a1`; callers consistently preload `a4`.
 
@@ -107,31 +108,34 @@ function nemesis_decode(src, write_long):
     bits = msb_bitstream(src)
     previous_row = 0
 
+    row = 0
+    nibbles = 0
     while rows_remaining != 0:
-        row = 0
-        nibbles = 0
-        while nibbles != 8:
-            if bits.peek(8) >= $FC:
-                bits.consume(6)
-                token = bits.read(7)
-            else:
-                (length, token) = decode_table[bits.peek(8)]
-                bits.consume(length)
+        if bits.peek(8) >= $FC:
+            bits.consume(6)
+            token = bits.read(7)
+        else:
+            (length, token) = decode_table[bits.peek(8)]
+            bits.consume(length)
 
-            repeat = (token >> 4) + 1
-            value = token & $0F
-            repeat times:
-                row = (row << 4) | value
-                nibbles += 1
-
-        if xor_mode:
-            row ^= previous_row
-            previous_row = row
-        write_long(row)
-        rows_remaining -= 1
+        repeat = (token >> 4) + 1
+        value = token & $0F
+        repeat times:
+            row = (row << 4) | value
+            nibbles += 1
+            if nibbles == 8:
+                if xor_mode:
+                    row ^= previous_row
+                    previous_row = row
+                write_long(row)
+                rows_remaining -= 1
+                row = 0
+                nibbles = 0
 ```
 
-The encoder guarantees that a token does not overrun the eight-nibble row boundary; the decoder has no guard for such malformed input.
+A repeat token may cross an eight-nibble row boundary. The decoder writes a
+completed row and continues the remaining repetitions in the next row; the
+offline decoder's crossing-token regression test exercises this exact case.
 
 ### Direct consumers
 
@@ -167,9 +171,16 @@ The gameplay path avoids decompressing large art streams in one frame:
 2. `$84BA (begin_incremental_nemesis_decode)` starts the queue head when no stream is active. It reads the Nemesis header, selects normal/XOR output, builds `$FFF600 (nemesis_decode_table)`, primes the 16-bit payload buffer, and saves decoder state in `$FFDD10-$FFDD28`.
 3. `$8510 (continue_incremental_nemesis_decode)`, called from the VBlank handler path at `$01A07C`, selects the queued VRAM address and resumes the decoder.
 4. One call decodes at most five tiles. It sets `a5=8` for each tile, reuses the common nibble decoder, decrements the remaining tile count, and advances the stored VRAM address by `$00A0` after a full five-tile slice (`5 * 32` bytes).
-5. On completion `$008592` shifts the following six-byte records toward the queue head.
+5. On completion `$008592` shifts the following records toward the queue head.
+   Its fixed 12-longword copy moves seven remaining six-byte slots plus the
+   zero sentinel, proving a capacity of eight queued records.
 
 `$1087A (game_mode_ingame)` calls `$84BA (begin_incremental_nemesis_decode)` once per update to start pending work; VBlank calls `$8510 (continue_incremental_nemesis_decode)` to make bounded progress. This separation is the important scheduling property: table construction and stream setup occur in game time, while VDP writes occur in the safe display interval.
+
+The producer scans for the first zero source longword but performs no bounds
+check. The ROM cue lists and their call pattern must therefore keep the queue
+at or below eight records; appending a ninth would overwrite the fixed sentinel
+area and break the completion shift.
 
 The saved state has the following observed meanings:
 
@@ -439,6 +450,8 @@ section remain separate visual/asset-identification questions.
 - Enigma command families, attribute-bit reconstruction, and even alignment.
 - Kosinski little-endian/LSB-first descriptor ordering and match lengths.
 - The incremental Nemesis five-tile VBlank budget.
+- The fixed eight-record incremental art queue and its unchecked producer contract.
+- Nemesis repeat tokens can continue across a 32-bit tile-row boundary.
 - ROM-derived compressed and output sizes in the tables.
 - Correction of `$8192 (nemesisdec_vram)` from `$018192` to `$8192 (nemesisdec_vram)`.
 
@@ -453,7 +466,6 @@ section remain separate visual/asset-identification questions.
 1. Which exact VRAM tile ranges correspond to every ID in the Nemesis table at `$00A662`?
 2. What padding or retained-buffer assumption explains the fixed-size VDP copy at `$0198AA` after variable-length Kosinski output?
 3. Which data fields in `$FFDD14` and `$FFDD18` merit semantic names beyond saved decoder scratch state?
-4. Can the incremental art queue reach all apparent record slots, and what is its exact maximum depth? The shift loop is clear, but producer-side bounds should be traced before documenting a hard capacity.
 
 ## Analysis-data update ledger
 
@@ -468,7 +480,7 @@ Correction:
 00008192, nemesisdec_vram, "100% - Nemesis decompressor targeting the VDP data port; a0=stream, VDP command preselected; header bit15 enables XOR-row reconstruction"
 ```
 
-The existing erroneous `00018192` row should be replaced, not duplicated.
+The obsolete `00018192` row was replaced rather than duplicated.
 
 New entries:
 

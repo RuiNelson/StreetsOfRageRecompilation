@@ -212,11 +212,12 @@ reserved/held (weapon +$52 = holder; player +$5E = weapon)
 
 The byte at weapon `+$51` is a command/state handshake rather than a simple Boolean. Values observed around `$5D84/$5E2E` mean approximately: 0 free/settling, 1 held/used, 2 dropped, and 3 thrown. The exact moment at which the player state machine writes each value varies by weapon action.
 
-Durability is not represented by one universal field for all five weapon types.
-The knife has an explicit counter at `+$50`; the bottle has a one-way intact to
-shattered transition; and the pipe/bat/pepper families encode wear through their
-state and landing transitions. The common result is the visible rule: repeated
-use and especially impacts with the floor eventually retire the weapon object.
+Durability is not universal across all five weapon types, but the knife,
+baseball bat, and steel pipe do share one exact rule. Their state tables all
+enter `$5C66`, which increments `+$50` when a held-use command begins and
+retires the weapon when the counter has reached 3. The bottle instead has a
+one-way intact-to-shattered transition; pepper spray uses `+$50` for its effect
+lifecycle rather than this three-use rule.
 
 ## Individual weapon families
 
@@ -240,9 +241,12 @@ The type `$1E` children use the small debris handler at `$61BE (bottle_shard_dis
 
 ### Types `$0A` and `$0B`: long melee weapons
 
-The two handlers at `$61F6 (baseball_bat_weapon_dispatcher)` and `$6226 (steel_pipe_weapon_dispatcher)` differ mainly in art data (`$6FA9A` versus `$6FB5A`) and both initialize damage 4. Type `$0A` is the baseball bat and type `$0B` is the steel pipe. They reuse the common ownership, attachment, drop, throw, collision, and landing paths rather than carrying the knife's explicit three-use counter or the bottle's shatter flag.
+The two handlers at `$61F6 (baseball_bat_weapon_dispatcher)` and `$6226 (steel_pipe_weapon_dispatcher)` differ mainly in art data (`$6FA9A` versus `$6FB5A`) and both initialize damage 4. Type `$0A` is the baseball bat and type `$0B` is the steel pipe. Their six-entry dispatch tables are identical after the family-specific initializer and route through the knife's shared `$5C66`, `$5CE4`, `$5D34`, `$5DDE`, and `$5DE0` states. They therefore use the same `+$50` three-use limit; unlike the bottle, they have no shatter flag or shard-spawn path.
 
-The visual mapping was confirmed during gameplay. Mechanically the distinction is small: both provide the same outgoing damage, can be dropped and collected again while durability remains, and wear through closely related impact/landing state transitions.
+The visual mapping was confirmed during gameplay. Mechanically the distinction
+is small: both provide the same outgoing damage, can be dropped and collected
+again while the shared use counter remains below 3, and use identical
+impact/landing transitions.
 
 ### Type `$0C`: pepper spray and smoke
 
@@ -358,7 +362,7 @@ void apply_pickup_effect(Player *p, unsigned effect) {
 | Reference | Analytical role |
 | --- | --- |
 | `$21E6 (player_release_thrown_weapon)` | Commands a carried knife or pepper spray to detach on the attack-animation release frame. |
-| `$3136 (find_close_interaction_target)` | Finds grabbable enemies, weapons, and consumable pickups in the player's close-interaction box. |
+| `$3136 (find_close_interaction_target)` | Finds free weapon types `$08-$0C` and six consumable pickup types in the player's close-interaction box. |
 | `$5C1E (knife_weapon_dispatcher)` | Type-$08 knife dispatcher and counted-use lifecycle. |
 | `$5D84 (launch_released_weapon)` | Detaches and launches a command-3 weapon according to holder facing. |
 | `$5E2E (update_held_weapon)` | Shared held/drop/throw ownership and attachment logic. |
@@ -407,7 +411,6 @@ dispatcher and remains correctly listed below.
 
 ## Uncertainties and recommended traces
 
-1. Trace the pipe and bat landing states to count their exact remaining-use rules after each floor impact.
-2. Map every type-`$0C` animation selector to the thrown canister, smoke/powder cloud, and lingering immobilization frames.
-3. Pair each hidden reward with its telephone booth, crate, or other container in the decoded ELC streams.
-4. Name weapon interaction values `+$51 = 0..3` only after a per-frame trace across player pickup, enemy pickup, knockdown drop, and throw; the high-level phases are clear, but some values are momentary commands rather than durable states.
+1. Map every type-`$0C` animation selector to the thrown canister, smoke/powder cloud, and lingering immobilization frames.
+2. Pair each hidden reward with its telephone booth, crate, or other container in the decoded ELC streams.
+3. Name weapon interaction values `+$51 = 0..3` only after a per-frame trace across player pickup, enemy pickup, knockdown drop, and throw; the high-level phases are clear, but some values are momentary commands rather than durable states.

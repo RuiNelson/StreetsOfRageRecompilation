@@ -430,6 +430,12 @@ deferred while `$1053E` and `$8454 (queue_nemesis_art_cues)` queue the needed ar
 `$FFDCD0 (art_array_cue)` becomes zero and a slot is free, the entity is spawned and the
 remaining records are compacted over it.
 
+The incremental-art queue is a fixed eight-record FIFO. Each record is six
+bytes, and the completion path copies 12 longwords from source `+6` to the
+queue head: seven remaining slots plus the zero sentinel. The producer has no
+bounds check, so the level resource lists must never leave a ninth record
+queued.
+
 This explains the cluster at `$FFFA60..$FFFA70`: it is a small resource-residency
 allocator for active enemy families, not merely a palette array.
 
@@ -756,7 +762,7 @@ The following map separates established structure from provisional naming.
 | `$FFB800 (p1_object)` | `$80` | P1 object |
 | `$FFB880 (p2_object)` | `$80` | P2 object |
 | `$FFB900 (object_table)` | `$1000` | 32 general `$80`-byte entity slots |
-| `$FFDCD0 (art_array_cue)` | long/list | pending art array cue; zero means queued art is drained |
+| `$FFDCD0 (art_array_cue)` | 8 × 6-byte records | incremental Nemesis art FIFO; zero head means drained |
 | `$FFE000 (primary_camera)` | structure | primary camera/plane state |
 | `$FFE002 (cam_x)` | long root | primary camera X 16.16; integer word is named `$FFE002 (cam_x)` |
 | `$FFE01A (camera_x_max)` | long | primary camera maximum X boundary |
@@ -824,6 +830,7 @@ entirely by data. The engine is data-driven, but not data-only.
 | all semantics of each six-byte resource descriptor | overlapping decoder `$F46` | 75% |
 | exact semantic name of every `$FFFA05 (level_spawn_flow_flags)` bit | many distributed producers/consumers | 75% |
 | repeated round-7 descriptor offsets encode vertical phases | ROM table plus round-7 camera exceptions | 70% |
+| incremental Nemesis queue holds eight records | `$8454 (queue_nemesis_art_cues)` append scan and fixed 12-longword shift at `$8592` | 100% |
 
 ---
 

@@ -78,15 +78,25 @@ resolve normal attack, bit 4 ($3028)
 otherwise dispatch directional movement from low input nibble
 ```
 
-The normal-attack path is more than a state change. `$3136 (find_close_interaction_target)` searches the object table for a nearby grabbable target. For ordinary enemies it accepts object types 8 through 12 when their reservation byte is clear and their subtype is allowed. On success it:
+The normal-attack path also checks for a nearby collectible.
+`$3136 (find_close_interaction_target)` scans the object table for weapon types
+`$08-$0C` and the six consumable pickup types. A weapon is accepted only when
+its reservation byte is clear and its subtype is below 3. For a weapon it:
 
 - records the target type in player `+$60`;
 - records its pointer in player `+$5E`;
-- records the player in target `+$52`;
-- marks target `+$51 = 1`;
-- changes the player to action `$28` (or its facing variant).
 
-This is the bridge from a close normal attack into the grab subsystem. While holding a target, the alternate path at `$2D20` selects grab strikes and throws from both the current directional input and the target's state. The target and player exchange reaction values through `+$37`, `+$51`, `+$52`, `+$5E`, `+$60`, `+$7C`, and `+$7D`. Throws then apply explicit X/Z velocities and clear the relationship on both objects.
+For either a weapon or consumable, the common tail records the player in target
+`+$52`, marks target `+$51 = 1`, and changes the player to action `$28` (or its
+facing variant).
+
+This is the bridge from a close normal attack into the weapon/item pickup
+animation, not the enemy-grab detector. Enemy grabs are negotiated by the
+separate collision/contact paths. Once an enemy is held, the alternate path at
+`$2D20` selects grab strikes and throws from directional input and the target's
+state. The target and player exchange reaction values through `+$37`, `+$51`,
+`+$52`, `+$5E`, `+$60`, `+$7C`, and `+$7D`; throws apply explicit X/Z
+velocities and clear the relationship on both objects.
 
 The attack+jump chord (`$322A (player_attack_jump_chord)`) recognizes either order: attack held plus a new jump press, or jump held plus a new attack press. It selects action `$20` (plus character/facing variants), or `$4A` while carrying a target. This is the two-button rear/escape attack family, distinct from the police special.
 
@@ -124,7 +134,19 @@ player.hit_property = (descriptor >> 4);          // merged into object +$42
 
 The exact table layout is compact and partly self-indexing, but the behavioral result is unambiguous: `+$34 == 0` means the current pose does not inflict damage; a nonzero low nibble is the amount applied on a valid collision. The high nibble is later used to select the victim's reaction/knockdown response.
 
-The global byte currently named `$FFFA43 (half_damage)` is enabled for the forced P1-versus-P2 fight in the Mr. X branch. It changes both descriptor conversion in `$41EA (compute_player_attack_descriptor)` and several player-hit reaction choices. The intent is reduced/modified friendly-fire damage, although the nibble transformation is encoded enough that the exact arithmetic should not be described as a simple `damage /= 2` without a runtime trace.
+The forced P1-versus-P2 fight enables
+`$FFFA43 (duel_damage_modifier)`. `$41EA (compute_player_attack_descriptor)`
+then transforms the descriptor exactly as follows:
+
+```c
+modified = (descriptor & 0xF0) + 3 * (descriptor & 0x0F);
+outgoing_damage = modified & 0x0F;
+hit_property = modified >> 4;
+```
+
+The low damage nibble is therefore tripled modulo 16, not halved; a carry can
+also increment the reaction nibble. Other player-contact paths select alternate
+reaction values while the same flag is set.
 
 ### Player-versus-player contact
 
@@ -360,7 +382,7 @@ adjust_player_health: health = clamp(health - damage, 0, 80), redraw bar
 | `$1E0E (player_spawn_or_respawn)` | Spawn/respawn active player; restore health and specials. |
 | `$2B48 (resolve_player_death)` | Resolve completed death into respawn or continue object. |
 | `$3028 (player_normal_attack_input)` | Normal-attack entry and combo continuation. |
-| `$3136 (find_close_interaction_target)` | Find/reserve nearby grabbable object. |
+| `$3136 (find_close_interaction_target)` | Find/reserve a nearby free weapon or consumable pickup. |
 | `$322A (player_attack_jump_chord)` | Attack+jump chord / rear attack. |
 | `$333E (resolve_player_hit_or_ko)` | Player hit/KO reaction gate. |
 | `$351E (apply_player_damage)` | Apply pending incoming damage. |
@@ -396,8 +418,7 @@ connection.
 
 ## Remaining uncertainties and useful runtime checks
 
-1. The global byte at `$FFFA43 (half_damage)` clearly modifies P1/P2 damage and is enabled for the forced duel, but the descriptor-nibble transformation should be traced with known attacks before naming its exact arithmetic contract.
-2. `$FFFF35 (respawn_specials_minus_one)` is read as "additional respawn specials" and is normally zero; no writer appears in the static code. A watchpoint would establish whether an undocumented mode or RAM side effect ever changes it.
-3. Several `+$58/+$59` bits combine invulnerability, combo continuation, grab state, and temporary locks. They should be named only after per-state traces, not globally from one call site.
-4. The time-over path enters a global timed display state before resuming object updates. The indirect branch at `$109D4` should be traced in 1P, P2-only, and 2P modes to document exactly when each active player is forced into the fatal state.
-5. The police event has two caller-index-dependent object scripts. The high-level behavior and attribution are clear, but naming every spawned object (car, officer, projectile, blast marker) would benefit from framebuffer/object-table capture during both P1 and P2 calls.
+1. `$FFFF35 (respawn_specials_minus_one)` is read as "additional respawn specials" and is normally zero; no writer appears in the static code. A watchpoint would establish whether an undocumented mode or RAM side effect ever changes it.
+2. Several `+$58/+$59` bits combine invulnerability, combo continuation, grab state, and temporary locks. They should be named only after per-state traces, not globally from one call site.
+3. The time-over path enters a global timed display state before resuming object updates. The indirect branch at `$109D4` should be traced in 1P, P2-only, and 2P modes to document exactly when each active player is forced into the fatal state.
+4. The police event has two caller-index-dependent object scripts. The high-level behavior and attribution are clear, but naming every spawned object (car, officer, projectile, blast marker) would benefit from framebuffer/object-table capture during both P1 and P2 calls.

@@ -138,6 +138,7 @@
 
 # Hardware / Utility Routines (addresses derived from call sites in ROM)
 00007F50, init_joypad, "100% - Initialises joypad detection; called from Init_RedScreen at game startup"
+00011992, initialize_power_on_defaults, "100% - After the cold-boot high-RAM clear, sets lives_setting=1, difficulty=Normal, and both continue counters=3; control_scheme remains zero"
 00007F6C, init_vdp, "100% - Initialises VDP registers; first call from the hardware-init routine"
 00007FB8, init_z80, "100% - Resets Z80 bus, initialises VDP, clears sprite mappings buffer, camera data, and palette"
 00008046, clear_ram, "100% - Clears a region of RAM; called by Clear_CAM_Data"
@@ -247,7 +248,7 @@
 00001E0E, player_spawn_or_respawn, "100% - Reinitializes an active player after round entry/respawn: placement, animation, full $50 health, and specials"
 00002B48, resolve_player_death, "100% - After death animation and life deduction, respawns if lives remain or converts the player to the continue/game-over object"
 00003028, player_normal_attack_input, "100% - Handles logical attack-button input, close interaction acquisition, and attack/combo state transition"
-00003136, find_close_interaction_target, "100% - Scans the player's close interaction box for grabbable enemies, carried weapons, or consumable pickups and links/reserves the match"
+00003136, find_close_interaction_target, "100% - Scans the player's close interaction box for free weapon types $08-$0C or six consumable pickup types and links/reserves the match"
 0000322A, player_attack_jump_chord, "100% - Detects attack+jump in either press order and selects rear/escape attack or the held-target variant"
 0000333E, resolve_player_hit_or_ko, "100% - Converts recorded collision reaction into hurt/knockdown state and enters fatal state when health is zero"
 0000351E, apply_player_damage, "100% - Reads attacker +$34 or deferred +$56 damage, subtracts it through adjust_player_health, and reports zero health"
@@ -299,7 +300,7 @@
 000096EC, ordinary_enemy_select_target, "100% - Selects the nearest active player by X in 2P and stores target object pointer at +$42; handles no-player state"
 0000982C, ordinary_enemy_vector_to_velocity, "100% - Converts target vector and speed d6 into fixed-point X/lane velocity using direction table $2705E; Easy reduces high speed"
 000098E8, ordinary_enemy_distance_metric, "100% - Computes approximate target distance as 3/8 of the major axis plus the minor axis"
-0000991A, ordinary_enemy_begin_hit_reaction, "100% - Initializes common hit/knockback state, clears attack damage, and dispatches reaction subtype"
+0000991A, ordinary_enemy_begin_knockdown, "100% - Starts the knockdown/airborne fall after sufficient damage, clears attack damage, and dispatches the fall subtype"
 000099A2, ordinary_enemy_update_airborne_reaction, "100% - Updates knockback/airborne physics, landing, obstacle response, and death transition"
 00009B88, ordinary_enemy_apply_contact_damage, "100% - Applies attacker damage to ordinary-enemy health and selects stun, grab, lethal, or scripted state"
 00009DC0, ordinary_enemy_release_accounting, "100% - Releases active-enemy palette/variant counters when an ordinary enemy is removed"
@@ -310,6 +311,8 @@
 0000A00E, ordinary_enemy_advance_lane_bounded, "100% - Advances lane velocity subject to normal or Round-7 lane bounds and reports blockage in d5 bit 1"
 
 # Bosses and final encounter
+00012B5C, mr_x_office_controller_update, "100% - Type-$33 office controller primary-state dispatcher; creates linked scene objects and hands off to the type-$35 Mr. X body"
+00012CE0, mr_x_office_controller_spawn_boss, "100% - When level-flow bit 3 is set, allocates type-$35 Mr. X at the controller position, removes the linked type-$34 object, and clears the controller"
 0001306A, mr_x_boss_update, "100% - Mr. X bespoke primary-state dispatcher and global reaction gate; dispatcher object type $35"
 00013E4C, mr_x_final_encounter_init, "100% - Registers Mr. X with final-stage HUD/completion state via $FA77/$F50E/$F502 and initializes combat presentation"
 00013EBC, mr_x_init_combat_stats, "100% - Initializes Mr. X health and outgoing damage from the difficulty table at $13ED0"

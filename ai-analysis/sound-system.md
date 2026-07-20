@@ -271,6 +271,32 @@ Pointed by **`$73B56 (sfx_pointer_table)`**. Routing tables at `$72E74` / `$72E8
 - **Byte &lt; `$F0`**: duration (bit 7 often rest / key-off); optional pitch byte follows.
 - **Byte ≥ `$F0`**: command → **`$732EA (sound_seq_command)`**, with separate FM vs PSG jump tables (`$73302` / `$73342`).
 
+The two 16-entry tables are now fully decoded. The descriptions below stay at
+the bounded state/register effect where a musical name is not yet proved:
+
+| Cmd | FM target/effect | PSG target/effect |
+|---:|---|---|
+| `$F0` | `$7361E`: select/program FM voice | `$73832`: write channel `+$0A` |
+| `$F1` | `$735D6`: set base attenuation and derived operator levels | `$73838`: set PSG attenuation |
+| `$F2` | `$733A0`: load three pitch/modulation bytes | same |
+| `$F3` | `$733C2`: set channel `+$0D` | same |
+| `$F4` | `$733CA`: configure/dispatch modulation parameters | same |
+| `$F5` | `$73466`: begin counted relative loop | same |
+| `$F6` | `$7348C`: decrement/repeat or leave loop | same |
+| `$F7` | `$734D2`: load four YM channel-3 mode bytes and write register `$27` | `$7385E`: configure PSG noise channel |
+| `$F8` | `$73512`: update YM `$B4` pan/AMS/FMS bits | `$7384A`: consume one byte |
+| `$F9` | `$73384`: toggle the global sound-engine gate | `$7384E`: write channel `+$0B` |
+| `$FA` | `$7353E`: write a supplied YM register/value pair and remember it | `$7384E`: write channel `+$0B` |
+| `$FB` | `$735BC`: add attenuation/volume delta | `$73854`: add attenuation delta |
+| `$FC` | `$73588`: write YM `$22` LFO and `$B4` modulation/pan fields | `$73382`: deliberate self-loop trap if reached |
+| `$FD` | `$735B4`: set channel flag bit 5 (hold/no-retrigger path) | same |
+| `$FE` | `$734AE`: conditional relative skip using the active loop counter | same |
+| `$FF` | `$7380C`: signed relative sequence jump; clear selected modulation/hold flags | same |
+
+The PSG `$FC` entry is literally `bra.s` to itself, so valid PSG streams must
+not issue it. This is a data contract, not an unimplemented branch in the
+recompilation.
+
 ### 6.4 Pitch tables
 
 | Chip | Symbol | Use |
@@ -386,9 +412,9 @@ Deep sequence helpers remain largely unnamed `sub_072xxx` / `sub_073xxx` in gene
 ## 13. Open follow-ups
 
 1. **Name every ID** `$81`–`$CF` (and PCM `$D0`–`$DF`) from call sites and auditory testing.
-2. **Document the full `$F0+` command set** in `$732EA (sound_seq_command)` (FM vs PSG tables).
-3. **Extract the Z80 sample directory** (offsets/lengths after `SUB $81`) and map PCM IDs to game events.
-4. **Instrument bank format** behind the music header’s voice-bank pointer / `$FFF014 (sound_music_voice_bank)`.
+2. **Extract the Z80 sample directory** (offsets/lengths after `SUB $81`) and map PCM IDs to game events.
+3. **Instrument bank format** behind the music header’s voice-bank pointer / `$FFF014 (sound_music_voice_bank)`.
+4. Assign musical names to the remaining `$F2-$F6/$FE` parameter fields by tracing real sequence streams.
 5. Safe, incremental **native port** of `sound_ym2612_*` / engine (with correct BUSREQ pacing) if desired.
 
 ---

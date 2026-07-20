@@ -16,7 +16,10 @@ not ordinary enemies:
 | `$58` | Onihime/Yasha | 5, 8 | `$158C4 (onihime_yasha_update)` |
 | `$30` | Abadede | 3, 8 | `$143D0 (abadede_update)` |
 
-Those handlers are discussed only at the boundary of shared infrastructure. Earlier inference from their sophisticated target selection was insufficient to classify them as ordinary enemies; ELC placement is decisive.
+The ordinary-enemy part discusses those handlers only at the shared-infrastructure
+boundary; the boss part later covers them directly. Earlier inference from their
+sophisticated target selection was insufficient to classify them as ordinary
+enemies; ELC placement is decisive.
 
 The ordinary roster is the contiguous type range `$20-$2A`. `$9350 (is_nonordinary_enemy_type)` subtracts `$20` and accepts exactly eleven values, and the palette/metadata pass at `$810 (prepare_next_spawn_section)` applies the same range. The ordinary subsystem is more data-driven than the later boss handlers: type and variant select statistic, palette, animation and behavior tables around `$026FCE-$027032`.
 
@@ -28,7 +31,8 @@ spawn type $20-$2A
     -> initialize type+variant tables ($938C)
     -> choose active player target ($96EC)
     -> primary state $0100: normal behavior
-    -> collision may enter $0300 hit/airborne, $0500 held, or $0700 blocked
+    -> sufficient damage may enter $0300 knockdown/airborne; grabs use $0500
+    -> blocked movement/contact may enter $0700
     -> health/death enters $0600
     -> remove object, release palette/active-enemy accounting
 ```
@@ -148,7 +152,7 @@ Proven difficulty effects are:
 
 ## Collision, reactions, grabs, and death
 
-`$991A (ordinary_enemy_begin_hit_reaction)` initializes a generic hit/knockback reaction, clears attack damage, selects facing from the attacker, and dispatches by reaction subtype `$4A`. `$99A2 (ordinary_enemy_update_airborne_reaction)` advances airborne physics and landing, using `$973E` for vertical motion and `$9F22` for obstacle response.
+`$991A (ordinary_enemy_begin_knockdown)` starts the knockdown/airborne fall after the enemy has taken sufficient damage; it is not the generic reaction to every hit. It clears attack damage, selects facing from the attacker, and dispatches by fall subtype `$4A`. `$99A2 (ordinary_enemy_update_airborne_reaction)` advances airborne physics and landing, using `$973E` for vertical motion and `$9F22` for obstacle response.
 
 `$9B88 (ordinary_enemy_apply_contact_damage)` is a common contact-damage/stun path. It obtains the attacker through `$3E`, subtracts attacker damage `$34` from health `$32`, and chooses:
 
@@ -219,7 +223,7 @@ These duplicate-checked entries were integrated into the shared CSV files.
 000096EC, ordinary_enemy_select_target, "100% - Selects nearest active player by X in 2P and stores target object pointer at +$42; handles no-player state"
 0000982C, ordinary_enemy_vector_to_velocity, "100% - Converts target vector and speed d6 into fixed-point X/lane velocity using direction table $2705E; Easy reduces high speed"
 000098E8, ordinary_enemy_distance_metric, "100% - Computes approximate target distance as 3/8 of the major axis plus the minor axis"
-0000991A, ordinary_enemy_begin_hit_reaction, "100% - Initializes common hit/knockback state, clears attack damage and dispatches reaction subtype"
+0000991A, ordinary_enemy_begin_knockdown, "100% - Starts the knockdown/airborne fall after sufficient damage, clears attack damage and dispatches the fall subtype"
 000099A2, ordinary_enemy_update_airborne_reaction, "100% - Updates knockback/airborne physics, landing, obstacle response and death transition"
 00009B88, ordinary_enemy_apply_contact_damage, "100% - Applies attacker damage to ordinary-enemy health and selects stun, grab, lethal or scripted state"
 00009DC0, ordinary_enemy_release_accounting, "100% - Releases active-enemy palette/variant counters when an ordinary enemy is removed"
@@ -607,6 +611,15 @@ mode. The boss object and level pipeline continue to exist beneath it.
 
 #### Mr. X body and attack state machine
 
+The office-to-boss hand-off is explicit. The type-`$33` controller runs
+`$12B5C (mr_x_office_controller_update)`. In its hand-off state,
+`$12CE0 (mr_x_office_controller_spawn_boss)` waits for bit 3 of
+`$FFFA72 (level_flow_flags)`, allocates an object, writes type `$35`, copies the
+controller's X/lane/height and adds `$28` to height. It then clears the linked
+type-`$34` object stored at controller `+$50` and deletes the type-`$33`
+controller itself. The new type-`$35` object enters the dispatcher below on its
+next object pass.
+
 The final boss uses the bespoke handler at `$1306A (mr_x_boss_update)` (dispatcher type `$35`).
 Its relative state table at `$130B8` reaches movement, charge, firing,
 hit-reaction, and death states through `$130D6-$13E3E`. It uses:
@@ -716,7 +729,7 @@ registers combat objects; the engine advances the campaign.
 - Shared `$55-$58` object fields, target/distance helpers, health/damage path,
   pair linking, and death cleanup.
 - Mr. X type `$35`, bespoke dispatcher, difficulty stats, collision dispatch,
-  and final-encounter registration.
+  type-`$33` office-controller hand-off, and final-encounter registration.
 - Round 6 multi-boss structure, Round 7 no-boss exception, and Round 8 boss
   rush plus offer state machine.
 - Arena locking belongs to the level camera/pipeline rather than boss objects.
@@ -732,15 +745,13 @@ registers combat objects; the engine advances the campaign.
 
 #### Open questions
 
-1. Trace the office controller's exact instruction that materializes Mr. X and
-   annotate the controller type-to-body hand-off.
-2. Record `$F502/$F508/$F50E` frame by frame through every Round 8 boss-rush
+1. Record `$F502/$F508/$F50E` frame by frame through every Round 8 boss-rush
    section to distinguish HUD registration from completion signaling.
-3. Capture linked objects `$96-$99` in the framebuffer and SAT to assign exact
+2. Capture linked objects `$96-$99` in the framebuffer and SAT to assign exact
    names (boomerang, claw trail, flame, or invisible hitbox) to every state.
-4. Decode every family primary/tactical table into named moves without relying
+3. Decode every family primary/tactical table into named moves without relying
    on visible retail descriptions.
-5. Test all 2P Mr. X offer answer combinations and document which route returns
+4. Test all 2P Mr. X offer answer combinations and document which route returns
    to Round 6 versus the final fight/bad ending.
 
 ### Boss analysis-data update ledger
@@ -752,6 +763,8 @@ All entries below were new except `$117FC (stage_clear_monitor)`, whose existing
 #### `labels.csv`
 
 ```csv
+00012B5C, mr_x_office_controller_update, "100% - Type-$33 office controller primary-state dispatcher; creates linked scene objects and hands off to the type-$35 Mr. X body"
+00012CE0, mr_x_office_controller_spawn_boss, "100% - When level-flow bit 3 is set, allocates type-$35 Mr. X at the controller position, removes the linked type-$34 object and clears the controller"
 0001306A, mr_x_boss_update, "100% - Mr. X bespoke primary-state dispatcher and global reaction gate; dispatcher object type $35"
 00013E4C, mr_x_final_encounter_init, "100% - Registers Mr. X with final-stage HUD/completion state via $FA77/$F50E/$F502 and initializes final combat presentation"
 00013EBC, mr_x_init_combat_stats, "100% - Initializes Mr. X health and outgoing damage from the difficulty table at $13ED0"

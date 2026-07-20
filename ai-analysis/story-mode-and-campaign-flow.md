@@ -307,7 +307,7 @@ The observable phases include:
 - drawing dialogue one character at a time;
 - allowing left/right selection and confirmation;
 - comparing both players' choices in 2P mode;
-- enabling `$FFFA43 (half_damage)` during a P1-versus-P2 duel;
+- enabling `$FFFA43 (duel_damage_modifier)` during a P1-versus-P2 duel;
 - returning to normal combat or marking the narrative outcome.
 
 The choices themselves are stored in player-object state, particularly bits in `object+$59`. `$FFDE0E (mr_x_dialogue_clear_flags)` does not store the answers. Routine `$12576` consumes bit 0 to clear the main dialogue area and bit 1 to clear both player-choice tile areas. The connection between accepting the offer and the bad ending is unambiguous.
@@ -327,11 +327,20 @@ The same state machine supports additional cases in 2P mode:
 
 - matching answers can proceed directly to the corresponding branch;
 - conflicting answers activate a P1-versus-P2 confrontation;
-- `$FFFA43 (half_damage)` changes applied strength during this fight;
+- `$FFFA43 (duel_damage_modifier)` triples the low damage nibble (modulo 16)
+  and selects alternate player-reaction values during this fight;
 - the `$FFFF18 (player_mode)` mask can be modified temporarily while the machine determines which player continues;
 - one branch returns to round 6 by setting `level = 5` before re-entering the normal cycle.
 
 The code clearly establishes this topology. Assigning a definitive narrative name to every answer combination, however, requires a dynamic input matrix. The CSVs therefore name only states and outcomes confirmed by static evidence.
+
+The transition from office scene to combat is also explicit. Object type `$33`
+dispatches through `$12B5C (mr_x_office_controller_update)`. Once bit 3 of
+`$FFFA72 (level_flow_flags)` is set,
+`$12CE0 (mr_x_office_controller_spawn_boss)` allocates a type-`$35` object at
+the controller position (height plus `$28`), clears the controller's linked
+type-`$34` scene object, and deletes the controller. The new type-`$35` object
+is the body handled by `$1306A (mr_x_boss_update)`.
 
 ---
 
