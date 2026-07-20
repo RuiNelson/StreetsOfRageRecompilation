@@ -167,13 +167,31 @@ The exact visual identity of every `$010E42` region remains less certain than th
 
 The gameplay path avoids decompressing large art streams in one frame:
 
-1. `$8454 (queue_nemesis_art_cues)` receives an art-set index in `d0`, resolves a relative list through the table rooted at `$008672`, and appends six-byte records to `$FFDCD0 (art_array_cue)`: a source long plus a VRAM-destination word.
+1. `$8454 (queue_nemesis_art_cues)` receives an art-set index in `d0`, resolves a relative list through the table rooted at `$8672 (nemesis_art_cue_offset_table)`, and appends six-byte records to `$FFDCD0 (art_array_cue)`: a source long plus a VRAM-destination word.
 2. `$84BA (begin_incremental_nemesis_decode)` starts the queue head when no stream is active. It reads the Nemesis header, selects normal/XOR output, builds `$FFF600 (nemesis_decode_table)`, primes the 16-bit payload buffer, and saves decoder state in `$FFDD10-$FFDD28`.
 3. `$8510 (continue_incremental_nemesis_decode)`, called from the VBlank handler path at `$01A07C`, selects the queued VRAM address and resumes the decoder.
 4. One call decodes at most five tiles. It sets `a5=8` for each tile, reuses the common nibble decoder, decrements the remaining tile count, and advances the stored VRAM address by `$00A0` after a full five-tile slice (`5 * 32` bytes).
 5. On completion `$008592` shifts the following records toward the queue head.
    Its fixed 12-longword copy moves seven remaining six-byte slots plus the
    zero sentinel, proving a capacity of eight queued records.
+
+The ordinary-enemy producer makes the table structure concrete. `$A4E (ordinary_enemy_art_family_table)` maps
+types `$20-$2A` to five art families; each family owns three consecutive cue
+IDs for the three possible resident VRAM destinations:
+
+| Visual family | Internal types | Cue IDs | Nemesis source | Decoded tiles | Cue destinations |
+|---|---|---:|---:|---:|---|
+| Garcia | `$20-$23,$29` | `$0B-$0D` | `$20172 (garcia_nemesis_art)` | 295 | `$7100,$4B80,$2600` |
+| Signal | `$24` | `$0E-$10` | `$21708 (signal_nemesis_art)` | 257 | `$7100,$4B80,$2600` |
+| Haku-Ro | `$25,$2A` | `$11-$13` | `$22BFE (haku_ro_nemesis_art)` | 296 | `$7100,$4B80,$2600` |
+| Nora | `$26` | `$14-$16` | `$245E0 (nora_nemesis_art)` | 261 | `$7100,$4B80,$2600` |
+| Jack | `$27,$28` | `$17-$19` | `$258F8 (jack_nemesis_art)` | 298 | `$7100,$4B80,$2600` |
+
+All three cue IDs in a row point to the same compressed bytes; only the VRAM
+destination changes. The names come from visual inspection of PNG tile sheets
+produced by `tools/decompress.py`; the cue IDs, source pointers, output sizes,
+type grouping, and destinations come directly from the ROM tables and Nemesis
+headers.
 
 `$1087A (game_mode_ingame)` calls `$84BA (begin_incremental_nemesis_decode)` once per update to start pending work; VBlank calls `$8510 (continue_incremental_nemesis_decode)` to make bounded progress. This separation is the important scheduling property: table construction and stream setup occur in game time, while VDP writes occur in the safe display interval.
 

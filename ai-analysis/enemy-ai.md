@@ -21,7 +21,7 @@ boundary; the boss part later covers them directly. Earlier inference from their
 sophisticated target selection was insufficient to classify them as ordinary
 enemies; ELC placement is decisive.
 
-The ordinary roster is the contiguous type range `$20-$2A`. `$9350 (is_nonordinary_enemy_type)` subtracts `$20` and accepts exactly eleven values, and the palette/metadata pass at `$810 (prepare_next_spawn_section)` applies the same range. The ordinary subsystem is more data-driven than the later boss handlers: type and variant select statistic, palette, animation and behavior tables around `$026FCE-$027032`.
+The common ordinary-type dispatch range is the contiguous `$20-$2A`. `$9350 (is_nonordinary_enemy_type)` subtracts `$20` and accepts exactly eleven values, and the palette/metadata pass at `$810 (prepare_next_spawn_section)` applies the same bounds. The tables show, however, that only `$20-$27` and `$2A` are complete combatant entries; `$28/$29` are exceptional slots with zero health data, and `$29` also has a null animation pointer. The ordinary subsystem is more data-driven than the later boss handlers: type and variant select health, damage, palette, animation, and behavior tables around `$026FCE-$027032`.
 
 ## Ordinary-enemy lifecycle
 
@@ -49,7 +49,7 @@ Objects are 128 bytes in the table beginning at `$FFB900 (object_table)`.
 |---:|---:|---|---|
 | `$00` | B | Type `$20-$2A` | `$9350 (is_nonordinary_enemy_type)`, `$938C (ordinary_enemy_init_type_data)` |
 | `$01` | B | Visibility, collision and airborne flags | hit/death paths |
-| `$04` | L | Animation-set pointer | selected from `$27032` |
+| `$04` | L | Animation-set pointer | selected from `$27032 (ordinary_enemy_animation_set_pointer_table)` |
 | `$08` | W | Animation/action index | `$969E/$96C0` |
 | `$09` | B | Facing flags; bit 1 is left/right | `$96C0`, `$9E4C` |
 | `$10/$14/$18` | L each | X, lane/depth, and vertical position | movement helpers |
@@ -57,7 +57,7 @@ Objects are 128 bytes in the table beginning at `$FFB900 (object_table)`.
 | `$30` | W | Primary state (`$0100`, `$0300`...) | reaction paths |
 | `$31` | B | Fine-grained reaction/physics flags | `$991A-$9D16` |
 | `$32` | W | Health/energy | `$93CE (ordinary_enemy_init_combat_values)`, `$9BC6`, `$A13A` |
-| `$33` | B | Type/variant combat statistic; mirrored at `$38` | `$93CE (ordinary_enemy_init_combat_values)` |
+| `$33` | B | Low byte of current health word `$32`; initialized by type/variant and mirrored at `$38` | `$93CE (ordinary_enemy_init_combat_values)`, word damage subtraction at `$9BC6/$A13A` |
 | `$34` | B | Contact/attack damage | `$93CE (ordinary_enemy_init_combat_values)`, damage consumers |
 | `$37` | B | Hit/throw/death flags | shared collision paths |
 | `$39` | B | Score/palette/accounting selector | `$93B4`, `$9E26 (ordinary_enemy_award_score)` |
@@ -76,19 +76,61 @@ Several offsets are polymorphic by state and type; the table lists only uses dem
 `$938C (ordinary_enemy_init_type_data)` performs four data-driven steps:
 
 1. `$00945A` splits spawn byte `$41` into two nibbles and maps each through `$9484`, producing signed/unsigned approach offsets at `$68/$66`.
-2. `$93CE (ordinary_enemy_init_combat_values)` indexes six-byte records at `$26FCE` by `type_index*6 + variant`. It loads `$33`, copies it to `$38`, and loads attack damage `$34`. On highest difficulty both receive `+4`.
-3. `$0093B4` indexes `$27010` to choose `$39`, used by score/palette accounting.
+2. `$93CE (ordinary_enemy_init_combat_values)` indexes six-byte records at `$26FCE (ordinary_enemy_combat_value_table)` by `type_index*6 + variant`. Bytes 0-2 are initial health for variants 0-2; bytes 3-5 are their attack damage. It writes health to the low byte `$33` of word `$32`, mirrors it at `$38`, and writes damage to `$34`. On highest difficulty health and damage both receive `+4`.
+3. `$0093B4` indexes `$27010 (ordinary_enemy_accounting_selector_table)` to choose `$39`, used by score/palette accounting.
 4. `$009406` selects palette/tile base, while `$27032[type_index]` supplies the animation/behavior resource pointer.
 
 Thus archetype differences are not eleven completely separate top-level functions. The shared state machinery is parameterized by type records, animation command streams, approach offsets, attack damage, palette and per-animation callbacks.
 
 | Type range | Classification | Proven differentiation |
 |---|---|---|
-| `$20-$2A` | Ordinary enemies | Eleven type records; type/variant stats, palette and animation-set pointer |
+| `$20-$27`, `$2A` | Normal ordinary-enemy entries | Nine complete type records; type/variant health, damage, palette and animation-set pointer |
+| `$28/$29` | Exceptional slots inside the accepted range | Zero health records; `$29` also has a null animation pointer and both are absent from regular ELC blocks |
 | `$30` | Abadede boss | Separate byte-state handler `$143D0 (abadede_update)` |
 | `$55-$58` | Souther/Antonio/Bongo/Onihime-Yasha bosses | Separate boss-family handlers and target selectors |
 
-Mapping each `$20-$2A` value to a retail name requires correlating ELC type, art/palette and framebuffer output; names should not be guessed from code order.
+The ROM reduces the eleven internal types to five visual families through the
+byte table at `$A4E (ordinary_enemy_art_family_table)`. Each family selects one Nemesis stream; three art-cue
+IDs then place that same stream in one of three resident VRAM slots. Rendering
+those five streams with `tools/decompress.py` and visually classifying the
+result gives this mapping:
+
+| Internal type(s) | Art-family byte | Nemesis stream | Visual identity | Distinguishing behaviour |
+|---|---:|---:|---|---|
+| `$20-$23`, `$29` | `$01` (`$81` for `$29`) | `$20172 (garcia_nemesis_art)` | Garcia | Most common basic enemy |
+| `$24` | `$02` | `$21708 (signal_nemesis_art)` | Signal | Sliding attacks; gets behind and throws the player |
+| `$25`, `$2A` | `$03` | `$22BFE (haku_ro_nemesis_art)` | Haku-Ro | Highly mobile ninja |
+| `$26` | `$04` | `$245E0 (nora_nemesis_art)` | Nora | Whip attacks; some variants feign injury before resuming combat |
+| `$27`, `$28` | `$05` (`$85` for `$28`) | `$258F8 (jack_nemesis_art)` | Jack | Juggles axes or torches, then may stop and throw them |
+
+This is a **visual-family mapping**, not proof that every internal ID in a
+shared row behaves identically. The type tables make the differences explicit:
+
+| Type | Identity | Animation set | Variant health bytes | Variant damage bytes |
+|---:|---|---:|---|---|
+| `$20` | Garcia | `$1FC70 (garcia_animation_set)` | `$06,$09,$0B` | `$08,$08,$08` |
+| `$21` | Garcia | `$1FC70 (garcia_animation_set)` | `$04,$07,$09` | `$04,$08,$08` |
+| `$22` | Garcia | `$1FC70 (garcia_animation_set)` | `$04,$07,$09` | `$04,$08,$08` |
+| `$23` | Garcia | `$1FC70 (garcia_animation_set)` | `$06,$09,$0B` | `$0C,$0C,$0C` |
+| `$24` | Signal | `$22948 (signal_animation_set)` | `$04,$07,$09` | `$08,$08,$0C` |
+| `$25` | Haku-Ro | `$2402C (haku_ro_animation_set)` | `$04,$07,$09` | `$0C,$0C,$10` |
+| `$26` | Nora | `$242F8 (nora_animation_set)` | `$07,$0B,$0E` | `$08,$08,$08` |
+| `$27` | Jack | `$2556C (jack_animation_set)` | `$09,$0E,$11` | `$0C,$10,$14` |
+| `$28` | Jack-family special slot | `$2556C (jack_animation_set)` | `$00,$00,$00` | `$0C,$10,$14` |
+| `$29` | Garcia-family reserved slot | null | `$00,$00,$00` | `$00,$00,$00` |
+| `$2A` | Haku-Ro | `$2402C (haku_ro_animation_set)` | `$07,$0B,$0E` | `$0C,$0C,$10` |
+
+The exact duplicate animation pointers prove that `$20-$23` share the Garcia
+animation resource, `$25/$2A` share Haku-Ro, and `$27/$28` share Jack. `$29`
+cannot enter the normal initialized animation path safely because its pointer
+is null; `$28` also has zero initial-health bytes. Together with their absence
+from every regular ELC block, this makes `$28/$29` special/reserved table slots,
+not normal roster variants. Their exact exceptional purpose remains open.
+
+The high bit on types `$28/$29` has engine meaning: `$810
+(prepare_next_spawn_section)` excludes those entries from the ordinary
+palette-family count, while `$9406` strips the bit when selecting the art
+family and uses its fixed residency path.
 
 Direct Nemesis decoding of all eight ELC streams gives a useful constraint on
 that future mapping. The regular wave blocks contain these ordinary type IDs
@@ -166,7 +208,7 @@ Randomness is explicit rather than ambient. `$0104D8` is used in reaction/landin
 Proven difficulty effects are:
 
 - spawn filtering by low two bits of ELC metadata in `$784 (object_manager_loop)`;
-- `$93CE (ordinary_enemy_init_combat_values)` adds four to ordinary-enemy combat values `$33/$34` on the highest difficulty;
+- `$93CE (ordinary_enemy_init_combat_values)` adds four to initial health `$33` and attack damage `$34` on the highest difficulty;
 - `$982C (ordinary_enemy_vector_to_velocity)` reduces large movement speed on Easy;
 - type/variant tables may already encode different baseline health/damage.
 
@@ -218,14 +260,14 @@ award, and collision-bounded movement. This follows the complete producer and
 consumer chains for the stated fields and does not depend on assigning retail
 names to types `$20-$2A`.
 
-Medium confidence (75-90%): precise semantic names for `$33/$38/$39`; exact division between animation-script decisions and native behavior callbacks; interpretation of every `$31` reaction bit.
+Medium confidence (75-90%): later purpose of the initial-health mirror `$38` and precise accounting meaning of `$39`; exact division between animation-script decisions and native behavior callbacks; interpretation of every `$31` reaction bit.
 
 Open questions:
 
-1. Map ordinary types `$20-$2A` to retail names using ELC, art and framebuffer evidence.
-2. Name every behavior callback reachable from the eleven pointers at `$27032`.
+1. Separate Garcia types `$20-$23` and Haku-Ro types `$25/$2A` into exact behavioural variants, and identify the exceptional purpose of `$28/$29`.
+2. Name every behavior callback reachable from the eleven pointers at `$27032 (ordinary_enemy_animation_set_pointer_table)`.
 3. Fully enumerate collision result `d7` from `$AA22`.
-4. Separate health from other type-specific combat values in the `$26FCE` records with runtime traces.
+4. Determine the later purpose, if any, of the initial-health mirror at object byte `$38`.
 5. Determine how often active states recalculate `$42` in 2P and whether particular archetypes deliberately retain a farther target.
 
 ## Ordinary-enemy analysis-data update ledger
@@ -237,8 +279,8 @@ These duplicate-checked entries were integrated into the shared CSV files.
 ```csv
 00009350, is_nonordinary_enemy_type, "100% - Returns zero only for ordinary enemy object types $20-$2A accepted by the common enemy subsystem"
 0000937A, ordinary_enemy_activate, "100% - Activates an on-screen ordinary enemy, initializes type/variant data, animation resources and common AI state"
-0000938C, ordinary_enemy_init_type_data, "100% - Initializes type $20-$2A offsets, combat values, palette/tile base and animation-set pointer from ROM tables"
-000093CE, ordinary_enemy_init_combat_values, "100% - Loads type/variant combat bytes into object+$33/+$38/+$34; highest difficulty adds four"
+0000938C, ordinary_enemy_init_type_data, "100% - Initializes type $20-$2A offsets, health/damage, palette/tile base and animation-set pointer from ROM tables"
+000093CE, ordinary_enemy_init_combat_values, "100% - Loads type/variant initial health into object+$33/$38 and attack damage into +$34; highest difficulty adds four"
 00009604, ordinary_enemy_approach_point, "100% - Moves toward desired X/lane words at object+$60/+$62 using type speed and vector conversion"
 000096EC, ordinary_enemy_select_target, "100% - Selects nearest active player by X in 2P and stores target object pointer at +$42; handles no-player state"
 0000982C, ordinary_enemy_vector_to_velocity, "100% - Converts target vector and speed d6 into fixed-point X/lane velocity using direction table $2705E; Easy reduces high speed"
