@@ -11,7 +11,23 @@ constexpr m_long kHalfDamage    = 0xFFFFFA43u;
 
 // Main game-state word and the long jump table at $3BA (ROM).
 constexpr m_long kGameState      = 0xFFFFFF00u;
+constexpr m_long kLevel          = 0xFFFFFF02u;
 constexpr m_long kStateJumpTable = 0x000003BAu;
+
+constexpr m_long kP1SpecialAttacks          = 0xFFFFFF21u;
+constexpr m_long kP2SpecialAttacks          = 0xFFFFFF24u;
+constexpr m_long kPoliceSpecialActive       = 0xFFFFFA1Au;
+constexpr m_long kPoliceSpecialCaller       = 0xFFFFFA1Cu;
+constexpr m_long kLevelIntroActive          = 0xFFFFFA1Fu;
+constexpr m_long kPoliceSpecialBlastActive  = 0xFFFFFA41u;
+constexpr m_long kScreenShakeActive         = 0xFFFFFA44u;
+constexpr m_long kPoliceSpecialImpactFlags  = 0xFFFFFA51u;
+constexpr m_long kWaveAdvancePending        = 0xFFFFFA0Du;
+constexpr m_long kRound7CameraBlocker1      = 0xFFFFFA14u;
+constexpr m_long kRound7CameraBlocker2      = 0xFFFFFA15u;
+constexpr m_long kPoliceSpecialBlastLane    = 0xFFFFFB40u;
+constexpr m_long kPalette                   = 0xFFFFF400u;
+constexpr m_long kPoliceSpecialPalette      = 0xFFFFDD80u;
 
 // Attack-strength lookup table in ROM (word offsets from the table base).
 constexpr m_long kAttackStrengthTable = 0x0000423Cu;
@@ -90,6 +106,89 @@ void Sor::game_infinite_loop(m_long entry_) {
         if (!call68k([this] { sync_z80_1(); }, 0x03B8u))
             return;
     }
+}
+
+// ---------------------------------------------------------------------------
+// $003FCC — activate a police special
+//
+// Preserves the cartridge gate and sequence. Alt/Option+W supplies a one-shot
+// caller request from the SDL thread; that request replaces the button/resource
+// checks and decrement, so the normal event runs without consuming a special.
+// ---------------------------------------------------------------------------
+void Sor::try_activate_police_special(m_long /*entry_*/) {
+    traceEnter(0x3FCCu);
+
+    const auto call68k = [this](auto &&fn, m_long retPc) -> bool {
+        const m_long spBefore = cpu().ssp;
+        cpu().ssp -= 4;
+        memory().writeLong(cpu().ssp, retPc);
+        fn();
+        return (cpu().ssp & 0x00FFFFFFu) <= (spBefore & 0x00FFFFFFu);
+    };
+
+    const m_long object   = cpu().a[0];
+    const bool freeCall   = SorCheats::consumeFreePoliceCall(object);
+    const m_word level    = memory().readWord(kLevel);
+    const bool round7Busy = level == 6u &&
+                            (memory().readByte(kWaveAdvancePending) != 0u ||
+                             memory().readByte(kRound7CameraBlocker1) != 0u ||
+                             memory().readByte(kRound7CameraBlocker2) != 0u);
+
+    if ((!freeCall && (memory().readByte(object + 0x55u) & 0x40u) == 0u) ||
+        memory().readWord(object + 0x32u) == 0u ||
+        memory().readByte(kLevelIntroActive) != 0u ||
+        (memory().readByte(object + 0x4Bu) & 0x01u) != 0u ||
+        round7Busy || memory().readByte(kPoliceSpecialActive) != 0u) {
+        cpu().ssp += 4;
+        return;
+    }
+
+    const bool p1 = (object & 0x00FFFFFFu) == SorCheats::kP1Object;
+    const m_long specialCounter = p1 ? kP1SpecialAttacks : kP2SpecialAttacks;
+    if (!freeCall && memory().readByte(specialCounter) == 0u) {
+        cpu().ssp += 4;
+        return;
+    }
+
+    cpu().d[0] = p1 ? 0u : 1u;
+    cpu().a[1] = specialCounter;
+    if (!freeCall)
+        memory().writeByte(specialCounter, static_cast<m_byte>(memory().readByte(specialCounter) - 1u));
+    memory().writeByte(kPoliceSpecialCaller, cpu().db(0));
+
+    if (!call68k([this] { draw_player_lives_and_specials(); }, 0x4038u))
+        return;
+
+    memory().writeByte(kPoliceSpecialImpactFlags, 0u);
+    memory().writeByte(kPoliceSpecialBlastActive, 0u);
+    memory().writeWord(kPoliceSpecialBlastLane, 0u);
+    memory().writeByte(kScreenShakeActive, 0u);
+
+    if (!call68k([this] { prepare_ordinary_enemies_for_police_special(); }, 0x404Cu))
+        return;
+
+    memory().writeWord(kPoliceSpecialActive, 0x0101u);
+    cpu().a[1] = kPalette;
+    cpu().a[2] = kPoliceSpecialPalette;
+    if (!call68k([this] { memcopy_128(); }, 0x4060u))
+        return;
+
+    if (level == 2u)
+        memory().writeWord(0xFFFFDDDAu, 0x0668u);
+
+    if (level != 6u) {
+        memory().writeLong(0xFFFFE00Eu, 0u);
+        memory().writeLong(0xFFFFE10Eu, 0u);
+        memory().writeLong(0xFFFFE012u, 0u);
+        memory().writeLong(0xFFFFE112u, 0u);
+        if (level == 4u) {
+            memory().writeLong(0xFFFFE1AAu, 0xFFFFF800u);
+            memory().writeWord(0xFFFFE1A8u, 0x1428u);
+            memory().writeLong(0xFFFFE1AEu, 0u);
+        }
+    }
+
+    cpu().ssp += 4;
 }
 
 // ---------------------------------------------------------------------------

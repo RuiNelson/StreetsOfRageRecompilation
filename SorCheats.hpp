@@ -10,6 +10,8 @@ constexpr m_byte kMaximumAttackDamage  = 0x0Fu;
 
 void setP1PunchPowerEnabled(bool enabled);
 bool p1PunchPowerEnabled();
+void requestFreePoliceCall(m_long objectAddress);
+bool consumeFreePoliceCall(m_long objectAddress);
 
 constexpr m_byte adjustP1PunchDamage(m_long objectAddress, m_byte damage, bool enabled) {
     if (!enabled || (objectAddress & 0x00FFFFFFu) != kP1Object)

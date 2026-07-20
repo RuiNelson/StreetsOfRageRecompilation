@@ -176,7 +176,7 @@ logs a short `[cheat] …` line via the async host `Logger`.
 | Alt/Option + `S` | +1 P1 special attack (`$FFFFFF21`) |
 | Alt/Option + `P` | Toggle P1 punch power ×12 |
 | Alt/Option + `K` | Kill all instantiated enemies, including bosses |
-| Alt/Option + `W` | Spawn a random weapon on the ground near each active player |
+| Alt/Option + `W` | Call the police for the first active player without consuming a special |
 | Alt/Option + `1`–`8` | Jump to level 1–8 (sets level/wave and forces the level-intro game state) |
 | Alt/Option + `G` | Start good ending (`game_state` → `$0024` / `init_ending_good`) |
 | Alt/Option + `B` | Start bad ending (`game_state` → `$001C` / `init_ending_bad`) |
@@ -192,11 +192,10 @@ reaction states. It leaves players, pickups, weapons, scenery, and boss helper
 objects untouched; normal enemy accounting and boss cleanup then advance the
 encounter as usual.
 
-Random weapons use the five normal carried-weapon types (`$08`–`$0C`). The
-cheat allocates a free object slot for each active player and spawns the weapon
-unowned on the ground beside them. Existing carried weapons and player/weapon
-ownership links are left untouched, so the spawned weapon must be picked up
-normally.
+The free police call uses the cartridge's normal activation gate and full
+scripted sequence, but bypasses the special-counter requirement and decrement.
+It still respects normal blockers such as the level intro, an active police
+sequence, dead players, and Round 7 transitions.
 
 Punch power is implemented in `SorCheats` and hooked from the hand-written
 attack-strength routine (`$0041EA`). When enabled, only the player-1 object
@@ -333,7 +332,7 @@ tree so `--full` does not wipe it:
 - `SorManualFunctions.cpp` — bodies listed in `manual_functions.txt`
 - `SoRMainMenus.cpp` — native mode-select, OPTIONS, and character-select flow
 - `SoRSound.cpp` — small native sound helpers
-- `SorCheats.*` — P1 punch-power cheat
+- `SorCheats.*` — thread-safe punch-power and free-police cheat state
 - `build.sh` — configure, build, optional full recompile and run
 
 Analysis data sits in `code-analysis/`: `aux_addresses.txt` feeds extra entry
@@ -341,8 +340,8 @@ points the static disassembler cannot resolve; `manual_functions.txt` names the
 functions with hand-written C++ bodies; the CSV files hold labels, blocks, and
 address metadata. Disassembler output goes to `output/` (local).
 
-Thirty-three cartridge functions are currently manual. Four provide the core
-frame loop, attack-strength hook, and host-friendly VBlank waits; two are small
+Thirty-four cartridge functions are currently manual. Five provide the core
+frame loop, cheat hooks, and host-friendly VBlank waits; two are small
 sound helpers; and the other twenty-seven implement the mode-select, OPTIONS,
 and character-select flow in `SoRMainMenus.cpp`.
 

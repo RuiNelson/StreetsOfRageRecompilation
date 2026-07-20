@@ -2,8 +2,6 @@
 #include "SorCheats.hpp"
 #include "Logger.hpp"
 
-#include <random>
-
 namespace {
 
 constexpr m_long kGameState        = 0xFFFFFF00u;
@@ -24,8 +22,6 @@ constexpr m_long kObjectSlotSize   = 0x80u;
 
 constexpr m_long kObjectPrimaryStateOffset = 0x30u;
 constexpr m_long kObjectHealthOffset       = 0x32u;
-constexpr m_byte kFirstWeaponType           = 0x08u;
-constexpr m_byte kLastWeaponType            = 0x0Cu;
 
 constexpr bool isOrdinaryEnemy(m_byte type) {
     return type >= 0x20u && type <= 0x2Au;
@@ -39,16 +35,10 @@ constexpr bool isSharedFrameworkBoss(m_byte type) {
     return type >= 0x55u && type <= 0x58u;
 }
 
-constexpr bool isWeapon(m_byte type) {
-    return type >= kFirstWeaponType && type <= kLastWeaponType;
-}
-
 static_assert(isOrdinaryEnemy(0x20u) && isOrdinaryEnemy(0x2Au));
 static_assert(!isOrdinaryEnemy(0x1Fu) && !isOrdinaryEnemy(0x2Bu));
 static_assert(isBespokeBoss(0x30u) && isBespokeBoss(0x35u));
 static_assert(isSharedFrameworkBoss(0x55u) && isSharedFrameworkBoss(0x58u));
-static_assert(isWeapon(0x08u) && isWeapon(0x0Cu));
-static_assert(!isWeapon(0x07u) && !isWeapon(0x0Du));
 
 int levelFromTopRowNumber(SDL_Keycode key) {
     switch (key) {
@@ -80,16 +70,17 @@ void incrementByte(SystemMemory &memory, m_long address, const char *label) {
     Logger::log("[cheat] %s: %u -> %u", label, static_cast<unsigned>(before), static_cast<unsigned>(after));
 }
 
-m_word activePlayerObject(SystemMemory &memory) {
+m_long activePlayerObject(SystemMemory &memory) {
     if (memory.readByte(kP1Object) == 1u)
-        return static_cast<m_word>(kP1Object);
+        return kP1Object;
     if (memory.readByte(kP2Object) == 1u)
-        return static_cast<m_word>(kP2Object);
-    return static_cast<m_word>(kP1Object);
+        return kP2Object;
+    return 0u;
 }
 
 int killInstantiatedEnemies(SystemMemory &memory) {
-    const m_word attacker = activePlayerObject(memory);
+    const m_long activePlayer = activePlayerObject(memory);
+    const m_word attacker = static_cast<m_word>(activePlayer != 0u ? activePlayer : kP1Object);
     int killed = 0;
 
     for (int slot = 0; slot < kObjectSlotCount; ++slot) {
@@ -131,57 +122,6 @@ int killInstantiatedEnemies(SystemMemory &memory) {
     return killed;
 }
 
-m_long findFreeObjectSlot(SystemMemory &memory) {
-    for (int slot = 0; slot < kObjectSlotCount; ++slot) {
-        const m_long object = kObjectTable + static_cast<m_long>(slot) * kObjectSlotSize;
-        if (memory.readByte(object) == 0u)
-            return object;
-    }
-    return 0u;
-}
-
-void clearObjectSlot(SystemMemory &memory, m_long object) {
-    for (m_long offset = 0; offset < kObjectSlotSize; offset += 4u)
-        memory.writeLong(object + offset, 0u);
-}
-
-m_byte randomWeaponType() {
-    static std::mt19937 generator{std::random_device{}()};
-    std::uniform_int_distribution<unsigned> distribution(kFirstWeaponType, kLastWeaponType);
-    return static_cast<m_byte>(distribution(generator));
-}
-
-m_byte spawnRandomWeaponOnGround(SystemMemory &memory, m_long player, int xOffset) {
-    if (memory.readByte(player) != 1u)
-        return 0u;
-
-    const m_long weapon = findFreeObjectSlot(memory);
-    if (weapon == 0u)
-        return 0u;
-
-    const m_byte newType = randomWeaponType();
-    clearObjectSlot(memory, weapon);
-
-    memory.writeByte(weapon, newType);
-    memory.copyLong(player + 0x10u, weapon + 0x10u);
-    memory.copyLong(player + 0x14u, weapon + 0x14u);
-    memory.writeWord(weapon + 0x10u,
-                     static_cast<m_word>(memory.readWord(weapon + 0x10u) + xOffset));
-    memory.writeLong(weapon + 0x18u, 0u);
-    return newType;
-}
-
-const char *weaponName(m_byte type) {
-    switch (type) {
-        case 0x08u: return "knife";
-        case 0x09u: return "bottle";
-        case 0x0Au: return "baseball bat";
-        case 0x0Bu: return "steel pipe";
-        case 0x0Cu: return "pepper spray";
-        default: return "unavailable";
-    }
-}
-
 } // namespace
 
 void SorRuntime::handleOptionHotkey(OptionHotkeyCode keyCode) {
@@ -211,11 +151,13 @@ void SorRuntime::handleOptionHotkey(OptionHotkeyCode keyCode) {
             return;
         }
         case SDLK_W: {
-            const m_byte p1Weapon = spawnRandomWeaponOnGround(memory(), kP1Object, 16);
-            const m_byte p2Weapon = spawnRandomWeaponOnGround(memory(), kP2Object, -16);
-            Logger::log("[cheat] spawned random weapons: P1=%s, P2=%s",
-                        weaponName(p1Weapon),
-                        weaponName(p2Weapon));
+            const m_long player = activePlayerObject(memory());
+            if (player == 0u) {
+                Logger::log("[cheat] free police call unavailable: no active player");
+                return;
+            }
+            SorCheats::requestFreePoliceCall(player);
+            Logger::log("[cheat] free police call requested for P%d", player == kP1Object ? 1 : 2);
             return;
         }
         case SDLK_G:
