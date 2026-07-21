@@ -30,7 +30,7 @@ void Sor::queue_sound_id(m_long entry_) {
     }
 
     const m_byte id = cpu().db(7);
-    Logger::log("[sound] queue_sound_id $%02X", static_cast<unsigned>(id));
+    // Logger::log("[sound] queue_sound_id $%02X", static_cast<unsigned>(id));
 
     for (int i = 0; i < 3; ++i) {
         if (mem.readByte(kPlaySe0 + i) == id) {
