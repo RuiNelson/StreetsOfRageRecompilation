@@ -80,7 +80,7 @@ speculative discovery loop; that build includes temporary stubs.
 Build and launch the recompiled cartridge in one step:
 
 ```bash
-./build.sh -r -- --runSor --debug --fast --rom rom/SOR.bin
+./build.sh -r -- --runSor --debug --rom rom/SOR.bin
 ```
 
 Everything after `-r` / `--run` is passed to the `sor` binary. You can also
@@ -123,7 +123,6 @@ MegaDriveEnvironment. Flags are processed by CLI11; `-V` / `--version` prints
 | `--runSor` | Boot the recompiled Streets of Rage cartridge |
 | `--rom PATH` | ROM image (default: `rom/SOR.bin`) |
 | `--debug` | Log CPU/VDP state once per second |
-| `--fast` | Disable CPU pacing (useful during bring-up) |
 | `--vsync N` | Frame sync: `0` = internal timer from `--hz` (default); `1` = display VSync; `2` / `3` = half / third rate |
 | `--port PORT` | Remote access TCP port (default: `6969`; `0` disables remote access) |
 | `--auxAddrFile PATH` | Discovery mode: on an unknown indirect dispatch, append the address and exit **42** instead of aborting |

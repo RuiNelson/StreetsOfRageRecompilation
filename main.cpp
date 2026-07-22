@@ -24,7 +24,6 @@ int main(int argc, char *argv[]) {
     bool        configControlsFlag    = false;
     bool        runSorFlag            = false;
     bool        sorDebugFlag          = false;
-    bool        sorFastFlag           = false;
     bool        silentFlag            = false;
     int         sorVSyncMode          = 0; // 0 = internal timer (default); 1/2/3 = VSync/VSync2/VSync3
     int         remoteAccessPort      = 6969;
@@ -51,7 +50,6 @@ int main(int argc, char *argv[]) {
         ->check(CLI::IsMember({"60", "50"}));
     app.add_flag("--runSor", runSorFlag, "Run the recompiled Streets of Rage cartridge");
     app.add_flag("--debug", sorDebugFlag, "With --runSor: log CPU/VDP state once per second");
-    app.add_flag("--fast", sorFastFlag, "With --runSor: disable CPU pacing (faster bring-up)");
     app.add_option("--vsync",
                    sorVSyncMode,
                    "With --runSor: frame sync — 0=internal timer from --hz (default), "
@@ -112,7 +110,6 @@ int main(int argc, char *argv[]) {
                        static_cast<std::uint16_t>(remoteAccessPort));
         configureEnvironment(sor);
         sor.setDebugLog(sorDebugFlag);
-        sor.setFastMode(sorFastFlag);
         if (!sorAuxAddrFile.empty()) {
             sor.setAuxAddrFile(sorAuxAddrFile);
         }

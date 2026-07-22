@@ -79,7 +79,7 @@ Always wrap runs in `timeout -k`. Boot bugs can hang, and SDL may not exit on a
 plain timeout signal.
 
 ```bash
-timeout -k 3 20 ./build.sh -r -- --runSor --debug --fast --rom rom/SOR.bin
+timeout -k 3 20 ./build.sh -r -- --runSor --debug --rom rom/SOR.bin
 ```
 
 Runtime test examples:
