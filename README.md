@@ -331,6 +331,7 @@ tree so `--full` does not wipe it:
   environment that owns it
 - `SorRuntime.*` — runtime hooks (hotkeys)
 - `SorManualFunctions.cpp` — bodies listed in `manual_functions.txt`
+- `SoRDecompress.cpp` — native Nemesis/Enigma/Kosinski decoders and direct VDP/Z80 delivery
 - `SoRMainMenus.cpp` — native mode-select, OPTIONS, and character-select flow
 - `SoRSound.cpp` — small native sound helpers
 - `SorCheats.*` — thread-safe punch-power and free-police cheat state
@@ -341,10 +342,11 @@ points the static disassembler cannot resolve; `manual_functions.txt` names the
 functions with hand-written C++ bodies; the CSV files hold labels, blocks, and
 address metadata. Disassembler output goes to `output/` (local).
 
-Thirty-four cartridge functions are currently manual. Five provide the core
-frame loop, cheat hooks, and host-friendly VBlank waits; two are small
-sound helpers; and the other twenty-seven implement the mode-select, OPTIONS,
-and character-select flow in `SoRMainMenus.cpp`.
+Forty-one cartridge functions are currently manual. Five provide the core
+frame loop, cheat hooks, and host-friendly VBlank waits; seven implement native
+decompression and asset delivery; two are small sound helpers; and the other
+twenty-seven implement the mode-select, OPTIONS, and character-select flow in
+`SoRMainMenus.cpp`.
 
 ## License
 

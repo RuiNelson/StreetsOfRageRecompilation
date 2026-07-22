@@ -4,8 +4,15 @@
 0003A2 # game_infinite_loop
 003FCC # try_activate_police_special (free police-call cheat hook)
 0041EA # compute_player_attack_descriptor (P1 punch-power cheat hook)
+008192 # nemesisdec_vram (also owns the $81A4 RAM entry alias)
+0082D2 # enigmadec_with_plane_header
+0082D6 # enigmadec (also owns tail-entry wrappers $112C0 and $12832)
+0084BA # begin_incremental_nemesis_decode
+008510 # continue_incremental_nemesis_decode
+0085A2 # kosinskidec
 010502 # sync_z80_1
 010514 # sync_z80_2
+01061C # load_z80_dac_driver (direct public Z80 API upload)
 
 # Mode-select, OPTIONS, and character-select flow.
 000FE8 # init_game_start_screen

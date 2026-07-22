@@ -25,7 +25,38 @@ The game has two visibly different loading paths:
 
 Earlier notes treated `$FF8000 (decompression_scratch_buffer)` as Nemesis-specific. The current name reflects that it is a general scratch area used by all three formats. Kosinski commonly receives `a1=$FF8000`; Nemesis RAM mode and Enigma commonly receive their destination in `a4` and `a1`, respectively.
 
-The codecs do not allocate memory, carry bounds, or validate malformed streams. Correct source, destination, and sufficient output space are contracts imposed by each call site.
+The original 68000 codecs do not allocate memory, carry bounds, or validate
+malformed streams. Correct source, destination, and sufficient output space are
+contracts imposed by each call site.
+
+### Native recompilation path
+
+The original 68000 routines below remain the source of truth for the formats
+and their call contracts, but the recompilation now supplies their runtime
+bodies manually in `SoRDecompress.cpp`. Nemesis, Enigma, and Kosinski decode
+into host-owned C++ vectors; the Nemesis prefix table and resumable payload are
+also host-owned rather than occupying the original
+`$FFF600 (nemesis_decode_table)` scratch table.
+
+Delivery still preserves the machine-visible destination contract:
+
+- persistent ELC, map, story, and scrolling data is copied to its original
+  68000 work-RAM address before the routine returns;
+- blocking and incremental Nemesis art is written through the public VDP
+  control/data-port APIs, without routing port writes through `SystemMemory`;
+- incremental Nemesis keeps the original maximum of five tiles per VBlank and
+  mirrors the queue head, destination, tile count, budget, and XOR row needed by
+  the surrounding game flow;
+- the Kosinski DAC-driver stream is decoded in host memory and its original
+  `$1EC7`-byte prefix is written directly through the public Z80 RAM API while
+  preserving BUSREQ/RESET sequencing and the four sample-bank bytes;
+- the manual bodies are atomic with respect to 68000 interrupt delivery: they
+  do not call `serviceIRQ()` between logical decoder steps.
+
+This removes the original `$FF7000` intermediate copy from the Z80-driver load
+and avoids using emulated work RAM for codec-private storage. It does not move
+outputs that are subsequently addressed by generated 68000 code out of work
+RAM; doing so would require reimplementing all of their consumers as well.
 
 ## Nemesis
 
