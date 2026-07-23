@@ -26,7 +26,7 @@ Place it at:
 rom/SOR.bin
 ```
 
-That path is what `build.sh`, the disassembly scripts, and the default
+That path is what the central scripts, the disassembly workflow, and the default
 `--rom` flag expect. To use another location, set `SOR_ROM` (for the scripts)
 or pass `--rom PATH` when running the binary.
 
@@ -64,7 +64,7 @@ The generated C++ directory is ignored by Git and is not present in a fresh
 clone. The first build must regenerate it from your local ROM:
 
 ```bash
-./build.sh --full
+../scripts/generate_cpp_and_build
 ```
 
 `--full` creates `generated/` from the ROM via RageDecompiler
@@ -76,10 +76,10 @@ Once `generated/Sor.cpp` and `generated/Sor.hpp` exist locally, ordinary
 incremental builds do not need to run the recompiler again:
 
 ```bash
-./build.sh                 # configure if needed, build Debug
-./build.sh --clean         # wipe build/ and reconfigure
-./build.sh --clean -t Release
-./build.sh --full          # regenerate local C++, then build
+../scripts/build                         # configure if needed, build Debug
+../scripts/build --clean                 # wipe build/ and reconfigure
+../scripts/build --release               # clean Release build
+../scripts/generate_cpp_and_build        # regenerate local C++, then build
 ```
 
 ### Windows
@@ -117,7 +117,7 @@ Use `--config Debug` instead of `Release` for a debug build.
 Build and launch the recompiled cartridge in one step:
 
 ```bash
-./build.sh -r -- --debug --debugUtils --rom rom/SOR.bin
+../scripts/run rom/SOR.bin --debug --debugUtils
 ```
 
 Everything after `-r` / `--run` is passed to the `sor` binary. You can also
@@ -182,10 +182,10 @@ The `sor` executable hosts the recompiled game and the controls configurator.
 Examples:
 
 ```bash
-./build.sh -r -- --configControls
-./build.sh -r -- --lang en --hz 60 --vsync 1 --debugUtils --port 6970
-./build.sh -r -- --fullScreen
-./build.sh -r -- --turbo 10 --silent
+../scripts/configure_controls
+../scripts/run rom/SOR.bin --lang en --hz 60 --vsync 1 --debugUtils --port 6970
+../scripts/run rom/SOR.bin --fullScreen
+../scripts/run rom/SOR.bin --turbo 10 --silent
 ```
 
 ## Cheats
@@ -238,9 +238,7 @@ RageDecompiler on `PYTHONPATH` themselves.
 ### Disassembly
 
 ```bash
-./disassemble.sh              # labels + addresses/blocks CSVs → output/
-./disassemble_nolabels.sh     # same without labels CSV
-./disassemble_iterative.sh    # iterative pass vs reference map
+../scripts/disassemble_to_asm  # labels + addresses/blocks CSVs → output/
 ```
 
 These produce `output/sor.asm` and a coverage map. The static tools follow known
@@ -319,8 +317,8 @@ instruction-shaped bytes:
 Two scripts automate that loop:
 
 ```bash
-./discover_aux_smart.sh           # recommended: advanced speculative loop
-./discover_aux_conservative.sh    # simpler fallback: leaner per-build compiles
+../scripts/discover_aux_smart           # recommended: advanced speculative loop
+../scripts/discover_aux_conservative    # simpler fallback: leaner per-build compiles
 ```
 
 **Smart** is the more advanced path and the one you should use by default. It
@@ -334,12 +332,14 @@ an address becomes a permanent entry point — candidates alone never define
 discovery is running, so each compile is heavier.
 
 **Conservative** is the simpler fallback. It never uses speculation: every new
-unknown dispatch is one rebuild cycle (`build.sh --full` without `--discover`).
+unknown dispatch is one rebuild cycle (`../scripts/build --full` without
+`--discover`).
 You pay for more iterations, but each compile stays lean — only confirmed entry
 points are recompiled, with no intermediate stubs — so individual builds are
 faster.
 
-Normal day-to-day builds should use `./build.sh` or `./build.sh --full`
+Normal day-to-day builds should use `../scripts/build` or
+`../scripts/generate_cpp_and_build`
 **without** `--discover`, so `generated/` contains only handlers for the
 vector table plus confirmed aux addresses — live entry points, not speculative
 guesses or data misread as instructions. Play (or script) enough of the game
@@ -361,7 +361,8 @@ tree so `--full` does not wipe it:
 - `SoRMainMenus.cpp` — native mode-select, OPTIONS, and character-select flow
 - `SoRSound.cpp` — small native sound helpers
 - `SorCheats.*` — thread-safe punch-power and free-police cheat state
-- `build.sh` — configure, build, optional full recompile and run
+- `../scripts/` — centralized configure, generation, build, run, disassembly,
+  and discovery entry points
 
 Analysis data sits in `code-analysis/`: `aux_addresses.txt` feeds extra entry
 points the static disassembler cannot resolve; `manual_functions.txt` names the

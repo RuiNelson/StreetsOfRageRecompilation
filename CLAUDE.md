@@ -65,20 +65,21 @@ Requirements:
 libpng dependencies and avoids relinking `sor` for implementation-only runtime
 library rebuilds.
 
-Preferred Bash build:
+Use the centralized meta-repository scripts:
 
 ```bash
-./build.sh --full
-./build.sh --clean
-./build.sh --clean --type Release
+../scripts/generate_cpp_and_build
+../scripts/build --clean
+../scripts/build --release
 ```
 
 `--full` is mandatory after a fresh clone because `generated/` is ignored by
 Git. Once `generated/Sor.cpp` and `generated/Sor.hpp` exist locally,
 subsequent builds may omit it until their inputs change.
 
-`build.sh` reconfigures only when necessary. Use `--clean` when changing an
-existing single-configuration build directory between Debug and Release.
+`../scripts/build` reconfigures only when necessary. Use `--clean` when
+changing an existing single-configuration build directory between Debug and
+Release.
 
 Portable direct CMake build:
 
@@ -105,7 +106,7 @@ so generate it after a fresh clone and regenerate whenever code-generation
 inputs change:
 
 ```bash
-./build.sh --full
+../scripts/generate_cpp
 ```
 
 `--full` runs the sibling `RageDecompiler` and rewrites `generated/Sor.*`.
@@ -140,7 +141,7 @@ Boot defects can spin forever and SDL windows may outlive plain `SIGTERM`. On
 systems with GNU `timeout`, always use a kill grace period:
 
 ```bash
-timeout -k 3 20 ./build.sh -r -- --debug --rom rom/SOR.bin
+timeout -k 3 20 ../scripts/run rom/SOR.bin --debug
 ```
 
 MegaDriveEnvironment runtime diagnostics are owned by the sibling
@@ -159,10 +160,8 @@ presses.
 Use the repository entry points:
 
 ```bash
-./disassemble.sh
-./disassemble_nolabels.sh
-./disassemble_iterative.sh
-./discover_aux_smart.sh
+../scripts/disassemble_to_asm
+../scripts/discover_aux_smart
 ```
 
 Equivalent direct tools require the sibling checkout:
@@ -203,8 +202,8 @@ changes. Keep CSV changes and synchronized manuscripts in the same logical
 delivery. When a code label changes, also regenerate the derived views:
 
 ```bash
-./disassemble.sh
-./build.sh --full
+../scripts/disassemble_to_asm
+../scripts/generate_cpp_and_build
 ```
 
 Never rename symbols directly in `output/sor.asm` or `generated/Sor.cpp`.
