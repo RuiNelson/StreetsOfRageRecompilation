@@ -95,6 +95,9 @@ $BinDir = (Join-Path (Resolve-Path ".") "$BuildDir/bin")
 $env:PYTHONPATH = (Resolve-Path RageDecompiler)
 python -m tools recompile StreetsOfRageRecompilation\rom\SOR.bin `
   -o StreetsOfRageRecompilation\generated `
+  --aux StreetsOfRageRecompilation\code-analysis\aux_addresses.txt `
+  --labels-csv StreetsOfRageRecompilation\code-analysis\labels.csv `
+  --addresses-csv StreetsOfRageRecompilation\code-analysis\addresses.csv `
   --manual-functions StreetsOfRageRecompilation\code-analysis\manual_functions.txt
 
 cmake -S StreetsOfRageRecompilation -B $BuildDir `
