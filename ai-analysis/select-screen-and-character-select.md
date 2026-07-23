@@ -188,8 +188,8 @@ addq.w  #2, select_screen_substate
 
 ### 6.1 Build (`$117C (options_menu_build)`)
 
-1. Clear sprite mapping buffer
-2. Draw static labels (`sub_A8B8` / palette-remapped tilemaps)
+1. Clear `$FFDA00 (sprite_attribute_table_buffer)`
+2. Draw static labels with `$A8B8 (load_encoded_vdp_tilemap_bundle)` and its palette-remapped tilemaps
 3. Draw current values:
    - **Sound list** — `$FFFFC4 (sound_test_index)`, tile rows at `$1C684 (options_sound_name_table)`
    - **Difficulty** — `$FFFFC6 (difficulty)`, strings at `$12FE (options_difficulty_strings)`
@@ -197,7 +197,7 @@ addq.w  #2, select_screen_substate
 4. If `$FFFA7B (cheat_flag)`:
    - Draw **lives** digit from `$FFFFCA (lives_setting)`
    - Draw **level** digit from `$FFFF02 (level)`
-   - Extra labels (`sub_A8B8` IDs `$0F` / `$0E`)
+   - Extra labels (`$A8B8 (load_encoded_vdp_tilemap_bundle)` IDs `$0F` / `$0E`)
 
 ### 6.2 Vertical navigation (`$14F2 (options_row_nav)`)
 
@@ -344,7 +344,7 @@ portraits occupy the separate upper panels. This disconfirms both the former
 `set_player_position` name and the intermediate `char_select_portrait_setup`
 name.
 
-6. Load character art (`$A63A (load_nemesis_art_bundle)`, Kosinski `$71C6C`, UI tilemaps via `sub_A8B8`).
+6. Load character art (`$A63A (load_nemesis_art_bundle)`, Kosinski `$71C6C`, UI tilemaps via `$A8B8 (load_encoded_vdp_tilemap_bundle)`).
 
 ### 7.3 Update — `$170A (screen_state_dispatcher)`
 
