@@ -1,181 +1,266 @@
-# CLAUDE.md
+# Agent guide
 
-Guidance for LLM agents working in `StreetsOfRageRecompilation`.
+Instructions for automated contributors working in
+`StreetsOfRageRecompilation`.
 
-## Scope
+## Purpose and boundaries
 
-This repository contains the Streets of Rage-specific C++ recompilation,
-analysis data, ROM-local scripts, generated C++ output, and the executable entry
-point. It expects sibling checkouts of:
+This repository contains the Streets of Rage-specific native recompilation:
+ROM analysis data, generated C++, hand-written runtime/native overrides,
+reverse-engineering manuscripts, discovery scripts, tests, and the `sor`
+desktop executable.
 
-- `../MegaDriveEnvironment`
-- `../RageDecompiler`
+It expects these owned sibling repositories:
 
-Do not make changes in `../Genesis-Plus-GX`; it is an upstream dependency not
-owned by this project.
+- `../MegaDriveEnvironment`: C++23 host runtime;
+- `../RageDecompiler`: Python disassembly and recompilation tools.
 
-## Important Files
+`../Genesis-Plus-GX` is an upstream emulator used only as a read-only
+behavioral reference. Never edit, patch, reformat, commit, or update it.
 
-- `main.cpp` - CLI entry point and runtime/test mode selection.
-- `CMakeLists.txt` - builds the `sor` executable and links shared
-  `MegaDriveEnvironment` (`CMAKE_LINK_DEPENDS_NO_SHARED` skips re-link when only
-  the dylib changes). Sets `MEGADRIVE_ENVIRONMENT_SHARED_DEPS=ON` so
-  yaml-cpp/zlib/libpng are built and linked as shared libraries for this
-  consumer only.
-- `CPU68K.hpp` - 68000 register file for recompiled cartridge code.
-- `RecompilationEnvironment.hpp` - MegaDriveEnvironment plus CPU68K ownership.
-- `build.sh` - preferred build wrapper.
-- `generated/` - generated C++ recompilation output.
-- `output/sor.asm` - generated 68000 assembly listing and primary source for
-  reverse-engineering manuscripts; regenerate it, do not edit it by hand.
-- `ai-analysis/*.md` - English reverse-engineering manuscripts, organized by
-  gameplay/system topic.
-- `sync_ai_analysis.py` - synchronizes manuscript references from the analysis
-  CSVs and checks the canonical address/label format.
-- `code-analysis/aux_addresses.txt` - extra entry points for static
-  disassembly.
-- `code-analysis/labels.csv` - ROM code entry points and control-flow labels.
-- `code-analysis/addresses.csv` - named ROM data, work RAM, hardware registers,
-  tables, buffers, and other non-code addresses.
-- `rom/.gitignore` - keeps local ROM files out of git.
+Before changing files:
 
-## Build
+1. inspect this repository's status and preserve unrelated work;
+2. determine whether the source of truth is hand-written C++, analysis CSV,
+   generated C++, assembly output, or an analysis manuscript;
+3. read the sibling repository's local instructions before changing it;
+4. choose a bounded validation method because game boot can hang indefinitely.
 
-Preferred build:
+## Source-of-truth map
+
+| Path | Role |
+| --- | --- |
+| `main.cpp` | CLI and runtime/test-mode selection |
+| `CPU68K.hpp` | 68000 register file used by recompiled code |
+| `RecompilationEnvironment.*` | Runtime integration and CPU ownership |
+| `SorRuntime.*` | Host orchestration around the recompiled cartridge |
+| `SorManualFunctions.cpp` | Hand-written implementations of selected ROM routines |
+| `code-analysis/manual_functions.txt` | Addresses dispatched to manual implementations |
+| `code-analysis/labels.csv` | ROM code entry points and control-flow labels |
+| `code-analysis/addresses.csv` | ROM data, RAM, hardware, table, and buffer symbols |
+| `code-analysis/blocks.csv` | Known data/code block boundaries |
+| `code-analysis/aux_addresses.txt` | Confirmed extra static entry points |
+| `generated/Sor.*` | C++ generated from ROM and analysis inputs |
+| `output/sor.asm` | Generated 68000 listing and primary code-analysis view |
+| `ai-analysis/*.md` | English topic-based reverse-engineering manuscripts |
+| `sync_ai_analysis.py` | Symbol-reference synchronization and validation |
+
+Do not hand-edit `generated/Sor.cpp` or `output/sor.asm` to make a durable
+semantic change. Update the appropriate analysis input, generator, or manual
+implementation, then regenerate the derived files.
+
+## Build dependencies and CMake
+
+Requirements:
+
+- CMake 3.24 or newer;
+- a C++23 compiler;
+- SDL3 development files;
+- sibling `MegaDriveEnvironment`;
+- Git/network access for CMake `FetchContent`;
+- Python 3 and sibling `RageDecompiler` for regeneration and analysis.
+
+`CMakeLists.txt` builds `sor`, fetches CLI11, and adds
+`MegaDriveEnvironment`. It deliberately requests shared yaml-cpp, zlib, and
+libpng dependencies and avoids relinking `sor` for implementation-only runtime
+library rebuilds.
+
+Preferred Bash build:
 
 ```bash
 ./build.sh
-```
-
-Clean build:
-
-```bash
 ./build.sh --clean
+./build.sh --clean --type Release
 ```
 
-Release build:
+`build.sh` reconfigures only when necessary. Use `--clean` when changing an
+existing single-configuration build directory between Debug and Release.
+
+Portable direct CMake build:
 
 ```bash
-./build.sh --type Release
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --parallel
 ```
 
-Regenerate `generated/` from the local ROM before building:
+On multi-config generators, pass `--config Debug` or `--config Release`.
+Windows builds should put runtime DLL targets in a common output directory;
+the meta-repository README contains a complete CMake/Ninja/vcpkg command.
+
+## ROM and regeneration
+
+The original ROM is copyrighted, local-only, and never versioned. The default
+path is:
+
+```text
+rom/SOR.bin
+```
+
+Set `SOR_ROM` to use another path with scripts. A normal build uses checked-in
+generated C++. Regenerate only when the task changes code-generation inputs:
 
 ```bash
 ./build.sh --full
 ```
 
-The ROM is not versioned. Put it at:
+`--full` runs the sibling `RageDecompiler` and rewrites `generated/Sor.*`.
+Use `--full --discover` only inside the speculative discovery workflow; it can
+include temporary candidates that do not belong in a normal build.
 
-```bash
-rom/SOR.bin
-```
+Review regenerated diffs. A large generated delta is evidence to investigate,
+not a reason to accept it mechanically.
 
-or set `SOR_ROM` when running full builds.
+## Manual subroutines
 
-## Running
+A manual subroutine replaces the generated body of a known ROM routine while
+keeping the generated declaration, dispatcher, and call sites intact.
 
-Always wrap runs in `timeout -k`. Boot bugs can hang, and SDL may not exit on a
-plain timeout signal.
+- Record manual addresses in `code-analysis/manual_functions.txt`.
+- Implement native bodies in the established hand-written source, normally
+  `SorManualFunctions.cpp`.
+- Preserve 68000-visible register, memory, flag, stack, and control-flow
+  effects expected by callers.
+- Base behavior on `output/sor.asm`, analysis data, and bounded runtime
+  observations. Generated C++ is a navigation aid, not the primary evidence.
+- Add focused instrumentation/tests where feasible and compare behavior before
+  removing a generated implementation.
+- Regenerate and compile after changing the manual-function list.
+
+Do not turn unknown behavior into a host shortcut merely because it makes one
+scenario pass.
+
+## Run and observe safely
+
+Boot defects can spin forever and SDL windows may outlive plain `SIGTERM`. On
+systems with GNU `timeout`, always use a kill grace period:
 
 ```bash
 timeout -k 3 20 ./build.sh -r -- --runSor --debug --rom rom/SOR.bin
 ```
 
-Runtime test examples:
+Runtime diagnostics:
 
 ```bash
 timeout -k 3 20 ./build.sh -r -- --testVDP
 timeout -k 3 20 ./build.sh -r -- --testControllers
+timeout -k 3 20 ./build.sh -r -- --testAudioHeadless
 ```
 
-After a run, confirm no `build/sor` process is still alive.
+After automation, verify that no `build/sor` process remains. On platforms
+without GNU `timeout`, use another bounded process runner. Do not leave a game
+process or remote-access port active after a test.
 
-## Disassembly Workflows
+For deterministic gameplay automation, prefer the checked-in remote client
+scripts and the `megadrive_remote` API over imprecise sleeps or unbounded key
+presses.
 
-Use the checked-in scripts from this repository:
+## Disassembly and discovery
+
+Use the repository entry points:
 
 ```bash
 ./disassemble.sh
 ./disassemble_nolabels.sh
 ./disassemble_iterative.sh
 ./discover_aux_smart.sh
+```
+
+Equivalent direct tools require the sibling checkout:
+
+```bash
+PYTHONPATH=../RageDecompiler python3 -m tools --help
+```
+
+The static disassembler follows confirmed reachable code. Indirect dispatches
+may require runtime active-disassembly evidence and confirmed additions to
+`code-analysis/aux_addresses.txt`. Keep speculative candidates separate from
+confirmed addresses and do not commit discovery stubs as production behavior.
+
+## Analysis manuscripts and symbol synchronization
+
+`code-analysis/labels.csv` and `code-analysis/addresses.csv` are authoritative
+for symbol names and locations. Manuscripts explain behavior; they must not
+invent a parallel symbol vocabulary. Use `output/sor.asm` as the primary code
+evidence and generated C++ as a secondary navigation aid.
+
+Manuscripts:
+
+- are written in English;
+- live under `ai-analysis/`;
+- use kebab-case filenames;
+- cover one coherent system/topic per file;
+- keep boss behavior in `enemy-ai.md`, not a separate `bosses.md`.
+
+After adding, renaming, moving, or removing a CSV symbol:
+
+```bash
 ./sync_ai_analysis.py
 ./sync_ai_analysis.py --check
 ```
 
-Equivalent direct tool calls use the sibling `RageDecompiler` on `PYTHONPATH`:
-
-```bash
-PYTHONPATH=../RageDecompiler python3 -m tools disassemble rom/SOR.bin -o output/sor.asm -v
-PYTHONPATH=../RageDecompiler python3 -m tools iterative-disasm output/sor.asm output/sor.map etc/sor-exodus.asm code-analysis/aux_addresses.txt rom/SOR.bin
-```
-
-## Analysis Manuscripts and Symbol Synchronization
-
-Treat `code-analysis/labels.csv` and `code-analysis/addresses.csv` as the source
-of truth for names and locations. Manuscripts explain behavior; they must not
-maintain an independent symbol vocabulary. Use `output/sor.asm` as the primary
-code source and generated C++ only as a secondary navigation aid.
-
-Manuscripts live in `ai-analysis/`, are written in English, and use kebab-case
-filenames. Keep one document per system/topic. Boss behavior belongs in
-`ai-analysis/enemy-ai.md`; do not recreate a separate `bosses.md`.
-
-After adding, renaming, moving, or removing an entry in either CSV, run:
-
-```bash
-./sync_ai_analysis.py
-./sync_ai_analysis.py --check
-```
-
-The first command updates every `ai-analysis/*.md` file. The second is
-read-only and exits nonzero if another synchronization pass would change a
-manuscript. The address is the stable identity, so canonical references are
-updated even when their labels were renamed. The script also merges compatible
-Address/Symbol table columns and deliberately leaves fenced assembly,
-pseudocode, and other code samples unchanged. It is idempotent: a second update
-must report that all manuscripts are synchronized.
-
-When changing a code label, also regenerate the derived views before testing:
+The update must be idempotent: a second synchronization should report no
+changes. Keep CSV changes and synchronized manuscripts in the same logical
+delivery. When a code label changes, also regenerate the derived views:
 
 ```bash
 ./disassemble.sh
 ./build.sh --full
 ```
 
-Do not edit `output/sor.asm` or `generated/Sor.cpp` to rename a symbol; both are
-regenerated from the CSV analysis data.
+Never rename symbols directly in `output/sor.asm` or `generated/Sor.cpp`.
 
-### Address and Location Conventions
+## Address conventions
 
-- Known references in manuscript prose and evidence tables use exactly
-  `` `$ADDRESS (label)` ``, for example
-  `` `$4D60 (update_score_hud_and_check_extra_life)` ``.
-- Write hexadecimal addresses with `$` and uppercase digits. Manuscripts omit
-  redundant leading zeroes for ROM offsets; CSV files retain their established
-  fixed-width form.
-- Use the full 24-bit work-RAM address in canonical references, such as
-  `` `$FFFF00 (game_state)` `` and `` `$FFB800 (p1_object)` ``. The synchronizer
-  expands mapped 16-bit shorthand such as `$FF00` or `$B800`.
-- Keep address spaces distinct. A Z80-local address and its 68000 mapping are
-  not interchangeable; for example Z80 `$1FFF` maps to
-  `` `$A01FFF (z80_dac_command)` ``.
-- Object-structure fields are relative offsets and remain `+$NN`, for example
-  player health at `+$32`. Numeric constants, state values, address ranges, and
-  genuinely unnamed locations remain plain hexadecimal and do not require a
-  fabricated label.
-- If a manuscript needs a new semantic code/data name, add it to the appropriate
-  CSV with evidence and confidence first, then run the synchronizer. Do not use
-  a generated `sub_...` or `loc_...` name when that address already has a
-  semantic CSV label.
+- Known prose and evidence references use `` `$ADDRESS (label)` ``.
+- Hexadecimal addresses use `$` and uppercase digits.
+- Manuscripts omit redundant leading zeroes for ROM offsets; CSV files retain
+  their established fixed-width format.
+- Work RAM references use the full 24-bit form, such as
+  `` `$FFFF00 (game_state)` `` and `` `$FFB800 (p1_object)` ``.
+- Keep address spaces distinct. Z80 `$1FFF`, for example, maps to the separate
+  68000-visible `` `$A01FFF (z80_dac_command)` `` address.
+- Object fields remain relative offsets such as `+$32`.
+- Constants, state values, ranges, and genuinely unnamed locations remain
+  plain hexadecimal; do not fabricate labels.
+- Add a new semantic name to the appropriate CSV with evidence and confidence
+  before using it in a manuscript.
+- Prefer a semantic CSV label over generated `sub_...` or `loc_...` names.
 
-## Conventions
+## Tests and validation
 
-- Do not commit `rom/SOR.bin`, build directories, CMake fetch content, or local
-  output captures.
-- Generated recompilation code belongs under `generated/`.
-- Keep CSV changes and their synchronized manuscript updates in the same
-  commit. Run `./sync_ai_analysis.py --check` before committing analysis work.
-- Keep `MegaDriveEnvironment` changes in the sibling submodule and update the
-  parent gitlink afterward.
+Run Python tests from this repository:
+
+```bash
+python3 -m pytest
+```
+
+For C++ changes, build first and run the narrowest relevant bounded runtime
+test. For cartridge behavior, record the exact ROM, flags, inputs, observed
+state, timeout, and whether the result came from host automation or an
+independent emulator/reference comparison.
+
+Before finishing analysis work:
+
+```bash
+./sync_ai_analysis.py --check
+```
+
+Before finishing generated/manual-function work, regenerate, inspect the diff,
+compile `sor`, and execute an appropriate bounded observation.
+
+## Generated files and delivery
+
+Never commit:
+
+- `rom/SOR.bin` or any commercial ROM dump;
+- build directories or CMake fetch trees;
+- caches, screenshots, logs, or temporary discovery output;
+- local captures not explicitly requested as fixtures.
+
+Generated source and assembly already tracked by the repository may be updated
+when their authoritative inputs change. Keep those updates reviewable and
+explain why they changed.
+
+When checked out as a submodule, do not commit, publish, or update the parent
+gitlink unless explicitly requested. Report all validation and clearly state
+which platforms or runtime scenarios were not tested.
