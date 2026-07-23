@@ -47,7 +47,8 @@ add_executable(sor ${SOR_SOURCES})
 
 set_source_files_properties(
     "${CMAKE_CURRENT_SOURCE_DIR}/generated/Sor.cpp"
-    PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Debug>:-O2>"
+    PROPERTIES COMPILE_OPTIONS
+        "$<$<AND:$<CONFIG:Debug>,$<NOT:$<CXX_COMPILER_ID:MSVC>>>:-O2>"
 )
 
 target_include_directories(sor PRIVATE
@@ -59,3 +60,20 @@ target_link_libraries(sor PRIVATE
     MegaDriveEnvironment::MegaDriveEnvironment
     CLI11::CLI11
 )
+
+if(MSVC)
+    # SorRuntime contains the complete emulation environment and is created on
+    # main's stack. Match the typical 8 MiB Unix process stack instead of
+    # MSVC's 1 MiB default, which overflows during cartridge startup.
+    target_link_options(sor PRIVATE /STACK:8388608)
+endif()
+
+if(WIN32)
+    add_custom_command(TARGET sor POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_RUNTIME_DLLS:sor>
+            $<TARGET_FILE_DIR:sor>
+        COMMAND_EXPAND_LISTS
+        COMMENT "Copying runtime DLLs next to sor"
+    )
+endif()
