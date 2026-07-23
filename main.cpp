@@ -27,6 +27,7 @@ int main(int argc, char *argv[]) {
     bool        silentFlag            = false;
     int         sorVSyncMode          = 0; // 0 = internal timer (default); 1/2/3 = VSync/VSync2/VSync3
     int         remoteAccessPort      = 6969;
+    std::uint32_t turboMultiplier     = 0;
     std::string sorRomPath            = "rom/SOR.bin";
     std::string sorAuxAddrFile; // if set, record unknown dispatch targets here
     std::string audioWavPath;
@@ -60,6 +61,10 @@ int main(int argc, char *argv[]) {
     app.add_option("--port", remoteAccessPort, "With --runSor: remote access TCP port (0 disables)")
         ->capture_default_str()
         ->check(CLI::Range(0, 65535));
+    app.add_option("--turbo",
+                   turboMultiplier,
+                   "With --runSor and --vsync 0: run the internal VDP at 60 Hz times this multiplier")
+        ->check(CLI::Range(1u, 4'294'967'295u));
     app.add_option("--auxAddrFile",
                    sorAuxAddrFile,
                    "With --runSor: on an indirect dispatch to an unknown address, append it to "
@@ -72,6 +77,7 @@ int main(int argc, char *argv[]) {
                                                : MegaDriveEnvironment::LanguagePin::Japanese);
         env.setVideoStandard(videoHz == "50" ? MegaDriveEnvironment::VideoStandard::Hz50
                                              : MegaDriveEnvironment::VideoStandard::Hz60);
+        env.setVDPTurboMultiplier(turboMultiplier);
         if (silentFlag)
             env.sound().disable();
     };

@@ -123,7 +123,8 @@ MegaDriveEnvironment. Flags are processed by CLI11; `-V` / `--version` prints
 | `--runSor` | Boot the recompiled Streets of Rage cartridge |
 | `--rom PATH` | ROM image (default: `rom/SOR.bin`) |
 | `--debug` | Log CPU/VDP state once per second |
-| `--vsync N` | Frame sync: `0` = internal timer from `--hz` (default); `1` = display VSync; `2` / `3` = half / third rate |
+| `--vsync N` | Frame sync: `0` = internal timer from `--hz` or `--turbo` (default); `1` = display VSync; `2` / `3` = half / third rate |
+| `--turbo N` | With internal timing, run the VDP at `60 × N` Hz (`2` = 120 Hz, `10` = 600 Hz) |
 | `--port PORT` | Remote access TCP port (default: `6969`; `0` disables remote access) |
 | `--auxAddrFile PATH` | Discovery mode: on an unknown indirect dispatch, append the address and exit **42** instead of aborting |
 
@@ -132,7 +133,7 @@ MegaDriveEnvironment. Flags are processed by CLI11; `-V` / `--version` prints
 | Flag | Meaning |
 |------|---------|
 | `--lang jp\|en` | Language pin (default `jp` = Japanese / domestic; `en` = overseas) |
-| `--hz 50\|60` | Video standard pin (default `60` = NTSC; `50` = PAL) |
+| `--hz 50\|60` | Video standard pin (default `60` = NTSC; `50` = PAL); turbo overrides only the host frame rate |
 | `--silent` | Drop all audio chip writes (no sound output) |
 
 ### Host tests and utilities
@@ -159,6 +160,7 @@ Examples:
 ./build.sh -r -- --testSound
 ./build.sh -r -- --configControls
 ./build.sh -r -- --runSor --lang en --hz 60 --vsync 1 --port 6970
+./build.sh -r -- --runSor --turbo 10 --silent
 ```
 
 ## Cheats
