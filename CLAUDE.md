@@ -140,7 +140,7 @@ Boot defects can spin forever and SDL windows may outlive plain `SIGTERM`. On
 systems with GNU `timeout`, always use a kill grace period:
 
 ```bash
-timeout -k 3 20 ./build.sh -r -- --runSor --debug --rom rom/SOR.bin
+timeout -k 3 20 ./build.sh -r -- --debug --rom rom/SOR.bin
 ```
 
 MegaDriveEnvironment runtime diagnostics are owned by the sibling

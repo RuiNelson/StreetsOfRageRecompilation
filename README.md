@@ -18,7 +18,7 @@ You need CMake ≥ 3.24, a C++23 compiler, and Python 3.
 ## ROM
 
 The original cartridge image is **not** shipped with this repository. You must
-supply your own dump before a full recompile or a `--runSor` session.
+supply your own dump before a full recompile or a game session.
 
 Place it at:
 
@@ -117,7 +117,7 @@ Use `--config Debug` instead of `Release` for a debug build.
 Build and launch the recompiled cartridge in one step:
 
 ```bash
-./build.sh -r -- --runSor --debug --debugUtils --rom rom/SOR.bin
+./build.sh -r -- --debug --debugUtils --rom rom/SOR.bin
 ```
 
 Everything after `-r` / `--run` is passed to the `sor` binary. You can also
@@ -127,7 +127,7 @@ invoke `build/sor` directly once it exists. Default controls live in
 
 ### Jump directly to gameplay
 
-With a `--runSor --debugUtils` process already running, use the reusable
+With a `--debugUtils` game process already running, use the reusable
 remote-control script to skip the boot/menu/character-select presentation
 while preserving the real level initialization:
 
@@ -154,11 +154,11 @@ MegaDriveEnvironment runtime diagnostics live in the sibling
 `MegaDriveEnvironmentSampleGame` executable. Flags are processed by CLI11;
 `-V` / `--version` prints `0.1.0`.
 
-### Cartridge (`--runSor`)
+### Cartridge (default)
 
 | Flag | Meaning |
 |------|---------|
-| `--runSor` | Boot the recompiled Streets of Rage cartridge |
+| `--runSor` | Explicitly boot the cartridge; optional unless combined with `--configControls` |
 | `--rom PATH` | ROM image (default: `rom/SOR.bin`) |
 | `--debug` | Log CPU/VDP state once per second |
 | `--debugUtils` | Enable debug hotkeys (except Ctrl+Q, which is always active), host cheats, and remote access |
@@ -186,9 +186,9 @@ Examples:
 
 ```bash
 ./build.sh -r -- --configControls
-./build.sh -r -- --runSor --lang en --hz 60 --vsync 1 --debugUtils --port 6970
-./build.sh -r -- --runSor --fullScreen
-./build.sh -r -- --runSor --turbo 10 --silent
+./build.sh -r -- --lang en --hz 60 --vsync 1 --debugUtils --port 6970
+./build.sh -r -- --fullScreen
+./build.sh -r -- --turbo 10 --silent
 ```
 
 ## Cheats
@@ -355,7 +355,7 @@ Most of the recompiled game lives under `generated/` (`Sor.cpp` / `Sor.hpp`),
 produced by the recompiler. Hand-written host integration stays outside that
 tree so `--full` does not wipe it:
 
-- `main.cpp` — CLI for `--runSor` and the controls configurator
+- `main.cpp` — CLI for the default game mode and the controls configurator
 - `CPU68K.hpp` / `RecompilationEnvironment.*` — 68000 register file and host
   environment that owns it
 - `SorRuntime.*` — runtime hooks (hotkeys)
