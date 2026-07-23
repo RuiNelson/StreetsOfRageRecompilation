@@ -61,6 +61,13 @@ target_link_libraries(sor PRIVATE
     CLI11::CLI11
 )
 
+if(MSVC)
+    # SorRuntime contains the complete emulation environment and is created on
+    # main's stack. Match the typical 8 MiB Unix process stack instead of
+    # MSVC's 1 MiB default, which overflows during cartridge startup.
+    target_link_options(sor PRIVATE /STACK:8388608)
+endif()
+
 if(WIN32)
     add_custom_command(TARGET sor POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
