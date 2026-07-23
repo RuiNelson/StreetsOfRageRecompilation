@@ -60,20 +60,27 @@ here is legal advice; if you are unsure, do not use a ROM with this software.
 
 ## Build
 
-`./build.sh` configures when needed and builds the `sor` binary (Debug by
-default). Useful variants:
+The generated C++ directory is ignored by Git and is not present in a fresh
+clone. The first build must regenerate it from your local ROM:
+
+```bash
+./build.sh --full
+```
+
+`--full` creates `generated/` from the ROM via RageDecompiler
+(`python -m tools recompile`, with `PYTHONPATH=../RageDecompiler` and
+`code-analysis/manual_functions.txt`). Use `--full --discover` only for the
+speculative discovery loop; that build includes temporary stubs.
+
+Once `generated/Sor.cpp` and `generated/Sor.hpp` exist locally, ordinary
+incremental builds do not need to run the recompiler again:
 
 ```bash
 ./build.sh                 # configure if needed, build Debug
 ./build.sh --clean         # wipe build/ and reconfigure
-./build.sh -t Release      # Release build
-./build.sh --full          # recompile ROM → generated/, then build
+./build.sh --clean -t Release
+./build.sh --full          # regenerate local C++, then build
 ```
-
-`--full` regenerates `generated/` from the ROM via RageDecompiler
-(`python -m tools recompile`, with `PYTHONPATH=../RageDecompiler` and
-`code-analysis/manual_functions.txt`). Use `--full --discover` only for the
-speculative discovery loop; that build includes temporary stubs.
 
 ## Run
 

@@ -40,8 +40,8 @@ Before changing files:
 | `code-analysis/addresses.csv` | ROM data, RAM, hardware, table, and buffer symbols |
 | `code-analysis/blocks.csv` | Known data/code block boundaries |
 | `code-analysis/aux_addresses.txt` | Confirmed extra static entry points |
-| `generated/Sor.*` | C++ generated from ROM and analysis inputs |
-| `output/sor.asm` | Generated 68000 listing and primary code-analysis view |
+| `generated/Sor.*` | Ignored local C++ generated from ROM and analysis inputs |
+| `output/sor.asm` | Ignored local 68000 listing and primary code-analysis view |
 | `ai-analysis/*.md` | English topic-based reverse-engineering manuscripts |
 | `sync_ai_analysis.py` | Symbol-reference synchronization and validation |
 
@@ -68,10 +68,14 @@ library rebuilds.
 Preferred Bash build:
 
 ```bash
-./build.sh
+./build.sh --full
 ./build.sh --clean
 ./build.sh --clean --type Release
 ```
+
+`--full` is mandatory after a fresh clone because `generated/` is ignored by
+Git. Once `generated/Sor.cpp` and `generated/Sor.hpp` exist locally,
+subsequent builds may omit it until their inputs change.
 
 `build.sh` reconfigures only when necessary. Use `--clean` when changing an
 existing single-configuration build directory between Debug and Release.
@@ -96,8 +100,9 @@ path is:
 rom/SOR.bin
 ```
 
-Set `SOR_ROM` to use another path with scripts. A normal build uses checked-in
-generated C++. Regenerate only when the task changes code-generation inputs:
+Set `SOR_ROM` to use another path with scripts. `generated/` is ignored by Git,
+so generate it after a fresh clone and regenerate whenever code-generation
+inputs change:
 
 ```bash
 ./build.sh --full
@@ -107,8 +112,8 @@ generated C++. Regenerate only when the task changes code-generation inputs:
 Use `--full --discover` only inside the speculative discovery workflow; it can
 include temporary candidates that do not belong in a normal build.
 
-Review regenerated diffs. A large generated delta is evidence to investigate,
-not a reason to accept it mechanically.
+Review regenerated output carefully. A large unexpected change is evidence to
+investigate, not a result to accept mechanically.
 
 ## Manual subroutines
 
@@ -245,8 +250,8 @@ Before finishing analysis work:
 ./sync_ai_analysis.py --check
 ```
 
-Before finishing generated/manual-function work, regenerate, inspect the diff,
-compile `sor`, and execute an appropriate bounded observation.
+Before finishing generated/manual-function work, regenerate, inspect the
+output, compile `sor`, and execute an appropriate bounded observation.
 
 ## Generated files and delivery
 
@@ -257,10 +262,13 @@ Never commit:
 - caches, screenshots, logs, or temporary discovery output;
 - local captures not explicitly requested as fixtures.
 
-Generated source and assembly already tracked by the repository may be updated
-when their authoritative inputs change. Keep those updates reviewable and
-explain why they changed.
+Generated source under `generated/` and assembly under `output/` are ignored
+local artifacts. Do not add them to Git unless repository policy is explicitly
+changed as part of the task.
 
-When checked out as a submodule, do not commit, publish, or update the parent
-gitlink unless explicitly requested. Report all validation and clearly state
-which platforms or runtime scenarios were not tested.
+After validation, commit and push this repository to `main` automatically
+unless the user explicitly asks not to publish. When checked out as a
+submodule, publish this repository first and then update the parent gitlink.
+Preserve unrelated work and never force-push or rewrite history. Report all
+validation and clearly state which platforms or runtime scenarios were not
+tested.
