@@ -18,14 +18,14 @@
 #   ./build.sh -t Release          Set the CMake build type (default: Debug).
 #   ./build.sh -j 8                Override the parallel job count.
 #   ./build.sh -r  [args...]        Build, then run `sor` with the remaining args.
-#   ./build.sh --run -- --testVDP   Same; everything after -r/--run goes to `sor`.
+#   ./build.sh --run -- --runSor    Same; everything after -r/--run goes to `sor`.
 #   ./build.sh -h | --help          Show this help.
 #
 # Examples:
 #   ./build.sh --clean
 #   ./build.sh --full              Regenerate generated/ from the ROM, then build.
-#   ./build.sh -r --testVDP
-#   ./build.sh -t Release -r --testControllers
+#   ./build.sh -r --runSor
+#   ./build.sh -t Release -r --runSor --fullScreen
 
 set -uo pipefail
 

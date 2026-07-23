@@ -143,13 +143,8 @@ systems with GNU `timeout`, always use a kill grace period:
 timeout -k 3 20 ./build.sh -r -- --runSor --debug --rom rom/SOR.bin
 ```
 
-Runtime diagnostics:
-
-```bash
-timeout -k 3 20 ./build.sh -r -- --testVDP
-timeout -k 3 20 ./build.sh -r -- --testControllers
-timeout -k 3 20 ./build.sh -r -- --testAudioHeadless
-```
+MegaDriveEnvironment runtime diagnostics are owned by the sibling
+`MegaDriveEnvironmentSampleGame` repository.
 
 After automation, verify that no `build/sor` process remains. On platforms
 without GNU `timeout`, use another bounded process runner. Do not leave a game

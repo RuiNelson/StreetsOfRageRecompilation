@@ -87,7 +87,7 @@ incremental builds do not need to run the recompiler again:
 Build and launch the recompiled cartridge in one step:
 
 ```bash
-./build.sh -r -- --runSor --debug --rom rom/SOR.bin
+./build.sh -r -- --runSor --debug --debugUtils --rom rom/SOR.bin
 ```
 
 Everything after `-r` / `--run` is passed to the `sor` binary. You can also
@@ -97,9 +97,9 @@ invoke `build/sor` directly once it exists. Default controls live in
 
 ### Jump directly to gameplay
 
-With a `--runSor` process already running, use the reusable remote-control
-script to skip the boot/menu/character-select presentation while preserving
-the real level initialization:
+With a `--runSor --debugUtils` process already running, use the reusable
+remote-control script to skip the boot/menu/character-select presentation
+while preserving the real level initialization:
 
 ```bash
 python3 tools/reach_gameplay.py axel
@@ -119,9 +119,10 @@ so no package installation or `PYTHONPATH` setup is needed.
 
 ## Command-line arguments
 
-The `sor` executable is both the game host and a small test harness for
-MegaDriveEnvironment. Flags are processed by CLI11; `-V` / `--version` prints
-`0.1.0`.
+The `sor` executable hosts the recompiled game and the controls configurator.
+MegaDriveEnvironment runtime diagnostics live in the sibling
+`MegaDriveEnvironmentSampleGame` executable. Flags are processed by CLI11;
+`-V` / `--version` prints `0.1.0`.
 
 ### Cartridge (`--runSor`)
 
@@ -130,12 +131,14 @@ MegaDriveEnvironment. Flags are processed by CLI11; `-V` / `--version` prints
 | `--runSor` | Boot the recompiled Streets of Rage cartridge |
 | `--rom PATH` | ROM image (default: `rom/SOR.bin`) |
 | `--debug` | Log CPU/VDP state once per second |
+| `--debugUtils` | Enable debug hotkeys (except Ctrl+Q, which is always active), host cheats, and remote access |
+| `--fullScreen` | Start the game in fullscreen |
 | `--vsync N` | Frame sync: `0` = internal timer from `--hz` or `--turbo` (default); `1` = display VSync; `2` / `3` = half / third rate |
 | `--turbo N` | With internal timing, run the VDP at `60 × N` Hz (`2` = 120 Hz, `10` = 600 Hz) |
-| `--port PORT` | Remote access TCP port (default: `6969`; `0` disables remote access) |
+| `--port PORT` | With `--debugUtils`, remote access TCP port (default: `6969`; `0` disables remote access) |
 | `--auxAddrFile PATH` | Discovery mode: on an unknown indirect dispatch, append the address and exit **42** instead of aborting |
 
-### Console pins (shared by the game and several tests)
+### Console pins
 
 | Flag | Meaning |
 |------|---------|
@@ -143,36 +146,24 @@ MegaDriveEnvironment. Flags are processed by CLI11; `-V` / `--version` prints
 | `--hz 50\|60` | Video standard pin (default `60` = NTSC; `50` = PAL); turbo overrides only the host frame rate |
 | `--silent` | Drop all audio chip writes (no sound output) |
 
-### Host tests and utilities
-
-These exercise the environment without needing a full recompilation of the
-cartridge:
+### Host utility
 
 | Flag | Meaning |
 |------|---------|
-| `--testVDP` | VDP suite (exports PNGs) |
-| `--testControllers` | Interactive controller readout on the VDP |
-| `--testSound` | YM2612 / PSG output + Z80 CPU test |
-| `--testAudioHeadless` | Headless YM2612 / PSG / Z80 regression tests |
-| `--writeAudioWav PATH` | With headless audio: write a 48 kHz stereo diagnostic WAV |
-| `--testFontSDL` | Font demo (3D rotating cube with glyphs) |
-| `--testFontPNG` | Font PNG export with artistic effects |
 | `--configControls` | Open the controller configuration UI |
 
 Examples:
 
 ```bash
-./build.sh -r -- --testVDP
-./build.sh -r -- --testControllers
-./build.sh -r -- --testSound
 ./build.sh -r -- --configControls
-./build.sh -r -- --runSor --lang en --hz 60 --vsync 1 --port 6970
+./build.sh -r -- --runSor --lang en --hz 60 --vsync 1 --debugUtils --port 6970
+./build.sh -r -- --runSor --fullScreen
 ./build.sh -r -- --runSor --turbo 10 --silent
 ```
 
 ## Cheats
 
-Host-side cheats are wired through keyboard **option hotkeys** in
+Host-side cheats are available only with `--debugUtils` and are wired through keyboard **option hotkeys** in
 `SorRuntime` (not the in-game pad bindings). Hold **Alt** (Windows/Linux) or
 **Option** (macOS) and press the key — the bare key alone does nothing, so
 cheats do not clash with typing or with pad-mapped letters. Only the keyboard
@@ -334,7 +325,7 @@ Most of the recompiled game lives under `generated/` (`Sor.cpp` / `Sor.hpp`),
 produced by the recompiler. Hand-written host integration stays outside that
 tree so `--full` does not wipe it:
 
-- `main.cpp` — CLI for tests and `--runSor`
+- `main.cpp` — CLI for `--runSor` and the controls configurator
 - `CPU68K.hpp` / `RecompilationEnvironment.*` — 68000 register file and host
   environment that owns it
 - `SorRuntime.*` — runtime hooks (hotkeys)
