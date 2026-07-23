@@ -34,10 +34,10 @@ The dump this project is developed against is the 512 KiB *Streets of Rage*
 Mega Drive / Genesis cartridge (*Bare Knuckle* / serial `MK 00001019-01`,
 region `JUE`). Verify yours matches:
 
-| | |
-|---|---|
-| **Size** | 524 288 bytes |
-| **MD5** | `59a3b22a1899461dceba50d1ade88d3a` |
+|             |                                                                    |
+| ----------- | ------------------------------------------------------------------ |
+| **Size**    | 524 288 bytes                                                      |
+| **MD5**     | `59a3b22a1899461dceba50d1ade88d3a`                                 |
 | **SHA-256** | `95d7efb98e97f4ffffe68257aef9a855034a36a41b86cf9d332d129f30cb2d4b` |
 
 On macOS / Linux:
@@ -150,37 +150,34 @@ so no package installation or `PYTHONPATH` setup is needed.
 ## Command-line arguments
 
 The `sor` executable hosts the recompiled game and the controls configurator.
-MegaDriveEnvironment runtime diagnostics live in the sibling
-`MegaDriveEnvironmentSampleGame` executable. Flags are processed by CLI11;
-`-V` / `--version` prints `0.1.0`.
-
-### Cartridge (default)
-
-| Flag | Meaning |
-|------|---------|
-| `--runSor` | Explicitly boot the cartridge; optional unless combined with `--configControls` |
-| `--rom PATH` | ROM image (default: `rom/SOR.bin`) |
-| `--debug` | Log CPU/VDP state once per second |
-| `--debugUtils` | Enable debug hotkeys (except Ctrl+Q, which is always active), host cheats, and remote access |
-| `--fullScreen` | Start the game in fullscreen |
-| `--vsync N` | Frame sync: `0` = internal timer from `--hz` or `--turbo` (default); `1` = display VSync; `2` / `3` = half / third rate |
-| `--turbo N` | With internal timing, run the VDP at `60 × N` Hz (`2` = 120 Hz, `10` = 600 Hz) |
-| `--port PORT` | With `--debugUtils`, remote access TCP port (default: `6969`; `0` disables remote access) |
-| `--auxAddrFile PATH` | Discovery mode: on an unknown indirect dispatch, append the address and exit **42** instead of aborting |
-
-### Console pins
-
-| Flag | Meaning |
-|------|---------|
-| `--lang jp\|en` | Language pin (default `jp` = Japanese / domestic; `en` = overseas) |
-| `--hz 50\|60` | Video standard pin (default `60` = NTSC; `50` = PAL); turbo overrides only the host frame rate |
-| `--silent` | Drop all audio chip writes (no sound output) |
 
 ### Host utility
 
-| Flag | Meaning |
-|------|---------|
+| Flag               | Meaning                              |
+| ------------------ | ------------------------------------ |
 | `--configControls` | Open the controller configuration UI |
+
+### Cartridge (default)
+
+| Flag                 | Meaning                                                                                                   |
+| -------------------- | --------------------------------------------------------------------------------------------------------- |
+| `--rom PATH`         | ROM image (default: `rom/SOR.bin`)                                                                        |
+| `--debug`            | Log CPU/VDP state once per second                                                                         |
+| `--debugUtils`       | Enable debug hotkeys, host cheats, and remote access.                                                     |
+| `--fullScreen`       | Start the game in fullscreen.                                                                             |
+| `--vsync N`          | Frame sync: `0` = no Vsync (default); `1` = display VSync; `2` / `3` = half / third rate to display VSync |
+| `--turbo N`          | With `--Vsync 0`, run the VDP at `60 × N` Hz (`2` = 120 Hz, `10` = 600 Hz)                                |
+| `--port PORT`        | With `--debugUtils`, remote access TCP port (default: `6969`; `0` disables remote access)                 |
+| `--auxAddrFile PATH` | Discovery mode: on an unknown indirect dispatch, append the address and exit **42** instead of aborting   |
+
+### Console pins
+
+| Flag            | Meaning                                                                                        |
+| --------------- | ---------------------------------------------------------------------------------------------- |
+| `--lang jp\|en` | Language pin (default `jp` = Japanese / domestic; `en` = overseas)                             |
+| `--hz 50\|60`   | Video standard pin (default `60` = NTSC; `50` = PAL); turbo overrides only the host frame rate |
+| `--silent`      | Drop all audio chip writes (no sound output)                                                   |
+
 
 Examples:
 
@@ -200,16 +197,16 @@ cheats do not clash with typing or with pad-mapped letters. Only the keyboard
 source is handled here; gamepad option chords are ignored. Each activation
 logs a short `[cheat] …` line via the async host `Logger`.
 
-| Chord | Effect |
-|-------|--------|
-| Alt/Option + `L` | +1 P1 life (`$FFFFFF20`) |
-| Alt/Option + `S` | +1 P1 special attack (`$FFFFFF21`) |
-| Alt/Option + `P` | Toggle P1 punch power ×12 |
-| Alt/Option + `K` | Kill all instantiated enemies, including bosses |
-| Alt/Option + `W` | Call the police for the first active player without consuming a special |
+| Chord                | Effect                                                                    |
+| -------------------- | ------------------------------------------------------------------------- |
+| Alt/Option + `L`     | +1 P1 life (`$FFFFFF20`)                                                  |
+| Alt/Option + `S`     | +1 P1 special attack (`$FFFFFF21`)                                        |
+| Alt/Option + `P`     | Toggle P1 punch power ×12                                                 |
+| Alt/Option + `K`     | Kill all instantiated enemies, including bosses                           |
+| Alt/Option + `W`     | Call the police for the first active player without consuming a special   |
 | Alt/Option + `1`–`8` | Jump to level 1–8 (sets level/wave and forces the level-intro game state) |
-| Alt/Option + `G` | Start good ending (`game_state` → `$0024` / `init_ending_good`) |
-| Alt/Option + `B` | Start bad ending (`game_state` → `$001C` / `init_ending_bad`) |
+| Alt/Option + `G`     | Start good ending (`game_state` → `$0024` / `init_ending_good`)           |
+| Alt/Option + `B`     | Start bad ending (`game_state` → `$001C` / `init_ending_bad`)             |
 
 Lives and specials simply increment a RAM byte (capped at `0xFF`). Level warp
 writes the selected stage, clears the wave counter, and switches game state to

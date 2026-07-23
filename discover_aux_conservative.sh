@@ -66,7 +66,7 @@ for ((i = 1; i <= MAX_ITERS; i++)); do
     fi
 
     echo "==> [discover $i] run"
-    run_sor_with_output --runSor --auxAddrFile "$AUX" --rom "$ROM"
+    run_sor_with_output --debugUtils --runSor --auxAddrFile "$AUX" --rom "$ROM"
     code=$?
     sort_aux_addresses
 

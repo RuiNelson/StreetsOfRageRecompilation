@@ -97,7 +97,7 @@ for ((i = 1; i <= MAX_ITERS; i++)); do
     pkill -9 -f "$BIN" 2>/dev/null
 
     echo "==> [smart $i] run"
-    run_sor_with_output --lang en --runSor --rom "$ROM" --auxAddrFile "$AUX"
+    run_sor_with_output --debugUtils --lang en --runSor --rom "$ROM" --auxAddrFile "$AUX"
     code=$?
     sort_aux_addresses
 
