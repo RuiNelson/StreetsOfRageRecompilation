@@ -82,6 +82,33 @@ incremental builds do not need to run the recompiler again:
 ./build.sh --full          # regenerate local C++, then build
 ```
 
+### Windows
+
+From the meta-repository root, use a Visual Studio multi-configuration build
+and the vcpkg SDL3 toolchain:
+
+```powershell
+$VcpkgRoot = "C:\src\vcpkg"
+$BuildDir = "build/windows"
+$BinDir = (Join-Path (Resolve-Path ".") "$BuildDir/bin")
+
+$env:PYTHONPATH = (Resolve-Path RageDecompiler)
+python -m tools recompile StreetsOfRageRecompilation\rom\SOR.bin `
+  -o StreetsOfRageRecompilation\generated `
+  --manual-functions StreetsOfRageRecompilation\code-analysis\manual_functions.txt
+
+cmake -S StreetsOfRageRecompilation -B $BuildDir `
+  -G "Visual Studio 17 2022" -A x64 `
+  -DCMAKE_TOOLCHAIN_FILE="$VcpkgRoot\scripts\buildsystems\vcpkg.cmake" `
+  -DCMAKE_RUNTIME_OUTPUT_DIRECTORY="$BinDir"
+cmake --build $BuildDir --config Release --parallel
+
+& "$BinDir\Release\sor.exe" --help
+```
+
+The build copies SDL3 and the project-built runtime DLLs next to `sor.exe`.
+Use `--config Debug` instead of `Release` for a debug build.
+
 ## Run
 
 Build and launch the recompiled cartridge in one step:
