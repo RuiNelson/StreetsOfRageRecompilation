@@ -240,7 +240,7 @@ On respawn, `$1E0E (player_spawn_or_respawn)`:
 
 At the beginning of a round, `$107F2 (spawn_round_players)` creates each active
 player and transiently seeds the special counter with 2. Its immediate
-`$AD8E (update_select_objects)` call dispatches the zero-state player to `$1E0E
+`$AD8E (update_objects_and_build_sprites)` call dispatches the zero-state player to `$1E0E
 (player_spawn_or_respawn)`, which replaces that seed with the same effective
 allowance as a respawn: normally 1, or 0 in Round 8. Round entry and post-death
 respawn therefore converge on the same playable resource value.

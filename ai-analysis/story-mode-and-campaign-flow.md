@@ -56,7 +56,7 @@ add.w  d0,d0
 move.l $3BA(pc,d0.w),d0
 movea.l d0,a0
 jsr    (a0)
-jsr    sync_z80_1
+jsr    wait_vblank_and_upload_graphics
 bra.s  game_infinite_loop
 ```
 

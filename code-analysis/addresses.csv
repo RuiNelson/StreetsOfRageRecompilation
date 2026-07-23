@@ -57,9 +57,18 @@ C0001E, vdp_disable_, "100% - VDP Disable/Debug Register (Mirror)"
 078000, z80_banked_pcm_directory, "100% - 8 five-byte PCM records visible to the Z80 at banked address $8000: little-endian sample offset and length plus playback-delay byte; commands $8A-$91"
 
 ; --- Buffers ---
+FF0000, primary_plane_blockmap, "100% - B - Primary camera plane's runtime block-ID map; row stride comes from primary_plane_blockmap_stride"
+FF2000, secondary_plane_blockmap, "100% - B - Secondary camera plane's runtime block-ID map"
+FF4000, primary_metatile_table, "100% - 8-byte records mapping primary-plane block IDs to four VDP tile words (2x2 tiles)"
+FF4800, secondary_metatile_table, "100% - 8-byte records mapping secondary-plane block IDs to four VDP tile words (2x2 tiles)"
+FF5000, primary_hscroll_strip_buffer, "100% - W[32+] - Primary-plane parallax scroll values, one per vertical strip/cell band"
+FF5400, secondary_hscroll_strip_buffer, "100% - W[32+] - Secondary-plane parallax scroll values, one per vertical strip/cell band"
+FF5800, secondary_hscroll_line_buffer, "100% - W[256] - Secondary-plane per-scanline horizontal-scroll values for VDP line-scroll mode"
+FF5A00, primary_hscroll_line_buffer, "100% - W[256] - Primary-plane per-scanline horizontal-scroll values for VDP line-scroll mode"
 FF6800, elc_buffer, "100% - Enemy load cue buffer; unpacked here before the level starts"
 FF8000, decompression_scratch_buffer, "100% - General decompression scratch buffer used by Nemesis, Enigma, and Kosinski"
-FFDA00, sprite_mappings_buffer, "100% - Sprite mapping data buffer"
+FFA000, level_collision_class_map, "100% - Packed two-4-bit-per-byte level collision-class map queried from world X/lane coordinates"
+FFDA00, sprite_attribute_table_buffer, "100% - 80 eight-byte Mega Drive SAT records in RAM; the linked active prefix and terminator are rebuilt, then all records are DMA-copied to VRAM $F000 each graphics VBlank"
 FFDCD0, art_array_cue, "100% - L - Head of the fixed eight-record incremental Nemesis art queue (source L + VRAM destination W); source becomes the current stream cursor while active"
 FFDCD4, nemesis_art_vram_destination, "100% - W - Current queued incremental Nemesis VRAM byte destination"
 FFDD10, nemesis_incremental_writer, "100% - L - Saved normal/XOR Nemesis output-writer address for incremental VBlank decoding"
@@ -81,7 +90,20 @@ FFE00A, camera_x_velocity, "100% - L - Primary camera X velocity (16.16 per fram
 FFE00E, camera_y, "100% - L - Primary camera Y/depth position (16.16)"
 FFE01A, camera_x_max, "100% - L - Primary camera maximum X bound; clamped at $19074 and advanced at $19570"
 FFE01E, camera_x_min, "100% - L - Primary camera minimum X bound; Round 8 advances this bound leftward"
+FFE02A, primary_plane_blockmap_ptr, "100% - L - Pointer to primary_plane_blockmap inside primary_camera"
+FFE02E, primary_plane_blockmap_stride, "100% - W - Row stride of primary_plane_blockmap"
+FFE032, primary_metatile_table_ptr, "100% - L - Pointer to primary_metatile_table inside primary_camera"
 FFE100, secondary_camera, "100% - Secondary camera/plane state structure, dispatched through $19332"
+FFE12A, secondary_plane_blockmap_ptr, "100% - L - Pointer to secondary_plane_blockmap inside secondary_camera"
+FFE12E, secondary_plane_blockmap_stride, "100% - W - Row stride of secondary_plane_blockmap"
+FFE132, secondary_metatile_table_ptr, "100% - L - Pointer to secondary_metatile_table inside secondary_camera"
+
+; --- Graphics render and streaming queues ---
+FFE200, render_depth_buckets, "100% - 64 $20-byte buckets: count word plus object pointers, keyed by lane Y and consumed foreground-first when building the SAT"
+FFEA00, primary_tilemap_row_update_queue, "100% - Buffered primary-plane horizontal metatile-row refresh commands consumed in VBlank"
+FFEB20, secondary_tilemap_row_update_queue, "100% - Buffered secondary-plane horizontal metatile-row refresh commands consumed in VBlank"
+FFEC40, primary_tilemap_column_update_queue, "100% - Buffered primary-plane vertical metatile-column refresh commands consumed in VBlank"
+FFECE0, secondary_tilemap_column_update_queue, "100% - Buffered secondary-plane vertical metatile-column refresh commands consumed in VBlank"
 
 ; --- Audio (68000 sequencer workspace + Z80 DAC mailboxes) ---
 ; See also ai-analysis/sound-system.md
@@ -138,10 +160,22 @@ A01FFF, z80_dac_command, "100% - B - DAC command mailbox; 68000 writes sample/co
 0795A2, z80_dac_driver_kosinski, "100% - Kosinski-compressed Z80 DAC/PCM driver; load_z80_dac_driver expands to Z80 RAM $0000"
 
 ; --- Palette ---
-FFF400, palette, "100% - Palette data buffer"
+FFF400, palette, "100% - W[64] - Active CRAM shadow; VBlank DMA-copies all 128 bytes when palette_dirty bit 0 is set"
+FFF480, target_palette_buffer, "100% - W[64] - Palette fade-in destination; sparse palette loaders normally populate this buffer"
 
 ; --- Status Bitfield ---
 FFFB14, status_bitfield_1, "100% - W - Dual-purpose: high byte = art-loading state bits (bset/bclr #0-7); low byte (FB15) = game-mode dispatch index"
+
+; --- VBlank / VDP frame handoff ---
+FFFA00, vblank_request, "100% - B - Main loop/VBlank handshake: 1 requests the full mode-specific graphics pass; 2 skips frame graphics but still samples pads and advances incremental art"
+FFFA01, palette_dirty, "100% - B - Bit 0 requests a 64-word DMA from palette to CRAM $0000 during the next full graphics VBlank"
+FFFA02, sprite_link_index, "100% - B - Current SAT link value while build_sprite_attribute_table emits records; starts at 0 and can reach 79 before the zero-link terminator"
+FFFA03, sprite_slots_remaining, "100% - B - Remaining SAT records during sprite construction; starts at $4F (79)"
+FFFB04, sprite_attribute_write_ptr, "100% - W - Current write cursor inside sprite_attribute_table_buffer"
+FFFC00, vdp_dma_command_scratch, "100% - L - RAM scratch used to split a prepared VDP DMA destination command into ordered control-port word writes"
+FFFF06, vblank_mode, "100% - W - Selects one of five full VBlank graphics paths: 0 gameplay, 1 menu/character select, 2 story/good ending, 3 bad ending, 4 round clear"
+FFFF46, vdp_display_enable_command, "100% - W - Cached VDP R1 display-on command: $8174 NTSC or $817C PAL"
+FFFF48, vdp_display_disable_command, "100% - W - Cached VDP R1 display-off command: $8134 NTSC or $813C PAL"
 
 ; --- Game Timer ---
 FFFB00, game_timer, "100% - W - In-game countdown timer (seconds display); decremented by the clock routine"
@@ -255,7 +289,7 @@ FFB8D8, p2_char_slot, "100% - W - Char-select slot on P2 object+$58: 0=Adam (lef
 FFB8DE, p2_carried_weapon_ptr, "95% - W - P2 object+$5E pointer to the currently carried type-$08..$0C weapon"
 FFB8E0, p2_carried_weapon_type, "95% - B - P2 object+$60 carried weapon object type; zero when unarmed"
 FFB900, object_table, "100% - Start of 32-slot, $80-byte gameplay object table; ordinary enemies use types $20-$2A, with type +$00, primary state W +$30, health W +$32, and target pointer W +$42"
-FFFC14, display_list_head, "90% - L - Head pointer of the sprite/object display list consumed by object_manager_loop"
+FFFC14, elc_spawn_stream_cursor, "100% - L - Current cursor in the Nemesis-decoded ELC spawn stream consumed by process_timed_spawn_records"
 FFFC04, p1_button_held, "100% - W"
 FFFC05, p1_button_press, "100% - B"
 FFFC06, p1_joypad_present_negated, "100% - B - 0 if the P1 joypad is present, 1 if not"

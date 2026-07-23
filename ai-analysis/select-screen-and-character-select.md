@@ -51,7 +51,7 @@ Both the select screen and character select are **sub-state machines** on top of
 ```asm
 ; init_selectscreenmode  ($9170)  — game_state = $10
     ; program VDP, enable IRQs
-    jsr  init_z80
+    jsr  reset_vdp_and_graphics_state
     jsr  init_game_start_screen     ; $FE8
     jsr  clear_player_input
     ; restore VDP, disable IRQs
@@ -145,7 +145,7 @@ While sub-state is `$00` / `$02`, update calls `$1564 (player_state_dispatcher)`
 | Cursor index | `$FFB840 (select_menu_cursor)` (`$FFB840 (select_menu_cursor)` = `$40` of P1 object) | `0` = 1P, `1` = 2P, `2` = OPTIONS |
 | Previous index | `$FFB842 (select_menu_cursor_prev)` | Used when skipping 2P with one pad |
 
-Up/Down on `$FFFC05 (p1_button_press)` bits 0–1 wrap the cursor `0…2`, play a UI beep, and place the cursor sprite in the `$FFDA00 (sprite_mappings_buffer)` buffer.
+Up/Down on `$FFFC05 (p1_button_press)` bits 0–1 wrap the cursor `0…2`, play a UI beep, and place the cursor sprite in the `$FFDA00 (sprite_attribute_table_buffer)` buffer.
 
 If `select_menu_option_count == 1` (no P2 pad), landing on index `1` (2 PLAYERS) is remapped via table `$1630 (select_menu_skip_2p_remap)` so the player only sees **1 PLAYER** and **OPTIONS**.
 
@@ -298,7 +298,7 @@ Left/Right adjust the global `$FFFF02 (level)` word (0 = first round). That valu
 
 ```asm
 ; init_characterselectscreen  ($927C)
-    jsr  init_z80
+    jsr  reset_vdp_and_graphics_state
     jsr  init_character_select_screen   ; $1634
     jsr  load_z80_dac_driver
     jsr  clear_player_input
@@ -310,7 +310,7 @@ Left/Right adjust the global `$FFFF02 (level)` word (0 = first round). That valu
 
 ### 7.2 Init — `$1634 (init_character_select_screen)`
 
-1. **Clear low work RAM** — `$1FA` × 128-byte fills from `$FF0000` → ends near `$FFFD00`. High variables (`$FFFF00 (game_state)`, `$FFFF18 (player_mode)`, `$FFFFC6 (difficulty)`, `$FFFFC8 (control_scheme)`, `$FFFFCA (lives_setting)`, `$FFFF02 (level)`, character IDs) live above that range and survive.
+1. **Clear low work RAM** — `$1FA` × 128-byte fills from `$FF0000 (primary_plane_blockmap)` → ends near `$FFFD00`. The `$FF0000 (primary_plane_blockmap)` role applies during gameplay; here this is simply the start of the low-RAM clear. High variables (`$FFFF00 (game_state)`, `$FFFF18 (player_mode)`, `$FFFFC6 (difficulty)`, `$FFFFC8 (control_scheme)`, `$FFFFCA (lives_setting)`, `$FFFF02 (level)`, character IDs) live above that range and survive.
 2. `$FFF900 (char_select_idle_timer)` = `$12C` (~300 frames)
 3. Fade setup; palette `$71F30`
 4. Spawn **player cursors** (object type **6**):
@@ -359,14 +359,14 @@ Indexed by `$FFF904 (char_select_substate)`, table `$171A (char_select_jt)`:
 | `$08` | `$1794 (char_select_fade_out)` | Palette fade-out |
 | `$0A` | `$17A2 (initialize_player_continues)` | Lives/continues → `game_state = $28` |
 
-### 7.4 Object pass — `$AD8E (update_select_objects)`
+### 7.4 Object pass — `$AD8E (update_objects_and_build_sprites)`
 
 Each frame during interactive select:
 
 1. For P1 and P2 slots: if type ≠ 0, dispatch via object-type jump table `$B236`
 2. Copy held/press input into object fields
 3. Process animated character-preview objects in the object table
-4. `$10514 (sync_z80_2)` (VBlank wait)
+4. `$10514 (wait_vblank_without_graphics_upload)` (VBlank wait)
 
 The ROM words at `$B242/$B244` are `$18D4/$1A12`, proving the exact entries:
 
@@ -574,7 +574,7 @@ Downstream consumers:
 | `$175A (char_select_interactive)` |
 | `$17A2 (initialize_player_continues)` |
 | `$1916 (char_select_player_input)` |
-| `$AD8E (update_select_objects)` |
+| `$AD8E (update_objects_and_build_sprites)` |
 | `$9170 (init_selectscreenmode)` / `$919A (game_mode_selectscreenmode)` |
 | `$927C (init_characterselectscreen)` / `$92A8 (game_mode_characterselectscreen)` |
 

@@ -48,8 +48,9 @@ constexpr m_word kStatusIrqEnabled = 0x2500u;
 // $0003A2 — game_infinite_loop
 //
 // Core frame loop: index the $3BA jump table by game_state, jsr the handler,
-// then sync_z80_1 (VBlank mailbox). IRQ service is not needed between those
-// few setup opcodes — handlers and sync_z80_1 already deliver IRQs. Also owns
+// then wait_vblank_and_upload_graphics (VBlank mailbox). IRQ service is not
+// needed between those few setup opcodes — handlers and the wait routine
+// already deliver IRQs. Also owns
 // the mid-entry at $412 (boot checksum-fail: clear CRAM and hang).
 // ---------------------------------------------------------------------------
 void Sor::game_infinite_loop(m_long entry_) {
@@ -102,8 +103,8 @@ void Sor::game_infinite_loop(m_long entry_) {
         if (!call68k([this, handler] { dispatch(handler); }, 0x03B2u))
             return;
 
-        // jsr sync_z80_1 — waits on VBlank mailbox; services IRQs there
-        if (!call68k([this] { sync_z80_1(); }, 0x03B8u))
+        // jsr wait_vblank_and_upload_graphics — service IRQs while waiting
+        if (!call68k([this] { wait_vblank_and_upload_graphics(); }, 0x03B8u))
             return;
     }
 }
@@ -249,7 +250,7 @@ void Sor::compute_player_attack_descriptor(m_long /*entry_*/) {
 // Posts a command byte; vblank_handler consumes it (and runs DMA/sound work)
 // then clears the mailbox. Host waits on interrupt instead of a tight spin.
 // ---------------------------------------------------------------------------
-void Sor::sync_z80_1(m_long /*entry_*/) {
+void Sor::wait_vblank_and_upload_graphics(m_long /*entry_*/) {
     traceEnter(0x00010502u);
 
     memory().writeByte(kVBlankMailbox, 1);
@@ -265,7 +266,7 @@ void Sor::sync_z80_1(m_long /*entry_*/) {
     cpu().ssp += 4;
 }
 
-void Sor::sync_z80_2(m_long /*entry_*/) {
+void Sor::wait_vblank_without_graphics_upload(m_long /*entry_*/) {
     traceEnter(0x00010514u);
 
     memory().writeByte(kVBlankMailbox, 2);

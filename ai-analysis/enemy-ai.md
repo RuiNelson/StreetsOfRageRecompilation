@@ -210,7 +210,7 @@ Randomness is explicit rather than ambient. `$0104D8` is used in reaction/landin
 
 Proven difficulty effects are:
 
-- spawn filtering by low two bits of ELC metadata in `$784 (object_manager_loop)`;
+- spawn filtering by low two bits of ELC metadata in `$784 (process_timed_spawn_records)`;
 - `$93CE (ordinary_enemy_init_combat_values)` adds four to initial health `$33` and attack damage `$34` on the highest difficulty;
 - `$982C (ordinary_enemy_vector_to_velocity)` reduces large movement speed on Easy;
 - type/variant tables may already encode different baseline health/damage.
@@ -366,7 +366,7 @@ because they use the same health offset and occur in late waves.
 
 ### Object dispatch and boss identity
 
-The global object dispatcher at `$AD8E (update_select_objects)` indexes the word table at `$B236`.
+The global object dispatcher at `$AD8E (update_objects_and_build_sprites)` indexes the word table at `$B236`.
 Several entries are trampolines because the real handler lies outside the
 signed 16-bit address range.
 

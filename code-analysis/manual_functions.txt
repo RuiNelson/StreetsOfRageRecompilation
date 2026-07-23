@@ -10,8 +10,8 @@
 0084BA # begin_incremental_nemesis_decode
 008510 # continue_incremental_nemesis_decode
 0085A2 # kosinskidec
-010502 # sync_z80_1
-010514 # sync_z80_2
+010502 # wait_vblank_and_upload_graphics
+010514 # wait_vblank_without_graphics_upload
 01061C # load_z80_dac_driver (direct public Z80 API upload)
 
 # Mode-select, OPTIONS, and character-select flow.
@@ -41,7 +41,7 @@
 00919A # game_mode_selectscreenmode
 00927C # init_characterselectscreen
 0092A8 # game_mode_characterselectscreen
-00AD8E # update_select_objects
+00AD8E # update_objects_and_build_sprites
 
 # Sound — only small, side-effect-light helpers for now.
 # The full engine/channel ticks stay generated until the native port is solid.

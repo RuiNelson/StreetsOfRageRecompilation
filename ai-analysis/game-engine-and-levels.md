@@ -72,7 +72,7 @@ add.w  d0,d0
 move.l $3BA(pc,d0.w),d0
 movea.l d0,a0
 jsr     (a0)
-jsr     sync_z80_1
+jsr     wait_vblank_and_upload_graphics
 bra.s   game_infinite_loop
 ```
 
@@ -133,7 +133,7 @@ table gives the exact pipeline:
 |---:|---:|---|
 | `$00` | `$5F4 (init_level_state)` | select next wave descriptor; prepare art/palettes and initial objects |
 | `$02` | `$6A6 (update_camera_scroll_if_needed)` | wait until camera corridor is locked, then normalize entities |
-| `$04` | `$784 (object_manager_loop)` | consume timed spawn records |
+| `$04` | `$784 (process_timed_spawn_records)` | consume timed spawn records |
 | `$06` | `$810 (prepare_next_spawn_section)` | preprocess/filter the next length-prefixed spawn section |
 | `$08` | `$936 (select_deferred_spawn)` | scan deferred records for a spawn whose palette/art can be resident |
 | `$0A` | `$B76 (load_deferred_spawn_art_and_spawn)` | load required art, then materialize the deferred entity |
@@ -178,7 +178,7 @@ The important calls and their proven effects are:
 |---:|---|
 | `$19848 (load_level_graphics_maps_and_camera)` | clear camera RAM; load/decompress per-round plane data and tile maps; initialize both camera-plane objects |
 | `$110AC` | load round/HUD resources and construct HUD tile data |
-| `$1119E` | build per-round animated-palette descriptors at `$FFEE00` |
+| `$1119E (init_animated_palette_sequences)` | build per-round animated-palette descriptors at `$FFEE00` |
 | `$10E42` | load/remap HUD character art (skipped in demo mode) |
 | `$11564` | load additional HUD/display assets |
 | `$E5C (start_round_setup)` | unpack ELC data, select difficulty, seed the spawn stream and initial objects |
@@ -246,8 +246,8 @@ relative offset to the table base, and calls `$81A4 (nemesisdec_ram)` with desti
 
 The decompressed buffer contains entity records and control framing. It is not
 background map data. This is proved by the destination `$FF6800 (elc_buffer)`, the immediate
-assignment of `$FF6800 (elc_buffer)` to `$FFFC14 (display_list_head)`, and the record consumers at
-`$784 (object_manager_loop)`, `$810 (prepare_next_spawn_section)`, `$C60 (spawn_single_object)`, and `$CC0 (spawn_object_batch)`.
+assignment of `$FF6800 (elc_buffer)` to `$FFFC14 (elc_spawn_stream_cursor)`, and the record consumers at
+`$784 (process_timed_spawn_records)`, `$810 (prepare_next_spawn_section)`, `$C60 (spawn_single_object)`, and `$CC0 (spawn_object_batch)`.
 
 ### 4.3 Per-round wave descriptor roots
 
@@ -300,7 +300,7 @@ Bit 7 of byte 4 selects between two lookup families:
 - clear: its high and low nibbles select entries through `$1FACC`;
 - set: the low seven bits select a six-byte entry through `$1C3A8`.
 
-The selected pointers are passed to `$10538` during round start and `$1053E`
+The selected pointers are passed to `$10538 (load_palette_list_to_target)` during round start and `$1053E (load_palette_list_to_active)`
 during later phases. Those routines consume resource command lists. It is safer
 to call these *resource descriptors* than “palette headers”: they coordinate
 palette residency and enemy art uploads together.
@@ -308,7 +308,7 @@ palette residency and enemy art uploads together.
 ### 4.5 Separate six-byte resource table at `$1C378 (level_resource_table)`
 
 `$576 (load_level_data)` multiplies `$FFFF02 (level)` by six, reads a longword pointer, calls
-`$1053E`, and leaves the final two bytes available to its caller. The records are:
+`$1053E (load_palette_list_to_active)`, and leaves the final two bytes available to its caller. The records are:
 
 | Round | Resource-list pointer | Byte 4 | Byte 5 |
 |---:|---:|---:|---:|
@@ -382,7 +382,7 @@ spawn interpretation of the same compact record.
 
 At round start, the first six bytes of the round header set:
 
-- `$FFFC14 (display_list_head)` to `$FF6800 (elc_buffer)`;
+- `$FFFC14 (elc_spawn_stream_cursor)` to `$FF6800 (elc_buffer)`;
 - a geometry index into the four-word table at `$1C1BC (spawn_geometry_table)`.
 
 The geometry record supplies an X stride and base. `$CC0 (spawn_object_batch)` is then
@@ -399,7 +399,7 @@ from a compact shared record format.
 
 ### 5.4 Timed list
 
-After the initial batches, `$784 (object_manager_loop)` treats the current stream position as a timed
+After the initial batches, `$784 (process_timed_spawn_records)` treats the current stream position as a timed
 list:
 
 ```text
@@ -419,7 +419,7 @@ pipeline to the next phase rather than spawning an entity.
 ### 5.5 Length-prefixed and gated sections
 
 `$810 (prepare_next_spawn_section)` handles the next layer of the ELC stream. It reads a word length, saves the
-payload pointer, advances `$FFFC14 (display_list_head)` by that length, and filters compact
+payload pointer, advances `$FFFC14 (elc_spawn_stream_cursor)` by that length, and filters compact
 six-byte records in place until a byte `$99` terminator. This creates a current
 section and a pointer to the following section without allocating another
 buffer.
@@ -456,7 +456,7 @@ block and provides a compact consistency check:
 
 The `$936 -> $B76` states scan this filtered section and enforce limited
 palette/art residency. If a required resource is not resident, the record is
-deferred while `$1053E` and `$8454 (queue_nemesis_art_cues)` queue the needed art/palette. Once
+deferred while `$1053E (load_palette_list_to_active)` and `$8454 (queue_nemesis_art_cues)` queue the needed art/palette. Once
 `$FFDCD0 (art_array_cue)` becomes zero and a slot is free, the entity is spawned and the
 remaining records are compacted over it.
 
@@ -628,14 +628,14 @@ matching its leftward progression.
 
 ### 6.5 Tile-map streaming and parallax
 
-The camera state machine at `$18C22` updates strip descriptors and emits dirty
+The camera state machine at `$18C22 (dispatch_primary_camera)` updates strip descriptors and emits dirty
 rows/columns into command buffers at `$FFEA00/$FFEB20` and
-`$FFEC40/$FFECE0`. `$19656` converts world/map coordinates into VDP tile-map
-addresses. `$196A4` and the VBlank handler transfer those commands to VRAM.
+`$FFEC40/$FFECE0`. `$19656 (resolve_blockmap_and_vdp_address)` converts world/map coordinates into VDP tile-map
+addresses. `$196A4 (dispatch_background_vblank_upload)` and the VBlank handler transfer those commands to VRAM.
 
-`$190E0` derives horizontal-scroll values from camera X and per-strip ratios,
+`$190E0 (build_hscroll_strip_buffer)` derives horizontal-scroll values from camera X and per-strip ratios,
 which is the parallax mechanism. The secondary plane has its own state table at
-`$19332`; in some rounds it follows primary X at a fraction (round 1 uses direct
+`$19332 (dispatch_secondary_camera)`; in some rounds it follows primary X at a fraction (round 1 uses direct
 handling, later rounds may quarter X), while special round states animate it
 independently.
 
@@ -798,10 +798,10 @@ The following map separates established structure from provisional naming.
 | `$FFE01A (camera_x_max)` | long | primary camera maximum X boundary |
 | `$FFE01E (camera_x_min)` | long | primary camera minimum X boundary |
 | `$FFE100 (secondary_camera)` | structure | secondary camera/plane state |
-| `$FFEA00` | buffer | primary-plane row/column update commands |
-| `$FFEB20` | buffer | secondary-plane row/column update commands |
-| `$FFEC40` | buffer | primary-plane auxiliary strip updates |
-| `$FFECE0` | buffer | secondary-plane auxiliary strip updates |
+| `$FFEA00 (primary_tilemap_row_update_queue)` | buffer | primary-plane horizontal-row update commands |
+| `$FFEB20 (secondary_tilemap_row_update_queue)` | buffer | secondary-plane horizontal-row update commands |
+| `$FFEC40 (primary_tilemap_column_update_queue)` | buffer | primary-plane vertical-column update commands |
+| `$FFECE0 (secondary_tilemap_column_update_queue)` | buffer | secondary-plane vertical-column update commands |
 | `$FFFA05 (level_spawn_flow_flags)` | byte | level/spawn flow flags; bits 2–6 gate filtering, drain, boss, and transitions |
 | `$FFFA0D (wave_advance_pending)` | byte | bit 0: pending wave/camera phase advance |
 | `$FFFA14..16` | bytes | round-7 vertical transition timing/state |
@@ -814,7 +814,7 @@ The following map separates established structure from provisional naming.
 | `$FFFB16 (level_pipeline_timer)` | word | shared pipeline delay timer |
 | `$FFFB1E (active_progression_entity_count)` | word | tracked scripted gameplay entities alive |
 | `$FFFB20 (spawn_x_stride)` | word | spawn-column X stride |
-| `$FFFC14 (display_list_head)` | long | active ELC stream cursor |
+| `$FFFC14 (elc_spawn_stream_cursor)` | long | active ELC stream cursor |
 | `$FFFC28 (pending_spawn_record_ptr)` | long | deferred record selected for spawn |
 | `$FFFC2C (current_spawn_section_ptr)` | long | pointer to current filtered/length-prefixed ELC section |
 | `$FFFC30 (pending_spawn_resource_ptr)` | long | required resource-list pointer for deferred spawn |
@@ -873,9 +873,9 @@ their stated, bounded behavior:
 | Address | Confirmed boundary | Direct evidence |
 |---:|---|---|
 | `$464 (level_flow_handler)` | Late-phase entity-drain, art, music, palette, and status gates in `$FFFA72 (level_flow_flags)`. | Every read/write is a bit operation on `$FFFA72 (level_flow_flags)` or a documented phase side effect; it is pipeline state `$16`. |
-| `$576 (load_level_data)` | Select the six-byte per-level record at `$1C378 (level_resource_table)`, process its pointer, and leave its trailing parameters to the caller. | `level*6`, `(a3)+` longword, call `$1053E`, then return with `a3` advanced four bytes. |
+| `$576 (load_level_data)` | Select the six-byte per-level record at `$1C378 (level_resource_table)`, process its pointer, and leave its trailing parameters to the caller. | `level*6`, `(a3)+` longword, call `$1053E (load_palette_list_to_active)`, then return with `a3` advanced four bytes. |
 | `$E5C (start_round_setup)` | Decode the selected ELC stream, choose the effective difficulty, seed the first wave descriptor, and create the round-specific fixed objects. | The level-indexed `$1B036 (level_elc_offset_table)` decode to `$FF6800 (elc_buffer)` and all eight level branches are explicit. |
-| `$810 (prepare_next_spawn_section)` | Split the next length-prefixed ELC section and compact records that pass difficulty/player-count gates. | The word length advances `$FFFC14 (display_list_head)`; surviving six-byte records are copied in place until `$99`. |
+| `$810 (prepare_next_spawn_section)` | Split the next length-prefixed ELC section and compact records that pass difficulty/player-count gates. | The word length advances `$FFFC14 (elc_spawn_stream_cursor)`; surviving six-byte records are copied in place until `$99`. |
 | `$936 (select_deferred_spawn)` | Scan the filtered section and select a record whose ordinary-enemy palette/art residency can be satisfied. | Record/type checks feed the `$FFFA60..$FFFA70` residency counters and save the selected pointer at `$FFFC28 (pending_spawn_record_ptr)`. |
 | `$B76 (load_deferred_spawn_art_and_spawn)` | Finish any required resource load, spawn the selected record, and compact the remainder over it. | It waits for `$FFDCD0 (art_array_cue)`, calls the resource loader/spawner, then shifts six-byte records through the `$99` terminator. |
 | `$8454 (queue_nemesis_art_cues)` | Resolve an art-set list and append six-byte source/destination records to the incremental Nemesis queue. | The producer and `$84BA/$8510` consumer agree on the exact longword-source/word-VRAM record layout. |
@@ -908,7 +908,7 @@ The highest-value runtime trace would record once per change:
 
 ```text
 frame, level, wave, $FA05, $FA0D, $FA72, $FB15, $FB1E,
-camera_state, camera_x, min_x, max_x, display_list_head
+camera_state, camera_x, min_x, max_x, elc_spawn_stream_cursor
 ```
 
 That small trace would validate the static state graph without requiring a full

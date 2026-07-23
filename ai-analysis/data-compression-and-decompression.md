@@ -170,7 +170,7 @@ offline decoder's crossing-token regression test exercises this exact case.
 
 ### Direct consumers
 
-`$A63A (load_nemesis_art_bundle)` is a four-ID bundle loader. Each nonzero byte in `d0` selects an eight-byte record from the table at `$00A662`: a VDP command long and a Nemesis source pointer. It then calls `$8192 (nemesisdec_vram)`, so these art streams decode directly to VRAM.
+`$A63A (load_nemesis_art_bundle)` is a four-ID bundle loader. Each nonzero byte in `d0` selects an eight-byte record from the table at `$A662 (nemesis_art_bundle_table)`: a VDP command long and a Nemesis source pointer. It then calls `$8192 (nemesisdec_vram)`, so these art streams decode directly to VRAM.
 
 `$E5C (start_round_setup)` selects one Nemesis stream per level through the relative-word table at `$1B036 (level_elc_offset_table)`, sets `a4=$FF6800`, and calls `$81A4 (nemesisdec_ram)`. The resulting data is the enemy load-cue data consumed during that round, demonstrating that Nemesis is a nibble-stream codec rather than a tile-only API.
 
@@ -320,7 +320,7 @@ function enigma_decode(src, dst, base_tile):
 
 ### Consumers and validated streams
 
-`$A82A (load_enigma_map_bundle)` is the Enigma analogue of the Nemesis bundle loader. A nonzero ID selects a ten-byte record at `$00A85A`: destination pointer, source pointer, and base tile word. It calls `$82D2 (enigmadec_with_plane_header)`, retaining the leading eight-byte plane header.
+`$A82A (load_enigma_map_bundle)` is the Enigma analogue of the Nemesis bundle loader. A nonzero ID selects a ten-byte record at `$A85A (enigma_map_bundle_table)`: destination pointer, source pointer, and base tile word. It calls `$82D2 (enigmadec_with_plane_header)`, retaining the leading eight-byte plane header.
 
 Representative ROM-validated streams are:
 
@@ -334,7 +334,7 @@ Representative ROM-validated streams are:
 
 The compressed-byte count includes the six-byte Enigma header and, for `$82D2 (enigmadec_with_plane_header)`, the preceding eight-byte plane header; it is rounded to the even source cursor returned by the assembly.
 
-During `$19848 (load_level_graphics_maps_and_camera)` level setup, two Enigma streams selected from the per-level table at `$05F5B8` decode to `$FF4000` and `$FF4800`. These are later referenced by the level-plane structures at `$FFE000 (primary_camera)` and `$FFE100 (secondary_camera)`, making Enigma central to level tilemap construction rather than merely a menu codec.
+During `$19848 (load_level_graphics_maps_and_camera)` level setup, two Enigma streams selected from the per-level table at `$05F5B8` decode to `$FF4000 (primary_metatile_table)` and `$FF4800 (secondary_metatile_table)`. These are later referenced by the level-plane structures at `$FFE000 (primary_camera)` and `$FFE100 (secondary_camera)`, making Enigma central to level tilemap construction rather than merely a menu codec.
 
 ## Kosinski
 
@@ -429,7 +429,7 @@ function kosinski_decode(src, dst):
 
 `$1061C (load_z80_dac_driver)` deserves a size caveat. The Kosinski stream expands to exactly `$1F00` (7,936) bytes, but `$010656` copies only `dbf d2` with `d2=$1EC6`, i.e. `$1EC7` (7,879) bytes, into Z80 RAM `$0000`. The final 57 decompressed bytes are not copied. The loader separately writes sample-bank bytes to Z80 `$1FF8-$1FFB`, leaving the intervening mailbox/workspace region under explicit runtime control.
 
-`$B748 (load_kosinski_story_asset)` selects fourteen Kosinski ending/story assets through eight-byte `(source,destination)` records at `$00B768`. Validated output sizes range from 512 bytes (`$039B80`) to 11,616 bytes (`$037360`), and destinations range across work RAM (`$FF0000`, `$FF0620`, `$FF0BE0`, and others). The caller can then upload art, retain maps, or build scene data without changing the codec.
+`$B748 (load_kosinski_story_asset)` selects fourteen Kosinski ending/story assets through eight-byte `(source,destination)` records at `$00B768`. Validated output sizes range from 512 bytes (`$039B80`) to 11,616 bytes (`$037360`), and destinations range across work RAM (`$FF0000 (primary_plane_blockmap)`, `$FF0620`, `$FF0BE0`, and others). The caller can then upload art, retain maps, or build scene data without changing the codec.
 
 ### Level setup at `$19848 (load_level_graphics_maps_and_camera)`
 
@@ -442,11 +442,11 @@ one record:   Kosinski source long (destination $FFA000)
 then:         palette and plane configuration
 ```
 
-The first two Kosinski streams are decoded through `$FF8000 (decompression_scratch_buffer)` and copied to the VDP. The Enigma streams form the two main level-map datasets. The final Kosinski stream populates `$FFA000` and is subsequently used by the scrolling/plane machinery.
+The first two Kosinski streams are decoded through `$FF8000 (decompression_scratch_buffer)` and copied to the VDP. The Enigma streams form the two main level-map datasets. The final Kosinski stream populates `$FFA000 (level_collision_class_map)` and is subsequently used by the scrolling/plane machinery.
 
 ROM-validated source sizes show why more than one codec is useful:
 
-| Level | Kosinski art 1 | Kosinski art 2 | Enigma map 1 | Enigma map 2 | Kosinski `$FFA000` |
+| Level | Kosinski art 1 | Kosinski art 2 | Enigma map 1 | Enigma map 2 | Kosinski `$FFA000 (level_collision_class_map)` |
 |---:|---:|---:|---:|---:|---:|
 | 0 | 2,791 -> 5,056 | 5,716 -> 12,224 | 90 B -> 228 W | 1,134 B -> 920 W | 70 -> 5,040 |
 | 1 | 3,401 -> 5,952 | 548 -> 1,120 | 558 B -> 528 W | 132 B -> 132 W | 70 -> 5,040 |
@@ -471,7 +471,7 @@ is a fixed VRAM-region refresh whose unused tail must not be interpreted as
 part of the compressed asset. The second art command begins at a per-level VRAM
 address chosen to follow the first asset's useful tile range.
 
-`$0199C6` performs a further level-dependent Kosinski decode into `$FF8000 (decompression_scratch_buffer)`, then copies selected 16-byte chunks into the large plane buffers at `$FF0000`/`$FF2000`. This is the bridge from compressed block definitions to the runtime level layout assembled for scrolling.
+`$199C6 (build_camera_plane_buffers)` performs a further level-dependent Kosinski decode into `$FF8000 (decompression_scratch_buffer)`, then copies selected 16-byte chunks into the large plane buffers at `$FF0000 (primary_plane_blockmap)`/`$FF2000 (secondary_plane_blockmap)`. This is the bridge from compressed block definitions to the runtime level layout assembled for scrolling.
 
 ## Format comparison and invariants
 
@@ -529,7 +529,7 @@ section remain separate visual/asset-identification questions.
 
 ### Open questions
 
-1. Which exact VRAM tile ranges correspond to every ID in the Nemesis table at `$00A662`?
+1. Which exact VRAM tile ranges correspond to every ID in the Nemesis table at `$A662 (nemesis_art_bundle_table)`?
 2. Which data fields in `$FFDD14` and `$FFDD18` merit semantic names beyond saved decoder scratch state?
 
 ## Analysis-data update ledger

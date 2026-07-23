@@ -372,14 +372,14 @@ Key-on / key-off use YM register **`$28`**. Direct PCM (`$D0`–`$DF`) bypasses 
 
 ---
 
-## 9. `$10502 (sync_z80_1)` / `$10514 (sync_z80_2)` (not sound mailboxes)
+## 9. `$10502 (wait_vblank_and_upload_graphics)` / `$10514 (wait_vblank_without_graphics_upload)` (not sound mailboxes)
 
 | Reference | Role |
 | --- | ------ |
-| `$10502 (sync_z80_1)` | Write **1** to `$FFFA00`, enable IRQs (`sr=$2500`), spin until `$19D16 (vblank_handler)` clears it |
-| `$10514 (sync_z80_2)` | Same with **2** |
+| `$10502 (wait_vblank_and_upload_graphics)` | Write **1** to `$FFFA00 (vblank_request)`, enable IRQs (`sr=$2500`), spin until `$19D16 (vblank_handler)` clears it |
+| `$10514 (wait_vblank_without_graphics_upload)` | Same with **2** |
 
-These are **VBlank wait** helpers, not Z80 sound mailboxes. `$19D16 (vblank_handler)` consumes `$FFFA00` (scroll/DMA, often with BUSREQ), then runs `$72914 (sound_engine)`. Manual C++ bodies: `SorManualFunctions.cpp`.
+These are **VBlank wait** helpers, not Z80 sound mailboxes. `$19D16 (vblank_handler)` consumes `$FFFA00 (vblank_request)` (scroll/DMA, often with BUSREQ), then runs `$72914 (sound_engine)`. Manual C++ bodies: `SorManualFunctions.cpp`.
 
 ---
 
@@ -388,8 +388,8 @@ These are **VBlank wait** helpers, not Z80 sound mailboxes. `$19D16 (vblank_hand
 | Reference |
 | --- |
 | `$85A2 (kosinskidec)` |
-| `$10502 (sync_z80_1)` |
-| `$10514 (sync_z80_2)` |
+| `$10502 (wait_vblank_and_upload_graphics)` |
+| `$10514 (wait_vblank_without_graphics_upload)` |
 | `$1061C (load_z80_dac_driver)` |
 | `$1069E (queue_sound_id)` |
 | `$11B12 (play_level_music)` |
