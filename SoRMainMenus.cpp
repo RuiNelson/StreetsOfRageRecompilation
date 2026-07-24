@@ -90,7 +90,7 @@ constexpr m_word wrappedStep(m_word value, m_word maximum, bool increment) {
 // Mode-select / OPTIONS ($0FE8-$1564)
 // ---------------------------------------------------------------------------
 
-void Sor::init_game_start_screen(m_long entry_) {
+void StreetsOfRage::init_game_start_screen(m_long entry_) {
     if (entry_ == 0x1050u || entry_ == 0x1058u) {
         traceEnter(entry_);
         memory().writeByte(kSelectMenuOptionCount, entry_ == 0x1050u ? 3 : 1);
@@ -133,7 +133,7 @@ void Sor::init_game_start_screen(m_long entry_) {
     cpu().ssp += 4;
 }
 
-void Sor::game_start_screen_update(m_long /*entry_*/) {
+void StreetsOfRage::game_start_screen_update(m_long /*entry_*/) {
     traceEnter(0x108Eu);
 
     const m_word substate = memory().readWord(kSelectScreenSubstate);
@@ -151,13 +151,13 @@ void Sor::game_start_screen_update(m_long /*entry_*/) {
     dispatch(cpu().a[1] + signExtendWord(relative));
 }
 
-void Sor::select_menu_wait_fade_in(m_long /*entry_*/) {
+void StreetsOfRage::select_menu_wait_fade_in(m_long /*entry_*/) {
     traceEnter(0x10F2u);
     SOR_CALL_68K(player_state_dispatcher(), 0x10F6u);
     select_menu_wait_fade(0x10F6u);
 }
 
-void Sor::select_menu_input(m_long /*entry_*/) {
+void StreetsOfRage::select_menu_input(m_long /*entry_*/) {
     traceEnter(0x1104u);
 
     const m_byte confirm = static_cast<m_byte>(memory().readByte(kP1ButtonPress) & 0xF0u);
@@ -175,7 +175,7 @@ void Sor::select_menu_input(m_long /*entry_*/) {
     cpu().ssp += 4;
 }
 
-void Sor::select_menu_resolve_choice(m_long /*entry_*/) {
+void StreetsOfRage::select_menu_resolve_choice(m_long /*entry_*/) {
     traceEnter(0x114Au);
 
     const m_word cursor = memory().readWord(kSelectMenuCursor);
@@ -198,7 +198,7 @@ void Sor::select_menu_resolve_choice(m_long /*entry_*/) {
     cpu().ssp += 4;
 }
 
-void Sor::options_menu_build(m_long /*entry_*/) {
+void StreetsOfRage::options_menu_build(m_long /*entry_*/) {
     traceEnter(0x117Cu);
 
     SOR_CALL_68K(sub_007f00(), 0x1180u);
@@ -225,7 +225,7 @@ void Sor::options_menu_build(m_long /*entry_*/) {
     cpu().ssp += 4;
 }
 
-void Sor::options_input_sound_test(m_long /*entry_*/) {
+void StreetsOfRage::options_input_sound_test(m_long /*entry_*/) {
     traceEnter(0x1218u);
 
     cpu().setDw(0, memory().readWord(kSoundTestIndex));
@@ -273,7 +273,7 @@ void Sor::options_input_sound_test(m_long /*entry_*/) {
     cpu().ssp += 4;
 }
 
-void Sor::options_input_difficulty(m_long /*entry_*/) {
+void StreetsOfRage::options_input_difficulty(m_long /*entry_*/) {
     traceEnter(0x131Au);
 
     cpu().setDw(0, memory().readWord(kDifficulty));
@@ -303,7 +303,7 @@ void Sor::options_input_difficulty(m_long /*entry_*/) {
     options_highlight_difficulty(0x12E0u);
 }
 
-void Sor::options_input_controls(m_long /*entry_*/) {
+void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
     traceEnter(0x1390u);
 
     cpu().setDw(0, memory().readWord(kControlScheme));
@@ -333,7 +333,7 @@ void Sor::options_input_controls(m_long /*entry_*/) {
     options_highlight_controls(0x136Cu);
 }
 
-void Sor::options_input_lives(m_long /*entry_*/) {
+void StreetsOfRage::options_input_lives(m_long /*entry_*/) {
     traceEnter(0x1404u);
 
     cpu().setDw(0, memory().readWord(kLivesSetting));
@@ -361,7 +361,7 @@ void Sor::options_input_lives(m_long /*entry_*/) {
     options_draw_lives_digit();
 }
 
-void Sor::options_input_level(m_long /*entry_*/) {
+void StreetsOfRage::options_input_level(m_long /*entry_*/) {
     traceEnter(0x1476u);
 
     cpu().setDw(0, memory().readWord(kLevel));
@@ -389,7 +389,7 @@ void Sor::options_input_level(m_long /*entry_*/) {
     options_draw_level_digit();
 }
 
-void Sor::options_input_exit(m_long /*entry_*/) {
+void StreetsOfRage::options_input_exit(m_long /*entry_*/) {
     traceEnter(0x14CAu);
 
     SOR_CALL_68K(options_row_nav(), 0x14CEu);
@@ -409,14 +409,14 @@ void Sor::options_input_exit(m_long /*entry_*/) {
     cpu().ssp += 4;
 }
 
-void Sor::options_menu_return(m_long /*entry_*/) {
+void StreetsOfRage::options_menu_return(m_long /*entry_*/) {
     traceEnter(0x14EAu);
     memory().writeWord(kGameState, 0x10);
     cpu().setNZClearVC(0x10u, 0x8000u);
     cpu().ssp += 4;
 }
 
-void Sor::options_row_nav(m_long /*entry_*/) {
+void StreetsOfRage::options_row_nav(m_long /*entry_*/) {
     traceEnter(0x14F2u);
 
     const m_byte vertical = static_cast<m_byte>(memory().readByte(kP1ButtonPress) & 0x03u);
@@ -453,7 +453,7 @@ void Sor::options_row_nav(m_long /*entry_*/) {
     queue_sound_id();
 }
 
-void Sor::select_menu_sync_pad_count(m_long /*entry_*/) {
+void StreetsOfRage::select_menu_sync_pad_count(m_long /*entry_*/) {
     traceEnter(0x1546u);
 
     const bool p2Missing = memory().readByte(kP2PadMissing) != 0;
@@ -471,7 +471,7 @@ void Sor::select_menu_sync_pad_count(m_long /*entry_*/) {
     cpu().ssp += 4;
 }
 
-void Sor::player_state_dispatcher(m_long /*entry_*/) {
+void StreetsOfRage::player_state_dispatcher(m_long /*entry_*/) {
     traceEnter(0x1564u);
     cpu().a[0] = kP1Object;
     cpu().a[1] = kPlayerStateJumpTable;
@@ -486,7 +486,7 @@ void Sor::player_state_dispatcher(m_long /*entry_*/) {
 // Character select ($1634-$1916)
 // ---------------------------------------------------------------------------
 
-void Sor::init_character_select_screen(m_long /*entry_*/) {
+void StreetsOfRage::init_character_select_screen(m_long /*entry_*/) {
     traceEnter(0x1634u);
 
     cpu().a[1] = 0x00FF0000u;
@@ -537,7 +537,7 @@ void Sor::init_character_select_screen(m_long /*entry_*/) {
     cpu().ssp += 4;
 }
 
-void Sor::screen_state_dispatcher(m_long /*entry_*/) {
+void StreetsOfRage::screen_state_dispatcher(m_long /*entry_*/) {
     traceEnter(0x170Au);
     cpu().a[1] = kCharSelectJumpTable;
     cpu().setDw(0, memory().readWord(kCharSelectSubstate));
@@ -547,7 +547,7 @@ void Sor::screen_state_dispatcher(m_long /*entry_*/) {
     dispatch(cpu().a[1] + signExtendWord(relative));
 }
 
-void Sor::char_select_play_music(m_long /*entry_*/) {
+void StreetsOfRage::char_select_play_music(m_long /*entry_*/) {
     traceEnter(0x1726u);
     cpu().d[7] = 0xFFFFFF8Au;
     SOR_CALL_68K(queue_sound_id(), 0x172Eu);
@@ -555,7 +555,7 @@ void Sor::char_select_play_music(m_long /*entry_*/) {
     update_objects_and_build_sprites();
 }
 
-void Sor::char_select_interactive(m_long /*entry_*/) {
+void StreetsOfRage::char_select_interactive(m_long /*entry_*/) {
     traceEnter(0x175Au);
     SOR_CALL_68K(char_select_idle_tick(), 0x175Eu);
     SOR_CALL_68K(update_objects_and_build_sprites(), 0x1764u);
@@ -571,7 +571,7 @@ void Sor::char_select_interactive(m_long /*entry_*/) {
     cpu().ssp += 4;
 }
 
-void Sor::initialize_player_continues(m_long /*entry_*/) {
+void StreetsOfRage::initialize_player_continues(m_long /*entry_*/) {
     traceEnter(0x17A2u);
 
     cpu().d[0] = 3;
@@ -593,7 +593,7 @@ void Sor::initialize_player_continues(m_long /*entry_*/) {
     queue_sound_id();
 }
 
-void Sor::char_select_player_input(m_long /*entry_*/) {
+void StreetsOfRage::char_select_player_input(m_long /*entry_*/) {
     traceEnter(0x1916u);
 
     const m_long object = cpu().a[0];
@@ -677,7 +677,7 @@ void Sor::char_select_player_input(m_long /*entry_*/) {
 // Mode wrappers ($9170-$92A8) and shared select-screen object pass ($AD8E)
 // ---------------------------------------------------------------------------
 
-void Sor::init_selectscreenmode(m_long /*entry_*/) {
+void StreetsOfRage::init_selectscreenmode(m_long /*entry_*/) {
     traceEnter(0x9170u);
     memory().writeWord(kVdpControl, memory().readWord(0xFFFFFF48u));
     cpu().setStatus(0x2500u);
@@ -690,12 +690,12 @@ void Sor::init_selectscreenmode(m_long /*entry_*/) {
     game_mode_selectscreenmode();
 }
 
-void Sor::game_mode_selectscreenmode(m_long /*entry_*/) {
+void StreetsOfRage::game_mode_selectscreenmode(m_long /*entry_*/) {
     traceEnter(0x919Au);
     game_start_screen_update();
 }
 
-void Sor::init_characterselectscreen(m_long /*entry_*/) {
+void StreetsOfRage::init_characterselectscreen(m_long /*entry_*/) {
     traceEnter(0x927Cu);
     memory().writeWord(kVdpControl, memory().readWord(0xFFFFFF48u));
     cpu().setStatus(0x2500u);
@@ -709,12 +709,12 @@ void Sor::init_characterselectscreen(m_long /*entry_*/) {
     game_mode_characterselectscreen();
 }
 
-void Sor::game_mode_characterselectscreen(m_long /*entry_*/) {
+void StreetsOfRage::game_mode_characterselectscreen(m_long /*entry_*/) {
     traceEnter(0x92A8u);
     screen_state_dispatcher();
 }
 
-void Sor::update_objects_and_build_sprites(m_long entry_) {
+void StreetsOfRage::update_objects_and_build_sprites(m_long entry_) {
     traceEnter(entry_ == 0xAE10u ? 0xAE10u : 0xAD8Eu);
 
     if (entry_ != 0xAE10u) {

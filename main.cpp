@@ -1,4 +1,4 @@
-#include "SorRuntime.hpp"
+#include "Sor.hpp"
 #include "config/controls/ControlsConfigUI.hpp"
 #include <CLI/CLI.hpp>
 #include <cstdint>
@@ -75,10 +75,10 @@ int main(int argc, char *argv[]) {
         runControlsConfig();
     }
     if (runSorFlag || !configControlsFlag) {
-        SorRuntime sor(sorRomPath,
-                       static_cast<VDP::Synchronization>(sorVSyncMode),
-                       VDP::Integer,
-                       debugUtilsFlag ? static_cast<std::uint16_t>(remoteAccessPort) : 0);
+        StreetsOfRage sor(sorRomPath,
+                          static_cast<VDP::Synchronization>(sorVSyncMode),
+                          VDP::Integer,
+                          debugUtilsFlag ? static_cast<std::uint16_t>(remoteAccessPort) : 0);
         configureEnvironment(sor);
         sor.setDebugLog(sorDebugFlag);
         sor.setDebugUtilities(debugUtilsFlag);

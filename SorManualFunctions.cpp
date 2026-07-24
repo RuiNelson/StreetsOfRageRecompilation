@@ -53,7 +53,7 @@ constexpr m_word kStatusIrqEnabled = 0x2500u;
 // already deliver IRQs. Also owns
 // the mid-entry at $412 (boot checksum-fail: clear CRAM and hang).
 // ---------------------------------------------------------------------------
-void Sor::game_infinite_loop(m_long entry_) {
+void StreetsOfRage::game_infinite_loop(m_long entry_) {
     // Soft 68000 jsr/rts. Mirrors CALL / CALL_DISPATCH in generated code: push
     // return PC, call, abort if the callee unwound past this frame.
     const auto call68k = [this](auto &&fn, m_long retPc) -> bool {
@@ -116,7 +116,7 @@ void Sor::game_infinite_loop(m_long entry_) {
 // caller request from the SDL thread; that request replaces the button/resource
 // checks and decrement, so the normal event runs without consuming a special.
 // ---------------------------------------------------------------------------
-void Sor::try_activate_police_special(m_long /*entry_*/) {
+void StreetsOfRage::try_activate_police_special(m_long /*entry_*/) {
     traceEnter(0x3FCCu);
 
     const auto call68k = [this](auto &&fn, m_long retPc) -> bool {
@@ -200,7 +200,7 @@ void Sor::try_activate_police_special(m_long /*entry_*/) {
 // half_damage is set (P1-vs-P2). Stores damage in object+$34 and packs the
 // original high nibble into object+$42. Host cheat may boost P1 damage only.
 // ---------------------------------------------------------------------------
-void Sor::compute_player_attack_descriptor(m_long /*entry_*/) {
+void StreetsOfRage::compute_player_attack_descriptor(m_long /*entry_*/) {
     traceEnter(0x41EAu);
 
     const m_long object = cpu().a[0];
@@ -250,7 +250,7 @@ void Sor::compute_player_attack_descriptor(m_long /*entry_*/) {
 // Posts a command byte; vblank_handler consumes it (and runs DMA/sound work)
 // then clears the mailbox. Host waits on interrupt instead of a tight spin.
 // ---------------------------------------------------------------------------
-void Sor::wait_vblank_and_upload_graphics(m_long /*entry_*/) {
+void StreetsOfRage::wait_vblank_and_upload_graphics(m_long /*entry_*/) {
     traceEnter(0x00010502u);
 
     memory().writeByte(kVBlankMailbox, 1);
@@ -266,7 +266,7 @@ void Sor::wait_vblank_and_upload_graphics(m_long /*entry_*/) {
     cpu().ssp += 4;
 }
 
-void Sor::wait_vblank_without_graphics_upload(m_long /*entry_*/) {
+void StreetsOfRage::wait_vblank_without_graphics_upload(m_long /*entry_*/) {
     traceEnter(0x00010514u);
 
     memory().writeByte(kVBlankMailbox, 2);

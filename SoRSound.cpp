@@ -20,7 +20,7 @@ constexpr m_long kHalfDamage    = 0xFFFFFA43u;
 // $01069E — queue a sound ID (d7) into the 3-slot play_se queue at $FFF00A
 // Alternate entry $0106CA: map object+$50 through ROM table $106D6 into d7 first.
 // ---------------------------------------------------------------------------
-void Sor::queue_sound_id(m_long entry_) {
+void StreetsOfRage::queue_sound_id(m_long entry_) {
     traceEnter(0x0001069Eu);
     auto &mem = memory();
 
@@ -50,7 +50,7 @@ void Sor::queue_sound_id(m_long entry_) {
 // ---------------------------------------------------------------------------
 // $011B12 — post the current level's BGM (or alternate IDs under flags)
 // ---------------------------------------------------------------------------
-void Sor::play_level_music(m_long /*entry_*/) {
+void StreetsOfRage::play_level_music(m_long /*entry_*/) {
     traceEnter(0x00011B12u);
     auto &mem = memory();
 

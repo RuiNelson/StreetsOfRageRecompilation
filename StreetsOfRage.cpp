@@ -1,6 +1,7 @@
-#include "SorRuntime.hpp"
+#include "Sor.hpp"
 #include "SorCheats.hpp"
 #include "Logger.hpp"
+#include <cstdio>
 
 namespace {
 
@@ -124,7 +125,7 @@ int killInstantiatedEnemies(SystemMemory &memory) {
 
 } // namespace
 
-void SorRuntime::handleOptionHotkey(OptionHotkeyCode keyCode) {
+void StreetsOfRage::handleOptionHotkey(OptionHotkeyCode keyCode) {
     if (keyCode.source != OptionHotkeyCode::Source::Keyboard)
         return;
 
@@ -184,4 +185,49 @@ void SorRuntime::handleOptionHotkey(OptionHotkeyCode keyCode) {
     memory().writeWord(kWave, 0);
     memory().writeWord(kGameState, kLevelIntroState);
     Logger::log("[cheat] loading level %d of %d", level + 1, kLevelCount);
+}
+
+void StreetsOfRage::dumpUnhandledDispatchCpuState() {
+    std::fprintf(stderr,
+                 "[dispatch] SR=$%04X SSP=$%06X USP=$%06X PC=$%06X\n",
+                 static_cast<unsigned>(cpu().status()),
+                 static_cast<unsigned>(cpu().ssp & 0x00FFFFFFu),
+                 static_cast<unsigned>(cpu().usp & 0x00FFFFFFu),
+                 static_cast<unsigned>(cpu().pc & 0x00FFFFFFu));
+    std::fprintf(stderr,
+                 "[dispatch] D0=$%08X D1=$%08X D2=$%08X D3=$%08X "
+                 "D4=$%08X D5=$%08X D6=$%08X D7=$%08X\n",
+                 static_cast<unsigned>(cpu().d[0]),
+                 static_cast<unsigned>(cpu().d[1]),
+                 static_cast<unsigned>(cpu().d[2]),
+                 static_cast<unsigned>(cpu().d[3]),
+                 static_cast<unsigned>(cpu().d[4]),
+                 static_cast<unsigned>(cpu().d[5]),
+                 static_cast<unsigned>(cpu().d[6]),
+                 static_cast<unsigned>(cpu().d[7]));
+    std::fprintf(stderr,
+                 "[dispatch] A0=$%06X A1=$%06X A2=$%06X A3=$%06X "
+                 "A4=$%06X A5=$%06X A6=$%06X\n",
+                 static_cast<unsigned>(cpu().a[0] & 0x00FFFFFFu),
+                 static_cast<unsigned>(cpu().a[1] & 0x00FFFFFFu),
+                 static_cast<unsigned>(cpu().a[2] & 0x00FFFFFFu),
+                 static_cast<unsigned>(cpu().a[3] & 0x00FFFFFFu),
+                 static_cast<unsigned>(cpu().a[4] & 0x00FFFFFFu),
+                 static_cast<unsigned>(cpu().a[5] & 0x00FFFFFFu),
+                 static_cast<unsigned>(cpu().a[6] & 0x00FFFFFFu));
+
+    const m_long a0 = cpu().a[0] & 0x00FFFFFFu;
+    std::fprintf(stderr,
+                 "[dispatch] object@A0 type=%02X flags=%02X state30=%02X next31=%02X "
+                 "ptr4=%08X anim8=%04X timerE=%04X stack=%08X %08X %08X\n",
+                 static_cast<unsigned>(memory().readByte(a0 + 0)),
+                 static_cast<unsigned>(memory().readByte(a0 + 1)),
+                 static_cast<unsigned>(memory().readByte(a0 + 0x30)),
+                 static_cast<unsigned>(memory().readByte(a0 + 0x31)),
+                 static_cast<unsigned>(memory().readLong(a0 + 4)),
+                 static_cast<unsigned>(memory().readWord(a0 + 8)),
+                 static_cast<unsigned>(memory().readWord(a0 + 0x0E)),
+                 static_cast<unsigned>(memory().readLong(cpu().ssp)),
+                 static_cast<unsigned>(memory().readLong(cpu().ssp + 4)),
+                 static_cast<unsigned>(memory().readLong(cpu().ssp + 8)));
 }

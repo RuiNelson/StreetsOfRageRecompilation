@@ -399,15 +399,15 @@ struct IncrementalNemesisState {
 };
 
 // The 68000 CPU and its IRQ handler execute on one host thread. Keying the
-// resumable host buffer by Sor instance keeps independent environments apart.
-thread_local std::unordered_map<Sor *, IncrementalNemesisState> incrementalNemesis;
+// resumable host buffer by StreetsOfRage instance keeps independent environments apart.
+thread_local std::unordered_map<StreetsOfRage *, IncrementalNemesisState> incrementalNemesis;
 
 } // namespace
 
 // ---------------------------------------------------------------------------
 // $8192/$81A4 — blocking Nemesis to VDP or 68000 work RAM.
 // ---------------------------------------------------------------------------
-void Sor::nemesisdec_vram(m_long entry_) {
+void StreetsOfRage::nemesisdec_vram(m_long entry_) {
     const bool ramDestination = entry_ == 0x81A4u;
     traceEnter(ramDestination ? 0x81A4u : 0x8192u);
 
@@ -437,7 +437,7 @@ void Sor::nemesisdec_vram(m_long entry_) {
 // ---------------------------------------------------------------------------
 // $82D2 — copy the plane header, then share the Enigma decoder stack frame.
 // ---------------------------------------------------------------------------
-void Sor::enigmadec_with_plane_header(m_long /*entry_*/) {
+void StreetsOfRage::enigmadec_with_plane_header(m_long /*entry_*/) {
     traceEnter(0x82D2u);
 
     const auto readByte = [this](m_long address) {
@@ -462,7 +462,7 @@ void Sor::enigmadec_with_plane_header(m_long /*entry_*/) {
 // ---------------------------------------------------------------------------
 // $82D6, plus the real tail-entry wrappers at $112C0 and $12832.
 // ---------------------------------------------------------------------------
-void Sor::enigmadec(m_long entry_) {
+void StreetsOfRage::enigmadec(m_long entry_) {
     traceEnter(entry_);
 
     if (entry_ == 0x000112C0u) {
@@ -499,7 +499,7 @@ void Sor::enigmadec(m_long entry_) {
 // ---------------------------------------------------------------------------
 // $84BA — build a host-owned incremental Nemesis stream.
 // ---------------------------------------------------------------------------
-void Sor::begin_incremental_nemesis_decode(m_long /*entry_*/) {
+void StreetsOfRage::begin_incremental_nemesis_decode(m_long /*entry_*/) {
     traceEnter(0x84BAu);
 
     const m_long source = memory().readLong(kArtQueue);
@@ -550,7 +550,7 @@ void Sor::begin_incremental_nemesis_decode(m_long /*entry_*/) {
 // ---------------------------------------------------------------------------
 // $8510 — upload at most five decoded tiles through the public VDP ports.
 // ---------------------------------------------------------------------------
-void Sor::continue_incremental_nemesis_decode(m_long /*entry_*/) {
+void StreetsOfRage::continue_incremental_nemesis_decode(m_long /*entry_*/) {
     traceEnter(0x8510u);
 
     m_word remaining = memory().readWord(kIncrementalTiles);
@@ -621,7 +621,7 @@ void Sor::continue_incremental_nemesis_decode(m_long /*entry_*/) {
 // ---------------------------------------------------------------------------
 // $85A2 — blocking Kosinski to 68000 work RAM.
 // ---------------------------------------------------------------------------
-void Sor::kosinskidec(m_long /*entry_*/) {
+void StreetsOfRage::kosinskidec(m_long /*entry_*/) {
     traceEnter(0x85A2u);
 
     const auto readByte = [this](m_long address) {
@@ -641,7 +641,7 @@ void Sor::kosinskidec(m_long /*entry_*/) {
 // ---------------------------------------------------------------------------
 // $1061C — decode the DAC driver in host memory and write Z80 RAM directly.
 // ---------------------------------------------------------------------------
-void Sor::load_z80_dac_driver(m_long /*entry_*/) {
+void StreetsOfRage::load_z80_dac_driver(m_long /*entry_*/) {
     traceEnter(0x0001061Cu);
 
     z80().setReset(false);
