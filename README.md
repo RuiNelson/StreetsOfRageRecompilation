@@ -224,7 +224,7 @@ scripted sequence, but bypasses the special-counter requirement and decrement.
 It still respects normal blockers such as the level intro, an active police
 sequence, dead players, and Round 7 transitions.
 
-Punch power is implemented in `SorCheats` and hooked from the hand-written
+Punch power is implemented in `SoRCheats` and hooked from the hand-written
 attack-strength routine (`$0041EA`). When enabled, only the player-1 object
 (`$FFB800`) has its damage nibble multiplied by 12 and clamped to `0x0F`; other
 objects and the upper nibble that drives hit reaction are left alone. Toggle
@@ -356,11 +356,11 @@ tree so `--full` does not wipe it:
 - `CPU68K.hpp` / `RecompilationEnvironment.*` — 68000 register file and host
   environment that owns it
 - `SorRuntime.*` — runtime hooks (hotkeys)
-- `SorManualFunctions.cpp` — bodies listed in `manual_functions.txt`
+- `SoRManualFunctions.cpp` — bodies listed in `manual_functions.txt`
 - `SoRDecompress.cpp` — native Nemesis/Enigma/Kosinski decoders and direct VDP/Z80 delivery
 - `SoRMainMenus.cpp` — native mode-select, OPTIONS, and character-select flow
 - `SoRSound.cpp` — small native sound helpers
-- `SorCheats.*` — thread-safe punch-power and free-police cheat state
+- `SoRCheats.*` — thread-safe punch-power and free-police cheat state
 - `../scripts/` — centralized configure, generation, build, run, disassembly,
   and discovery entry points
 

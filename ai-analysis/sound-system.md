@@ -379,7 +379,7 @@ Key-on / key-off use YM register **`$28`**. Direct PCM (`$D0`–`$DF`) bypasses 
 | `$10502 (wait_vblank_and_upload_graphics)` | Write **1** to `$FFFA00 (vblank_request)`, enable IRQs (`sr=$2500`), spin until `$19D16 (vblank_handler)` clears it |
 | `$10514 (wait_vblank_without_graphics_upload)` | Same with **2** |
 
-These are **VBlank wait** helpers, not Z80 sound mailboxes. `$19D16 (vblank_handler)` consumes `$FFFA00 (vblank_request)` (scroll/DMA, often with BUSREQ), then runs `$72914 (sound_engine)`. Manual C++ bodies: `SorManualFunctions.cpp`.
+These are **VBlank wait** helpers, not Z80 sound mailboxes. `$19D16 (vblank_handler)` consumes `$FFFA00 (vblank_request)` (scroll/DMA, often with BUSREQ), then runs `$72914 (sound_engine)`. Manual C++ bodies: `SoRManualFunctions.cpp`.
 
 ---
 
@@ -423,7 +423,7 @@ Deep sequence helpers remain largely unnamed `sub_072xxx` / `sub_073xxx` in gene
 | Manual function list | `code-analysis/manual_functions.txt` |
 | Disassembly | `output/sor.asm` |
 | Generated 68000 recompile | `generated/Sor.cpp` / `Sor.hpp` |
-| Manual VBlank + punch damage | `SorManualFunctions.cpp` |
+| Manual VBlank + punch damage | `SoRManualFunctions.cpp` |
 | Manual `$1069E (queue_sound_id)` / `$11B12 (play_level_music)` | `SoRSound.cpp` |
 | Async host logger | `MegaDriveEnvironment` `util/Logger.hpp` |
 | YM2612 + PSG host | `MegaDriveEnvironment` `system/sound/` |

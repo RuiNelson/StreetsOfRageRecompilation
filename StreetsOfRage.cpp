@@ -1,5 +1,5 @@
 #include "Sor.hpp"
-#include "SorCheats.hpp"
+#include "SoRCheats.hpp"
 #include "Logger.hpp"
 #include <cstdio>
 
@@ -137,10 +137,10 @@ void StreetsOfRage::handleOptionHotkey(OptionHotkeyCode keyCode) {
             incrementByte(memory(), kP1SpecialAttacks, "P1 special attacks");
             return;
         case SDLK_P: {
-            const bool enabled = !SorCheats::p1PunchPowerEnabled();
-            SorCheats::setP1PunchPowerEnabled(enabled);
+            const bool enabled = !SoRCheats::p1PunchPowerEnabled();
+            SoRCheats::setP1PunchPowerEnabled(enabled);
             Logger::log("[cheat] P1 punch power x%u: %s",
-                        static_cast<unsigned>(SorCheats::kPunchPowerMultiplier),
+                        static_cast<unsigned>(SoRCheats::kPunchPowerMultiplier),
                         enabled ? "on" : "off");
             return;
         }
@@ -157,7 +157,7 @@ void StreetsOfRage::handleOptionHotkey(OptionHotkeyCode keyCode) {
                 Logger::log("[cheat] free police call unavailable: no active player");
                 return;
             }
-            SorCheats::requestFreePoliceCall(player);
+            SoRCheats::requestFreePoliceCall(player);
             Logger::log("[cheat] free police call requested for P%d", player == kP1Object ? 1 : 2);
             return;
         }

@@ -1,5 +1,5 @@
 #include "Sor.hpp"
-#include "SorCheats.hpp"
+#include "SoRCheats.hpp"
 
 #include <cstdint>
 
@@ -128,7 +128,7 @@ void StreetsOfRage::try_activate_police_special(m_long /*entry_*/) {
     };
 
     const m_long object   = cpu().a[0];
-    const bool freeCall   = SorCheats::consumeFreePoliceCall(object);
+    const bool freeCall   = SoRCheats::consumeFreePoliceCall(object);
     const m_word level    = memory().readWord(kLevel);
     const bool round7Busy = level == 6u &&
                             (memory().readByte(kWaveAdvancePending) != 0u ||
@@ -144,7 +144,7 @@ void StreetsOfRage::try_activate_police_special(m_long /*entry_*/) {
         return;
     }
 
-    const bool p1 = (object & 0x00FFFFFFu) == SorCheats::kP1Object;
+    const bool p1 = (object & 0x00FFFFFFu) == SoRCheats::kP1Object;
     const m_long specialCounter = p1 ? kP1SpecialAttacks : kP2SpecialAttacks;
     if (!freeCall && memory().readByte(specialCounter) == 0u) {
         cpu().ssp += 4;
@@ -232,7 +232,7 @@ void StreetsOfRage::compute_player_attack_descriptor(m_long /*entry_*/) {
     // (before the memory mask) are merged into +$42 with bit 0 cleared.
     const m_byte reactionNibble = static_cast<m_byte>(strength >> 4);
     m_byte       damage         = static_cast<m_byte>(strength & 0x0Fu);
-    damage = SorCheats::adjustP1PunchDamage(object, damage, SorCheats::p1PunchPowerEnabled());
+    damage = SoRCheats::adjustP1PunchDamage(object, damage, SoRCheats::p1PunchPowerEnabled());
 
     memory().writeByte(object + kObjDamage, damage);
 

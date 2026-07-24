@@ -1,5 +1,5 @@
 # Functions whose declarations/call sites remain generated, but whose bodies
-# are provided by hand-written C++ in SorManualFunctions.cpp,
+# are provided by hand-written C++ in SoRManualFunctions.cpp,
 # SoRMainMenus.cpp, or SoRSound.cpp.
 0003A2 # game_infinite_loop
 003FCC # try_activate_police_special (free police-call cheat hook)

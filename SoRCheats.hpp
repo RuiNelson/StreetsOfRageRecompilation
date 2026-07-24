@@ -2,7 +2,7 @@
 
 #include "data_types.hpp"
 
-namespace SorCheats {
+namespace SoRCheats {
 
 constexpr m_long kP1Object             = 0x00FFB800u;
 constexpr m_byte kPunchPowerMultiplier = 12u;
@@ -21,4 +21,4 @@ constexpr m_byte adjustP1PunchDamage(m_long objectAddress, m_byte damage, bool e
     return static_cast<m_byte>(boosted > kMaximumAttackDamage ? kMaximumAttackDamage : boosted);
 }
 
-} // namespace SorCheats
+} // namespace SoRCheats

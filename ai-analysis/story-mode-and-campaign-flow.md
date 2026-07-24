@@ -4,7 +4,7 @@
 
 **Scope:** story opening, attract mode, campaign start, progression through all eight rounds, round-clear screen, Mr. X's offer, and ending selection
 
-**Primary sources:** `output/sor.asm`, `generated/Sor.cpp`, `SorManualFunctions.cpp`, `code-analysis/addresses.csv`, `code-analysis/labels.csv`, and `rom/SOR.bin`
+**Primary sources:** `output/sor.asm`, `generated/Sor.cpp`, `SoRManualFunctions.cpp`, `code-analysis/addresses.csv`, `code-analysis/labels.csv`, and `rom/SOR.bin`
 
 The names used below match the symbols added to the analysis CSVs. Meanings inferred from context rather than proved by unambiguous reads and writes are explicitly identified as such.
 
@@ -80,7 +80,7 @@ The pattern is consistent: an initialization handler normally ends with `addq.w 
 
 ### 2.2 Recompiled C++ implementation
 
-`SorManualFunctions.cpp` preserves this mechanism in the manual implementation of `Sor::game_infinite_loop`. Its relevant constants are:
+`SoRManualFunctions.cpp` preserves this mechanism in the manual implementation of `Sor::game_infinite_loop`. Its relevant constants are:
 
 ```cpp
 constexpr m_long kGameState      = 0xFFFFFF00u;

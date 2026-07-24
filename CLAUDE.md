@@ -34,7 +34,7 @@ Before changing files:
 | `CPU68K.hpp` | 68000 register file used by recompiled code |
 | `RecompilationEnvironment.*` | Runtime integration and CPU ownership |
 | `SorRuntime.*` | Host orchestration around the recompiled cartridge |
-| `SorManualFunctions.cpp` | Hand-written implementations of selected ROM routines |
+| `SoRManualFunctions.cpp` | Hand-written implementations of selected ROM routines |
 | `code-analysis/manual_functions.txt` | Addresses dispatched to manual implementations |
 | `code-analysis/labels.csv` | ROM code entry points and control-flow labels |
 | `code-analysis/addresses.csv` | ROM data, RAM, hardware, table, and buffer symbols |
@@ -123,7 +123,7 @@ keeping the generated declaration, dispatcher, and call sites intact.
 
 - Record manual addresses in `code-analysis/manual_functions.txt`.
 - Implement native bodies in the established hand-written source, normally
-  `SorManualFunctions.cpp`.
+  `SoRManualFunctions.cpp`.
 - Preserve 68000-visible register, memory, flag, stack, and control-flow
   effects expected by callers.
 - Base behavior on `output/sor.asm`, analysis data, and bounded runtime

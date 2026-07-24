@@ -1,8 +1,8 @@
-#include "SorCheats.hpp"
+#include "SoRCheats.hpp"
 
 #include <atomic>
 
-namespace SorCheats {
+namespace SoRCheats {
 namespace {
 
 std::atomic_bool p1PunchPowerEnabled_{false};
@@ -31,4 +31,4 @@ bool consumeFreePoliceCall(m_long objectAddress) {
     return freePoliceCaller_.compare_exchange_strong(objectAddress, 0u, std::memory_order_acq_rel);
 }
 
-} // namespace SorCheats
+} // namespace SoRCheats
