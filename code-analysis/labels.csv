@@ -20,6 +20,8 @@
 0000033A, boot_checksum_loop, "100% - Accumulates 16-bit sum (add.w) of ROM region; used to verify cart header checksum"
 0000036E, boot_skip_ram_clear, "100% - Skips full RAM clear (branch target from boot_modem_port_test on warm boot)"
 0000037A, boot_clear_ram_loop, "100% - Clears ~64KB of work RAM: 506 iterations × memfill_long_128 (128 bytes each) starting at mem_ram"
+00000412, boot_checksum_fail, "100% - Red screen of death if the checksum verification fails"
+00000434, boot_checksum_fail_infinite_loop, "100% - Red screen of death if the checksum verification fails"
 
 000003A2, game_infinite_loop, "100% - This is the core infinite loop that reads game_state and dispatches execution."
 000003BA, game_state_handler_table, "100% - L[22] - Absolute handler pointers for the eleven init/update game-state pairs ($00 through $2A)"
