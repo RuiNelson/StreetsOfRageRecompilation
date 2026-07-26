@@ -5,6 +5,8 @@
 
 namespace {
 
+constexpr m_long kP1Object             = 0xFFFFB800u;
+constexpr m_long kP2Object             = 0xFFFFB880u;
 constexpr m_long kObjectTable          = 0xFFFFB900u;
 constexpr m_long kObjectSlotSize       = 0x80u;
 constexpr int    kInteractionScanSlots = 0x44;
@@ -143,6 +145,10 @@ bool reservePickupTarget(SystemMemory &memory, m_long player, m_long target) {
     memory.writeWord(target + kTargetOwner, static_cast<m_word>(player & 0xFFFFu));
     memory.writeByte(target + kTargetInteraction, 1u);
     return true;
+}
+
+bool pickupTargetAvailable(SystemMemory &memory, m_long player) {
+    return memory.readByte(player + kObjType) == 1u && findPickupTarget(memory, player) != 0u;
 }
 
 bool hasNearbyObjectInFront(SystemMemory &memory, m_long player) {
@@ -380,25 +386,24 @@ void StreetsOfRage::handle_pause_start_input(m_long entry_) {
 
     cpu().d[7] = memory().readByte(kPauseTextFlag) == 0u ? 3u : 0u;
 
-    bool pauseRequested = false;
-    const bool alternativePickupOnly =
-        SoRCheats::alternativePickupRoutineEnabled() && memory().readByte(kDemoMode) == 0u;
+    bool       pauseRequested = false;
+    const bool alternative    = SoRCheats::alternativePickupRoutineEnabled() && memory().readByte(kDemoMode) == 0u;
     const m_byte playerMode = memory().readByte(kPlayerMode);
 
     if ((playerMode & 0x01u) != 0u) {
         const m_byte buffered =
             static_cast<m_byte>(memory().readByte(kP1StartButtonBuffer) | memory().readByte(kP1ButtonPress));
         memory().writeByte(kP1StartButtonBuffer, buffered);
-        if ((buffered & kButtonStart) != 0u && !alternativePickupOnly)
-            pauseRequested = true;
+        if ((buffered & kButtonStart) != 0u)
+            pauseRequested = !(alternative && pickupTargetAvailable(memory(), kP1Object));
     }
 
     if (!pauseRequested && (playerMode & 0x02u) != 0u) {
         const m_byte buffered =
             static_cast<m_byte>(memory().readByte(kP2StartButtonBuffer) | memory().readByte(kP2ButtonPress));
         memory().writeByte(kP2StartButtonBuffer, buffered);
-        if ((buffered & kButtonStart) != 0u && !alternativePickupOnly)
-            pauseRequested = true;
+        if ((buffered & kButtonStart) != 0u)
+            pauseRequested = !(alternative && pickupTargetAvailable(memory(), kP2Object));
     }
 
     if (pauseRequested) {
