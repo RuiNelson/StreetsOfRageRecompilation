@@ -87,7 +87,45 @@ The effect index, not the object type itself, drives resource application. Curre
 
 ## How a pickup is collected
 
-Pickups are acquired through the same close-interaction search that begins normal attacks. `$3136 (find_close_interaction_target)` builds a small three-dimensional box around the player and scans the object table. It first recognizes carried-object types `$08..$0C`; it also explicitly accepts pickup types `$47`, `$4B`, `$4C`, `$4F`, `$3F`, and `$40`.
+Ground objects are not collected by a passive overlap test in the movement
+code. The acquisition attempt is part of the player's attack/interaction
+handling. `$3028 (player_normal_attack_input)` and the adjacent held-weapon
+attack path call `$3136 (find_close_interaction_target)` before they commit to
+an ordinary punch or weapon swing. If the search succeeds, it consumes the
+button action and sends the player to action family `$28`, preserving the
+current facing bit through `$2DE6`.
+
+`$3136 (find_close_interaction_target)` first refuses to run when the player is
+already in action family `$28`; this prevents the pickup animation from
+re-reserving the same target every frame. Otherwise it builds a small
+three-dimensional search box around the player:
+
+| Axis | Search range relative to player |
+|---|---:|
+| X | `player.x - $14` through `player.x + $14` |
+| Lane Y | `player.y - $10` through `player.y + $10` |
+| Height Z | `player.z - $08` through `player.z + $08` |
+
+The routine scans the gameplay object table in slot order and accepts the first
+matching ground object whose origin lies inside all three ranges. This slot
+order matters in dense overlaps: there is no later best-distance comparison.
+
+It first recognizes carried-object types `$08..$0C`; it also explicitly accepts
+pickup types `$47`, `$4B`, `$4C`, `$4F`, `$3F`, and `$40`.
+
+For a weapon, the target must be a free, still-usable ground object:
+
+- object type is in `$08..$0C`;
+- weapon `+$51` is zero, so it is not already reserved, held, dropped by a
+  live command, or being thrown;
+- weapon `+$50 < 3`, which excludes exhausted knife/bat/pipe-style wear states;
+- if the player was already carrying another weapon, the old weapon's `+$51`
+  is cleared before the new links are installed.
+
+When these tests pass, the routine writes the selected type to player `+$60`
+and the object pointer to player `+$5E`. The common tail then records the
+collecting/holding player in target `+$52`, sets target `+$51 = 1`, and changes
+the player to action family `$28`.
 
 For a consumable it does not populate the player's carried-weapon fields. It only writes:
 
@@ -96,7 +134,11 @@ pickup->collector_at_52 = player;
 pickup->interaction_at_51 = 1;
 ```
 
-On the pickup's next update, `$69CC (consume_collected_pickup)` sees the nonzero interaction byte, temporarily changes `a0` to the collecting player, dispatches by pickup `+$50`, and deletes the pickup object after the effect returns.
+The player still enters the same `$28` pickup animation, but no inventory field
+is set. On the pickup's next update, `$69CC (consume_collected_pickup)` sees the
+nonzero interaction byte, temporarily changes `a0` to the collecting player,
+dispatches by pickup `+$50`, and deletes the pickup object after the effect
+returns.
 
 ```c
 void consume_pickup(Pickup *item) {
@@ -109,6 +151,17 @@ void consume_pickup(Pickup *item) {
 ```
 
 The collector pointer is what makes resource ownership deterministic in 2P: an item cannot accidentally credit the other player merely because both overlap it during the same frame.
+
+For held weapons, there is no immediate conversion step. The weapon remains an
+object-table entry. Its next dispatcher pass reaches the shared hold/update path
+at `$5E2E (update_held_weapon)`, follows the holder pointer in weapon `+$52`,
+checks that the player's `+$5E` still points back to the same object, and then
+places the sprite from the character/action attachment tables. The player-side
+state helper at `$2E32` also checks action families `$28` and `$30`; when
+player `+$60` is nonzero it applies a weapon-specific animation adjustment from
+the small table at `$2E5A`. This is why picking up a knife, bottle, bat, pipe,
+or pepper spray looks like a dedicated grab animation even though the logical
+reservation is just the `+$5E/+$60` and `+$51/+$52` link pair.
 
 ## Pickup effects
 
@@ -323,12 +376,17 @@ There is no separate inventory array. At most one carried object is represented 
 
 ```c
 void player_close_interaction(Player *p) {
+    if ((p->action & 0xfe) == 0x28)
+        return;
+
     for (Object *o : object_table) {
         if (!inside_pickup_box(p, o))
             continue;
 
         if (o->type >= 0x08 && o->type <= 0x0c &&
             o->interaction == 0 && o->subtype < 3) {
+            if (p->carried_type != 0)
+                p->carried_object->interaction = 0;
             p->carried_type = o->type;
             p->carried_object = o;
             o->holder = p;
