@@ -263,7 +263,7 @@ void StreetsOfRage::player_normal_attack_input(m_long entry_) {
     return68k(cpu());
 }
 
-void StreetsOfRage::sub_003084(m_long entry_) {
+void StreetsOfRage::player_held_object_attack_input(m_long entry_) {
     traceEnter(entry_);
 
     const m_long player        = cpu().a[0];
@@ -364,7 +364,7 @@ void StreetsOfRage::find_close_interaction_target(m_long entry_) {
     return68k(cpu());
 }
 
-void StreetsOfRage::sub_010d2e(m_long entry_) {
+void StreetsOfRage::handle_pause_start_input(m_long entry_) {
     traceEnter(entry_);
 
     const auto finishWithPauseFlag = [this] {
