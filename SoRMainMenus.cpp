@@ -1,4 +1,5 @@
 #include "Sor.hpp"
+#include "SoRTransitions.hpp"
 
 #include <cstdint>
 
@@ -182,6 +183,10 @@ void StreetsOfRage::select_menu_resolve_choice(m_long /*entry_*/) {
     if (cursor < 2) {
         cpu().setDw(0, cursor);
         memory().writeByte(kPlayerMode, memory().readByte(0x0000117Au + signExtendWord(cursor)));
+        
+        // Add fade out and VRAM clear before starting game
+        SOR_CALL_68K(clear_vram_and_fade_out(), 0x115Au);
+        
         memory().writeWord(kGameState, 0x20);
         cpu().setNZClearVC(0x20u, 0x8000u);
         cpu().ssp += 4;
@@ -232,10 +237,8 @@ void StreetsOfRage::options_input_sound_test(m_long /*entry_*/) {
     cpu().setFlag(CPU68K::FlagZ, cpu().dw(0) == 0);
     SOR_CALL_68K(options_row_nav(), 0x1220u);
     if (cpu().ne()) {
-        cpu().d[7] = 0xFFFFFFE1u;
-        SOR_CALL_68K(queue_sound_id(), 0x1262u);
         cpu().d[0] = 0x0Bu;
-        SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x126Au);
+        SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1262u);
         cpu().setDw(4, 0x2000u);
         cpu().setNZClearVC(0x2000u, 0x8000u);
         options_draw_sound_name(0x11D6u);
@@ -411,6 +414,10 @@ void StreetsOfRage::options_input_exit(m_long /*entry_*/) {
 
 void StreetsOfRage::options_menu_return(m_long /*entry_*/) {
     traceEnter(0x14EAu);
+    
+    // Add fade out before returning to main menu
+    SOR_CALL_68K(clear_vram_and_fade_out(), 0x14F0u);
+    
     memory().writeWord(kGameState, 0x10);
     cpu().setNZClearVC(0x10u, 0x8000u);
     cpu().ssp += 4;
@@ -574,6 +581,9 @@ void StreetsOfRage::char_select_interactive(m_long /*entry_*/) {
 void StreetsOfRage::initialize_player_continues(m_long /*entry_*/) {
     traceEnter(0x17A2u);
 
+    // Add fade out and VRAM clear before starting the game
+    SOR_CALL_68K(clear_vram_and_fade_out(), 0x17A6u);
+
     cpu().d[0] = 3;
     memory().writeWord(kP1Continues, 3);
     memory().writeWord(kP2Continues, 3);
@@ -656,7 +666,7 @@ void StreetsOfRage::char_select_player_input(m_long /*entry_*/) {
     cpu().a[1] = memory().readLong(cpu().a[1] + signExtendWord(cpu().dw(2)));
     memory().writeByte(cpu().a[1] + 0x5C, 0);
 
-    cpu().setDw(1, static_cast<m_word>(newSlot * 4u));
+    cpu().setDw(1, static_cast<m_word>(newSlot * 2u));
     cpu().a[1] = kCharPortraitPointers;
     cpu().a[1] = memory().readLong(cpu().a[1] + signExtendWord(cpu().dw(1)));
     memory().writeByte(cpu().a[1] + 0x5C, 1);
