@@ -1,7 +1,10 @@
 # Functions whose declarations/call sites remain generated, but whose bodies
 # are provided by hand-written C++ in SoRManualFunctions.cpp,
-# SoRMainMenus.cpp, or SoRSound.cpp.
+# SoRInteractions.cpp, SoRMainMenus.cpp, or SoRSound.cpp.
 0003A2 # game_infinite_loop
+003028 # player_normal_attack_input (alternative pickup input hook)
+003084 # sub_003084, held-weapon attack input (alternative pickup input hook)
+003136 # find_close_interaction_target
 003FCC # try_activate_police_special (free police-call cheat hook)
 0041EA # compute_player_attack_descriptor (P1 punch-power cheat hook)
 008192 # nemesisdec_vram (also owns the $81A4 RAM entry alias)
@@ -13,6 +16,7 @@
 010502 # wait_vblank_and_upload_graphics
 010514 # wait_vblank_without_graphics_upload
 01061C # load_z80_dac_driver (direct public Z80 API upload)
+010D2E # pause/start gate (lets Start reach alternative pickup instead of pausing)
 
 # Mode-select, OPTIONS, and character-select flow.
 000FE8 # init_game_start_screen

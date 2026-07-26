@@ -10,6 +10,8 @@ constexpr m_byte kMaximumAttackDamage  = 0x0Fu;
 
 void setP1PunchPowerEnabled(bool enabled);
 bool p1PunchPowerEnabled();
+void setAlternativePickupRoutineEnabled(bool enabled);
+bool alternativePickupRoutineEnabled();
 void requestFreePoliceCall(m_long objectAddress);
 bool consumeFreePoliceCall(m_long objectAddress);
 

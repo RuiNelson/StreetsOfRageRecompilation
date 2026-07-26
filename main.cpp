@@ -1,4 +1,5 @@
 #include "Sor.hpp"
+#include "SoRCheats.hpp"
 #include "config/controls/ControlsConfigUI.hpp"
 #include <CLI/CLI.hpp>
 #include <cstdint>
@@ -14,6 +15,7 @@ int main(int argc, char *argv[]) {
     bool        debugUtilsFlag        = false;
     bool        fullScreenFlag        = false;
     bool        silentFlag            = false;
+    bool        alternativePickupFlag = false;
     int         sorVSyncMode          = 0; // 0 = internal timer (default); 1/2/3 = VSync/VSync2/VSync3
     int         remoteAccessPort      = 6969;
     std::uint32_t turboMultiplier     = 0;
@@ -38,6 +40,9 @@ int main(int argc, char *argv[]) {
                  debugUtilsFlag,
                  "Enable debug hotkeys, cheats and remote access");
     app.add_flag("--fullScreen", fullScreenFlag, "Start the game in fullscreen");
+    app.add_flag("--alternativePickupRoutine",
+                 alternativePickupFlag,
+                 "Prioritize attacks on B; use Start to pick up nearby ground items/weapons");
     app.add_option("--vsync",
                    sorVSyncMode,
                    "Frame sync — 0=internal timer from --hz (default), "
@@ -80,6 +85,7 @@ int main(int argc, char *argv[]) {
                           VDP::Integer,
                           debugUtilsFlag ? static_cast<std::uint16_t>(remoteAccessPort) : 0);
         configureEnvironment(sor);
+        SoRCheats::setAlternativePickupRoutineEnabled(alternativePickupFlag);
         sor.setDebugLog(sorDebugFlag);
         sor.setDebugUtilities(debugUtilsFlag);
         sor.setStartFullscreen(fullScreenFlag);
