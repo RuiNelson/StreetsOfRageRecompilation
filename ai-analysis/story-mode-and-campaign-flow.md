@@ -129,7 +129,7 @@ move.l #$00FF8000,demo_ai_input_p2
 
 While `demo_mode != 0`:
 
-- joypad code at `$813C` merges bytes from scripted input streams;
+- joypad code at `$813C (sample_one_joypad)` merges bytes from scripted input streams;
 - `$10840 (init_ingame)` internally calls `$106EA (init_levelstart)`, bypassing the interactive start flow;
 - characters, lives, and demo duration are forced;
 - Start sets bit 7 of `$FFFF2A (demo_mode)`, starts a fade, and aborts the demonstration;

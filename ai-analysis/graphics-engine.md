@@ -106,7 +106,7 @@ The engine caches two R1 commands:
 | Reference | NTSC | PAL | Meaning |
 |---|---:|---:|---|
 | `$FFFF46 (vdp_display_enable_command)` | `$8174` | `$817C` | display on |
-| `$FFFF48 (vdp_display_disable_command)` | `$8134` | `$813C` | display off |
+| `$FFFF48 (vdp_display_disable_command)` | `0x8134` | `0x813C` | display off |
 
 Initializers turn the display off, perform large direct transfers or clears,
 then restore the cached display-on command. Ordinary gameplay does not rebuild

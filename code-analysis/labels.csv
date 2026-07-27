@@ -152,6 +152,8 @@
 00008064, vdp_copy_stride, "100% - Copies data to VDP with row stride ($00800000); d0=initial VDP addr, d1=columns, d2=rows, reads from (a1)+"
 0000808C, vdp_fill_stride, "100% - Fills VDP with constant word using row stride ($00800000); d0=VDP addr, d1=columns, d2=rows, d4=fill word"
 000080DC, vdp_copy_stride_encoded, "100% - Copies encoded byte data to VDP with stride; reads byte from (a1), zero-extends, adds d3, writes word — used for palette index remapping"
+0000810C, sample_all_joypads, "100% - VBlank joypad sampler: requests Z80 bus, samples P1 and P2 through sample_one_joypad, then releases the bus"
+0000813C, sample_one_joypad, "100% - Reads one 3-button pad by toggling TH, computes active-high held/pressed-edge bytes and present-negated flag, with demo stream injection"
 00010502, wait_vblank_and_upload_graphics, "100% - Writes request 1 to vblank_request, enables IRQs, and waits until vblank_handler completes the mode-specific graphics upload"
 00010514, wait_vblank_without_graphics_upload, "100% - Writes request 2 to vblank_request and waits for the VBlank path that samples controllers and advances incremental art without uploading frame graphics"
 00010526, clear_player_input, "100% - Clears button-held state for both players ($FF00)"
