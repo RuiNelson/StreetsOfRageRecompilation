@@ -303,36 +303,6 @@ void StreetsOfRage::options_input_difficulty(m_long /*entry_*/) {
     options_highlight_difficulty(0x12E0u);
 }
 
-void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
-    traceEnter(0x1390u);
-
-    cpu().setDw(0, memory().readWord(kControlScheme));
-    cpu().setFlag(CPU68K::FlagZ, cpu().dw(0) == 0);
-    SOR_CALL_68K(options_row_nav(), 0x1398u);
-    if (cpu().ne()) {
-        cpu().d[0] = 0x0Du;
-        SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x13CEu);
-        cpu().setDw(4, 0x2000u);
-        cpu().setNZClearVC(0x2000u, 0x8000u);
-        options_draw_controls();
-        return;
-    }
-
-    const m_byte horizontal = static_cast<m_byte>(memory().readByte(kP1ButtonPress) & 0x0Cu);
-    cpu().setDb(1, horizontal);
-    cpu().setNZClearVC(horizontal, 0x80u);
-    if (horizontal == 0) {
-        cpu().ssp += 4;
-        return;
-    }
-
-    const m_word value = wrappedStep(cpu().dw(0), 2, (horizontal & 0x08u) != 0);
-    cpu().setDw(0, value);
-    memory().writeWord(kControlScheme, value);
-    cpu().setNZClearVC(value, 0x8000u);
-    options_highlight_controls(0x136Cu);
-}
-
 void StreetsOfRage::options_input_lives(m_long /*entry_*/) {
     traceEnter(0x1404u);
 
@@ -589,86 +559,6 @@ void StreetsOfRage::initialize_player_continues(m_long /*entry_*/) {
     memory().writeWord(kGameState, 0x28);
 
     cpu().d[7] = 0xFFFFFFE1u;
-    cpu().setNZClearVC(cpu().d[7], 0x80000000u);
-    queue_sound_id();
-}
-
-void StreetsOfRage::char_select_player_input(m_long /*entry_*/) {
-    traceEnter(0x1916u);
-
-    const m_long object = cpu().a[0];
-    const m_byte locked = memory().readByte(object + 0x5A);
-    cpu().setDb(0, locked);
-    cpu().setNZClearVC(locked, 0x80u);
-    if (locked != 0) {
-        cpu().ssp += 4;
-        return;
-    }
-
-    const m_byte press = memory().readByte(object + 0x55);
-    cpu().setDb(6, press);
-    cpu().setNZClearVC(press, 0x80u);
-    if (press == 0) {
-        cpu().ssp += 4;
-        return;
-    }
-
-    if ((press & 0xF0u) != 0) {
-        memory().writeByte(object + 0x5A, 1);
-        memory().writeWord(kCharSelectConfirmCount,
-                           static_cast<m_word>(memory().readWord(kCharSelectConfirmCount) + 1));
-        const m_long characterIdAddress = object == kP1Object ? kP1CharacterId : kP2CharacterId;
-        cpu().a[2]                      = characterIdAddress;
-        const m_word slot               = memory().readWord(object + 0x58);
-        cpu().setDw(0, slot);
-        memory().writeByte(characterIdAddress, memory().readByte(kCharacterIdFromSlot + signExtendWord(slot)));
-        cpu().d[7] = 0xFFFFFFBAu;
-        cpu().setNZClearVC(cpu().d[7], 0x80000000u);
-        queue_sound_id();
-        return;
-    }
-
-    const bool right = (press & 0x08u) != 0;
-    cpu().setDb(6, static_cast<m_byte>(press & 0x08u));
-    cpu().a[2] = right ? kCharNavRight : kCharNavLeft;
-
-    const m_word oldSlot = memory().readWord(object + 0x58);
-    cpu().setDw(0, static_cast<m_word>(oldSlot * 2u));
-    m_word newSlot = memory().readWord(cpu().a[2] + signExtendWord(cpu().dw(0)));
-    cpu().setDw(1, newSlot);
-
-    if (memory().readByte(kPlayerMode) != 1) {
-        const m_long otherObject = object == kP1Object ? kP2Object : kP1Object;
-        cpu().a[3]               = otherObject;
-        cpu().setDw(2, memory().readWord(otherObject + 0x58));
-        cpu().setDw(2, static_cast<m_word>(cpu().dw(2) ^ newSlot));
-        if (cpu().dw(2) == 0) {
-            cpu().setDw(1, static_cast<m_word>(newSlot * 2u));
-            newSlot = memory().readWord(cpu().a[2] + signExtendWord(cpu().dw(1)));
-            cpu().setDw(1, newSlot);
-        }
-    }
-
-    memory().writeWord(object + 0x58, newSlot);
-
-    cpu().setDw(2, static_cast<m_word>(cpu().dw(0) * 2u));
-    cpu().a[1] = kCharPortraitPointers;
-    cpu().a[1] = memory().readLong(cpu().a[1] + signExtendWord(cpu().dw(2)));
-    memory().writeByte(cpu().a[1] + 0x5C, 0);
-
-    cpu().setDw(1, static_cast<m_word>(newSlot * 4u));
-    cpu().a[1] = kCharPortraitPointers;
-    cpu().a[1] = memory().readLong(cpu().a[1] + signExtendWord(cpu().dw(1)));
-    memory().writeByte(cpu().a[1] + 0x5C, 1);
-
-    cpu().a[6] = kCharOldPalette + signExtendWord(cpu().dw(0));
-    SOR_CALL_68K(load_palette_list_to_active(), 0x199Cu);
-    cpu().setDw(0, static_cast<m_word>(newSlot * 2u));
-    memory().writeWord(object + 0x10, memory().readWord(kCharCursorX + signExtendWord(cpu().dw(0))));
-    cpu().a[6] = kCharNewPalette + signExtendWord(cpu().dw(0));
-    SOR_CALL_68K(load_palette_list_to_active(), 0x19B2u);
-
-    cpu().d[7] = 0xFFFFFFB9u;
     cpu().setNZClearVC(cpu().d[7], 0x80000000u);
     queue_sound_id();
 }

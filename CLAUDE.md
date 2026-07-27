@@ -35,6 +35,7 @@ Before changing files:
 | `RecompilationEnvironment.*` | Runtime integration and CPU ownership |
 | `SorRuntime.*` | Host orchestration around the recompiled cartridge |
 | `SoRManualFunctions.cpp` | Hand-written implementations of selected ROM routines |
+| `SoRControls.cpp` | Hand-written controller sampling, input remap, OPTIONS controls, character-select input, and pause/Start routines |
 | `code-analysis/manual_functions.txt` | Addresses dispatched to manual implementations |
 | `code-analysis/labels.csv` | ROM code entry points and control-flow labels |
 | `code-analysis/addresses.csv` | ROM data, RAM, hardware, table, and buffer symbols |
