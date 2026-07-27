@@ -12,6 +12,10 @@ player1:
     - B@X
     - C@C
     - Start@V
+    - X@A
+    - Y@S
+    - Z@D
+    - Mode@F
 player2:
   enabled: true
   device: 0
@@ -26,3 +30,7 @@ player2:
     - B@K
     - C@L
     - Start@O
+    - X@U
+    - Y@I
+    - Z@P
+    - Mode@Q

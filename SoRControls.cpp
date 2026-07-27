@@ -5,26 +5,11 @@
 
 namespace {
 
-constexpr m_long kP1Object       = 0xFFFFB800u;
-constexpr m_long kP2Object       = 0xFFFFB880u;
-constexpr m_long kObjectTable    = 0xFFFFB900u;
-constexpr m_long kObjectSlotSize = 0x80u;
-
-constexpr int kInteractionScanSlots = 0x44;
-
-constexpr m_long kObjType        = 0x00u;
-constexpr m_long kObjX           = 0x10u;
-constexpr m_long kObjY           = 0x14u;
-constexpr m_long kObjZ           = 0x18u;
-constexpr m_long kObjState       = 0x30u;
-constexpr m_long kObjHeldPointer = 0x5Eu;
-constexpr m_long kObjHeldType    = 0x60u;
-
+constexpr m_long kP1Object        = 0xFFFFB800u;
+constexpr m_long kP2Object        = 0xFFFFB880u;
+constexpr m_long kObjState        = 0x30u;
 constexpr m_long kPlayerInputWord = 0x54u;
 constexpr m_long kPlayerPressByte = 0x55u;
-
-constexpr m_long kTargetInteraction = 0x51u;
-constexpr m_long kWeaponUseCounter  = 0x50u;
 
 constexpr m_long kIoPlayer1DataPort = 0x00A10003u;
 constexpr m_long kIoPlayer2DataPort = 0x00A10005u;
@@ -64,6 +49,7 @@ constexpr m_long kCharPreviewPointers = 0x00001A02u;
 constexpr m_long kCharacterIdFromSlot = 0x00001A0Eu;
 
 constexpr m_byte kButtonStart = 0x80u;
+constexpr m_byte kButtonX     = 0x40u;
 
 constexpr m_long signExtendWord(m_word value) {
     return static_cast<m_long>(static_cast<std::int32_t>(static_cast<std::int16_t>(value)));
@@ -73,10 +59,6 @@ constexpr m_word wrappedStep(m_word value, m_word maximum, bool increment) {
     if (increment)
         return value >= maximum ? 0 : static_cast<m_word>(value + 1);
     return value == 0 ? maximum : static_cast<m_word>(value - 1);
-}
-
-m_word addWord(m_word value, m_word delta) {
-    return static_cast<m_word>(value + delta);
 }
 
 bool bit(m_byte value, unsigned index) {
@@ -107,6 +89,20 @@ void setCmpByteFlags(CPU68K &cpu, m_byte destination, m_byte source) {
     cpu.setNZVC(result, 0x80u, overflow, carry);
 }
 
+void setActiveHighButton(m_byte &buttons, bool pressed, m_byte mask) {
+    if (pressed)
+        buttons = static_cast<m_byte>(buttons | mask);
+}
+
+int altPickupPlayerIndexForBuffer(m_long bufferAddress) {
+    const m_long normalized = bufferAddress & 0x00FFFFFFu;
+    if (normalized == (kP1ButtonHeld & 0x00FFFFFFu))
+        return 0;
+    if (normalized == (kP2ButtonHeld & 0x00FFFFFFu))
+        return 1;
+    return -1;
+}
+
 void setShiftLeftByteX(CPU68K &cpu, m_byte value, int count) {
     bool carry = false;
     for (int i = 0; i < count; ++i) {
@@ -134,51 +130,12 @@ void setShiftRightWordX(CPU68K &cpu, m_word value, int count) {
     cpu.setFlag(CPU68K::FlagX, carry);
 }
 
-bool isConsumablePickup(m_byte type) {
-    return type == 0x47u || type == 0x4Bu || type == 0x4Cu || type == 0x4Fu || type == 0x3Fu || type == 0x40u;
-}
+void sampleOneJoypadBody(CPU68K                   &cpu,
+                         SystemMemory             &memory,
+                         const PlayerControlsState *altControls) {
+    const int    altPickupPlayerIndex = altPickupPlayerIndexForBuffer(cpu.a[0]);
+    const m_byte oldHeld              = memory.readByte(cpu.a[0]);
 
-bool isEligibleWeapon(SystemMemory &memory, m_long object) {
-    const m_byte type = memory.readByte(object + kObjType);
-    return type >= 0x08u && type < 0x0Du && memory.readByte(object + kTargetInteraction) == 0u &&
-           memory.readByte(object + kWeaponUseCounter) < 3u;
-}
-
-bool objectInsidePickupBox(SystemMemory &memory, m_long player, m_long object) {
-    const auto sx = [](m_word value) {
-        return static_cast<std::int16_t>(value);
-    };
-
-    const m_word minX = addWord(memory.readWord(player + kObjX), 0xFFECu);
-    const m_word maxX = addWord(minX, 0x0028u);
-    const m_word minY = addWord(memory.readWord(player + kObjY), 0xFFF0u);
-    const m_word maxY = addWord(minY, 0x0020u);
-    const m_word minZ = addWord(memory.readWord(player + kObjZ), 0xFFF8u);
-    const m_word maxZ = addWord(minZ, 0x0008u);
-
-    const m_word x = memory.readWord(object + kObjX);
-    const m_word y = memory.readWord(object + kObjY);
-    const m_word z = memory.readWord(object + kObjZ);
-
-    return sx(minX) <= sx(x) && sx(x) <= sx(maxX) && sx(minY) <= sx(y) && sx(y) <= sx(maxY) && sx(minZ) <= sx(z) &&
-           sx(z) <= sx(maxZ);
-}
-
-bool pickupTargetAvailable(SystemMemory &memory, m_long player) {
-    if (memory.readByte(player + kObjType) != 1u || (memory.readByte(player + kObjState) & 0xFEu) == 0x28u)
-        return false;
-
-    for (int slot = 0; slot < kInteractionScanSlots; ++slot) {
-        const m_long object = kObjectTable + static_cast<m_long>(slot) * kObjectSlotSize;
-        if (!objectInsidePickupBox(memory, player, object))
-            continue;
-        if (isEligibleWeapon(memory, object) || isConsumablePickup(memory.readByte(object + kObjType)))
-            return true;
-    }
-    return false;
-}
-
-void sampleOneJoypadBody(CPU68K &cpu, SystemMemory &memory) {
     memory.writeByte(cpu.a[1], 0x00u);
     cpu.setDb(0, memory.readByte(cpu.a[1]));
     cpu.setDb(3, cpu.db(0));
@@ -190,9 +147,44 @@ void sampleOneJoypadBody(CPU68K &cpu, SystemMemory &memory) {
     cpu.setDb(1, static_cast<m_byte>(memory.readByte(cpu.a[1]) & 0x3Fu));
     cpu.setDb(4, cpu.db(1));
 
-    cpu.setDb(0, static_cast<m_byte>(~static_cast<m_byte>(cpu.db(0) | cpu.db(1))));
+    m_byte held = static_cast<m_byte>(~static_cast<m_byte>(cpu.db(0) | cpu.db(1)));
+
+    // Host-side --altControls hack:
+    //
+    // The normal path above samples the emulated Mega Drive data port exactly
+    // as the ROM does. The alternative layout needs X/Y and originally tried
+    // to perform another 6-button TH sequence here. That made the result
+    // dependent on the controller's current TH phase and could lose B.
+    //
+    // Controllers has already applied controls.yaml and combined physical and
+    // remote input, so the alternative path receives that logical snapshot
+    // instead. It translates the host buttons directly into the active-high
+    // ROM byte: B=attack, C=jump, A=attack+jump, X=police special, Y=pickup,
+    // plus directions and Start. The unchanged code below derives the pressed
+    // edge from this held byte, preserving the input format expected by the
+    // original player routines.
+    if (altControls != nullptr && memory.readByte(kDemoMode) == 0u) {
+        m_byte altHeld = 0;
+        setActiveHighButton(altHeld, altControls->up, 0x01u);
+        setActiveHighButton(altHeld, altControls->down, 0x02u);
+        setActiveHighButton(altHeld, altControls->left, 0x04u);
+        setActiveHighButton(altHeld, altControls->right, 0x08u);
+        setActiveHighButton(altHeld, altControls->b, 0x10u);
+        setActiveHighButton(altHeld, altControls->c, 0x20u);
+        setActiveHighButton(altHeld, altControls->a, 0x30u);
+        setActiveHighButton(altHeld, altControls->x, kButtonX);
+        setActiveHighButton(altHeld, altControls->start, kButtonStart);
+        SoRCheats::updateAltAttackButton(altPickupPlayerIndex, altControls->b);
+        SoRCheats::updateAltPickupButton(altPickupPlayerIndex, altControls->y);
+        held = altHeld;
+    } else {
+        SoRCheats::updateAltAttackButton(altPickupPlayerIndex, false);
+        SoRCheats::updateAltPickupButton(altPickupPlayerIndex, false);
+    }
+
+    cpu.setDb(0, held);
     cpu.setDb(1, cpu.db(0));
-    cpu.setDb(2, memory.readByte(cpu.a[0]));
+    cpu.setDb(2, oldHeld);
     cpu.setDb(0, static_cast<m_byte>(cpu.db(0) ^ cpu.db(2)));
 
     if (memory.readByte(kDemoMode) != 0u) {
@@ -367,7 +359,7 @@ void StreetsOfRage::remap_player_gameplay_input(m_long /*entry_*/) {
 
     const m_byte demo = memory().readByte(kDemoMode);
     cpu().setFlag(CPU68K::FlagZ, demo == 0);
-    if (demo == 0) {
+    if (demo == 0 && !SoRCheats::altControlsEnabled()) {
         const m_word scheme = memory().readWord(kControlScheme);
         cpu().setDw(7, scheme);
         cpu().setFlag(CPU68K::FlagZ, scheme == 0);
@@ -407,16 +399,20 @@ void StreetsOfRage::remap_player_gameplay_input(m_long /*entry_*/) {
 void StreetsOfRage::sample_all_joypads(m_long entry_) {
     traceEnter(entry_);
 
+    const bool                useAltControls =
+        SoRCheats::altControlsEnabled() && memory().readByte(kDemoMode) == 0u;
+    const PlayersControlState controls = controllers().getCurrentState();
+
     memory().writeWord(kZ80BusRequest, 0x0100u);
     cpu().a[1] = kIoPlayer1DataPort;
     cpu().a[0] = kP1ButtonHeld;
     cpu().a[2] = kDemoAiInputP1;
-    sampleOneJoypadBody(cpu(), memory());
+    sampleOneJoypadBody(cpu(), memory(), useAltControls ? &controls.player1 : nullptr);
 
     cpu().a[1] = kIoPlayer2DataPort;
     cpu().a[0] += signExtendWord(0x0002u);
     cpu().a[2] = kDemoAiInputP2;
-    sampleOneJoypadBody(cpu(), memory());
+    sampleOneJoypadBody(cpu(), memory(), useAltControls ? &controls.player2 : nullptr);
 
     memory().writeWord(kZ80BusRequest, 0);
     setMoveWordFlags(cpu(), 0);
@@ -425,7 +421,13 @@ void StreetsOfRage::sample_all_joypads(m_long entry_) {
 
 void StreetsOfRage::sample_one_joypad(m_long entry_) {
     traceEnter(entry_);
-    sampleOneJoypadBody(cpu(), memory());
+    const int                 playerIndex = altPickupPlayerIndexForBuffer(cpu().a[0]);
+    const bool                useAltControls =
+        SoRCheats::altControlsEnabled() && memory().readByte(kDemoMode) == 0u && playerIndex >= 0;
+    const PlayersControlState controls = controllers().getCurrentState();
+    const PlayerControlsState *playerControls =
+        !useAltControls ? nullptr : (playerIndex == 0 ? &controls.player1 : &controls.player2);
+    sampleOneJoypadBody(cpu(), memory(), playerControls);
     return68k(cpu());
 }
 
@@ -433,6 +435,7 @@ void StreetsOfRage::clear_player_input(m_long entry_) {
     traceEnter(entry_);
     memory().writeWord(kP1ButtonHeld, 0xFF00u);
     memory().writeWord(kP2ButtonHeld, 0xFF00u);
+    SoRCheats::clearAltPickupButtons();
     setMoveWordFlags(cpu(), 0xFF00u);
     return68k(cpu());
 }
@@ -454,7 +457,6 @@ void StreetsOfRage::handle_pause_start_input(m_long entry_) {
     cpu().d[7] = memory().readByte(kPauseTextFlag) == 0u ? 3u : 0u;
 
     bool         pauseRequested = false;
-    const bool   alternative    = SoRCheats::alternativePickupRoutineEnabled() && memory().readByte(kDemoMode) == 0u;
     const m_byte playerMode     = memory().readByte(kPlayerMode);
 
     if ((playerMode & 0x01u) != 0u) {
@@ -462,7 +464,7 @@ void StreetsOfRage::handle_pause_start_input(m_long entry_) {
             static_cast<m_byte>(memory().readByte(kP1StartButtonBuffer) | memory().readByte(kP1ButtonPress));
         memory().writeByte(kP1StartButtonBuffer, buffered);
         if ((buffered & kButtonStart) != 0u)
-            pauseRequested = !(alternative && pickupTargetAvailable(memory(), kP1Object));
+            pauseRequested = true;
     }
 
     if (!pauseRequested && (playerMode & 0x02u) != 0u) {
@@ -470,7 +472,7 @@ void StreetsOfRage::handle_pause_start_input(m_long entry_) {
             static_cast<m_byte>(memory().readByte(kP2StartButtonBuffer) | memory().readByte(kP2ButtonPress));
         memory().writeByte(kP2StartButtonBuffer, buffered);
         if ((buffered & kButtonStart) != 0u)
-            pauseRequested = !(alternative && pickupTargetAvailable(memory(), kP2Object));
+            pauseRequested = true;
     }
 
     if (pauseRequested) {

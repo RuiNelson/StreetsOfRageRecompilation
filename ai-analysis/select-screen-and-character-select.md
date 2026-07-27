@@ -258,6 +258,12 @@ The raw controller byte uses bit 6 for A, bit 4 for B, and bit 5 for C. Scheme
 1 rotates those bits left and scheme 2 rotates them right into the fixed logical
 roles (bit 4 attack, bit 5 jump, bit 6 special). D-pad and Start are preserved.
 
+In the native port, `--altControls` hides this OPTIONS row and makes
+`$568A (remap_player_gameplay_input)` ignore `$FFFFC8 (control_scheme)`.
+The manual sampler has already translated the 6-button layout into the fixed
+logical bits: A becomes B+C for rear attack, X becomes special, Y is kept as a
+native pickup edge, Z is ignored, and Start remains Start.
+
 ### 6.6 Lives (cheat) (`$FFFFCA (lives_setting)`)
 
 Input wraps **`0 … 3`**. Applied when leaving character select (and on some respawn paths):

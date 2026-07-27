@@ -1,3 +1,4 @@
+#include "SoRCheats.hpp"
 #include "Sor.hpp"
 
 #include <cstdint>
@@ -204,7 +205,7 @@ void StreetsOfRage::options_menu_build(m_long /*entry_*/) {
     SOR_CALL_68K(sub_007f00(), 0x1180u);
     memory().writeLong(0xFFFFDA00u, 0);
 
-    cpu().d[0] = 0x0D0C0504u;
+    cpu().d[0] = SoRCheats::altControlsEnabled() ? 0x000C0504u : 0x0D0C0504u;
     SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1190u);
     cpu().d[0] = 0x10u;
     SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1198u);
@@ -212,7 +213,8 @@ void StreetsOfRage::options_menu_build(m_long /*entry_*/) {
 
     cpu().setDw(4, 0x2000u);
     SOR_CALL_68K(options_draw_difficulty(), 0x11A4u);
-    SOR_CALL_68K(options_draw_controls(), 0x11A8u);
+    if (!SoRCheats::altControlsEnabled())
+        SOR_CALL_68K(options_draw_controls(), 0x11A8u);
 
     if (memory().readByte(kCheatFlag) != 0) {
         SOR_CALL_68K(options_draw_lives_digit(), 0x11B2u);
@@ -408,8 +410,12 @@ void StreetsOfRage::options_row_nav(m_long /*entry_*/) {
             next = 0x18;
         if (static_cast<m_byte>(next) < 0x10)
             next = 0x24;
+        if (SoRCheats::altControlsEnabled() && static_cast<m_byte>(next) == 0x18)
+            next = 0x14;
     } else {
         next = static_cast<m_word>(next + 2);
+        if (SoRCheats::altControlsEnabled() && static_cast<m_byte>(next) == 0x18)
+            next = memory().readByte(kCheatFlag) == 0 ? 0x24 : 0x1C;
         if (memory().readByte(kCheatFlag) == 0 && static_cast<m_byte>(next) == 0x1C)
             next = 0x24;
         if (static_cast<m_byte>(next) >= 0x26)

@@ -1,5 +1,5 @@
-#include "Sor.hpp"
 #include "SoRCheats.hpp"
+#include "Sor.hpp"
 #include "config/controls/ControlsConfigUI.hpp"
 #include <CLI/CLI.hpp>
 #include <cstdint>
@@ -9,20 +9,20 @@ int main(int argc, char *argv[]) {
     CLI::App app{"MegaDrive Environment"};
     app.set_version_flag("-V,--version", "0.1.0");
 
-    bool        configControlsFlag    = false;
-    bool        runSorFlag            = false;
-    bool        sorDebugFlag          = false;
-    bool        debugUtilsFlag        = false;
-    bool        fullScreenFlag        = false;
-    bool        silentFlag            = false;
-    bool        alternativePickupFlag = false;
-    int         sorVSyncMode          = 0; // 0 = internal timer (default); 1/2/3 = VSync/VSync2/VSync3
-    int         remoteAccessPort      = 6969;
-    std::uint32_t turboMultiplier     = 0;
-    std::string sorRomPath            = "rom/SOR.bin";
-    std::string sorAuxAddrFile; // if set, record unknown dispatch targets here
-    std::string languagePin = "jp";
-    std::string videoHz     = "60";
+    bool          configControlsFlag = false;
+    bool          runSorFlag         = false;
+    bool          sorDebugFlag       = false;
+    bool          debugUtilsFlag     = false;
+    bool          fullScreenFlag     = false;
+    bool          silentFlag         = false;
+    bool          altControlsFlag    = false;
+    int           sorVSyncMode       = 0; // 0 = internal timer (default); 1/2/3 = VSync/VSync2/VSync3
+    int           remoteAccessPort   = 6969;
+    std::uint32_t turboMultiplier    = 0;
+    std::string   sorRomPath         = "rom/SOR.bin";
+    std::string   sorAuxAddrFile; // if set, record unknown dispatch targets here
+    std::string   languagePin = "jp";
+    std::string   videoHz     = "60";
 
     app.add_flag("--silent", silentFlag, "Disable audio output entirely (chip writes are dropped)");
     app.add_flag("--configControls", configControlsFlag, "Open controller configuration UI");
@@ -32,17 +32,14 @@ int main(int argc, char *argv[]) {
     app.add_option("--hz", videoHz, "Console video frequency pin: 60=low/NTSC, 50=high/PAL")
         ->capture_default_str()
         ->check(CLI::IsMember({"60", "50"}));
-    app.add_flag("--runSor",
-                 runSorFlag,
-                 "Explicitly run Streets of Rage (already the default unless --configControls is used)");
+    app.add_flag(
+        "--runSor", runSorFlag, "Explicitly run Streets of Rage (already the default unless --configControls is used)");
     app.add_flag("--debug", sorDebugFlag, "Log CPU/VDP state once per second");
-    app.add_flag("--debugUtils",
-                 debugUtilsFlag,
-                 "Enable debug hotkeys, cheats and remote access");
+    app.add_flag("--debugUtils", debugUtilsFlag, "Enable debug hotkeys, cheats and remote access");
     app.add_flag("--fullScreen", fullScreenFlag, "Start the game in fullscreen");
-    app.add_flag("--alternativePickupRoutine",
-                 alternativePickupFlag,
-                 "Prioritize attacks on B; use Start to pick up nearby ground items/weapons");
+    app.add_flag("--altControls",
+                 altControlsFlag,
+                 "Use the alternative 6-button control layout and hide OPTIONS control remapping");
     app.add_option("--vsync",
                    sorVSyncMode,
                    "Frame sync — 0=internal timer from --hz (default), "
@@ -50,14 +47,10 @@ int main(int argc, char *argv[]) {
         ->capture_default_str()
         ->check(CLI::Range(0, 3));
     app.add_option("--rom", sorRomPath, "Streets of Rage ROM path")->capture_default_str();
-    app.add_option("--port",
-                   remoteAccessPort,
-                   "With --debugUtils: remote access TCP port (0 disables)")
+    app.add_option("--port", remoteAccessPort, "With --debugUtils: remote access TCP port (0 disables)")
         ->capture_default_str()
         ->check(CLI::Range(0, 65535));
-    app.add_option("--turbo",
-                   turboMultiplier,
-                   "With --vsync 0: run the internal VDP at 60 Hz times this multiplier")
+    app.add_option("--turbo", turboMultiplier, "With --vsync 0: run the internal VDP at 60 Hz times this multiplier")
         ->check(CLI::Range(1u, 4'294'967'295u));
     app.add_option("--auxAddrFile",
                    sorAuxAddrFile,
@@ -85,7 +78,7 @@ int main(int argc, char *argv[]) {
                           VDP::Integer,
                           debugUtilsFlag ? static_cast<std::uint16_t>(remoteAccessPort) : 0);
         configureEnvironment(sor);
-        SoRCheats::setAlternativePickupRoutineEnabled(alternativePickupFlag);
+        SoRCheats::setAltControlsEnabled(altControlsFlag);
         sor.setDebugLog(sorDebugFlag);
         sor.setDebugUtilities(debugUtilsFlag);
         sor.setStartFullscreen(fullScreenFlag);

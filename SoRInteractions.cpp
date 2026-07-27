@@ -45,7 +45,6 @@ constexpr m_long kWeaponUseCounter  = 0x50u;
 constexpr m_long kBottleBrokenFlag  = 0x54u;
 
 constexpr m_byte kButtonAttack = 0x10u;
-constexpr m_byte kButtonStart  = 0x80u;
 
 constexpr bool bit(m_byte value, unsigned index) {
     return (value & static_cast<m_byte>(1u << index)) != 0;
@@ -194,24 +193,25 @@ void return68k(CPU68K &cpu) {
 void StreetsOfRage::player_normal_attack_input(m_long entry_) {
     traceEnter(entry_);
 
-    const m_long player        = cpu().a[0];
-    const bool   alternative   = SoRCheats::alternativePickupRoutineEnabled();
-    const m_byte pressed       = memory().readByte(player + kPlayerInputPressed);
-    const bool   attackPressed = (pressed & kButtonAttack) != 0u;
-    const bool   startPressed  = (pressed & kButtonStart) != 0u;
-    const bool   comboPending  = clearBit(memory(), player + kPlayerFlags58, 5);
+    const m_long player      = cpu().a[0];
+    const m_byte pressed     = memory().readByte(player + kPlayerInputPressed);
+    const bool   altControls = SoRCheats::altControlsEnabled();
+    const bool   attackPressed =
+        (pressed & kButtonAttack) != 0u || (altControls && SoRCheats::altAttackButtonPressedForObject(player));
+    const bool pickupPressed = altControls && SoRCheats::altPickupButtonPressedForObject(player);
+    const bool comboPending  = clearBit(memory(), player + kPlayerFlags58, 5);
 
     if (comboPending) {
         setBit(memory(), player + kPlayerFlags58, 1);
         memory().writeByte(player + kPlayerSavedFrame, 1u);
         memory().writeByte(player + kPlayerSavedDuration, 2u);
-    } else if (!attackPressed && !(alternative && startPressed)) {
+    } else if (!attackPressed && !pickupPressed) {
         cpu().setFlag(CPU68K::FlagZ, true);
         return68k(cpu());
         return;
     }
 
-    const bool tryPickup = alternative ? (startPressed && !attackPressed && !comboPending) : true;
+    const bool tryPickup = altControls ? (pickupPressed && !attackPressed && !comboPending) : true;
     if (tryPickup) {
         if (!call68k(
                 cpu(),
@@ -272,19 +272,20 @@ void StreetsOfRage::player_normal_attack_input(m_long entry_) {
 void StreetsOfRage::player_held_object_attack_input(m_long entry_) {
     traceEnter(entry_);
 
-    const m_long player        = cpu().a[0];
-    const m_byte pressed       = memory().readByte(player + kPlayerInputPressed);
-    const bool   attackPressed = (pressed & kButtonAttack) != 0u;
-    const bool   startPressed  = (pressed & kButtonStart) != 0u;
-    const bool   alternative   = SoRCheats::alternativePickupRoutineEnabled();
+    const m_long player      = cpu().a[0];
+    const m_byte pressed     = memory().readByte(player + kPlayerInputPressed);
+    const bool   altControls = SoRCheats::altControlsEnabled();
+    const bool   attackPressed =
+        (pressed & kButtonAttack) != 0u || (altControls && SoRCheats::altAttackButtonPressedForObject(player));
+    const bool pickupPressed = altControls && SoRCheats::altPickupButtonPressedForObject(player);
 
-    if (!attackPressed && !(alternative && startPressed)) {
+    if (!attackPressed && !pickupPressed) {
         cpu().setFlag(CPU68K::FlagZ, true);
         return68k(cpu());
         return;
     }
 
-    const bool tryPickup = alternative ? (startPressed && !attackPressed) : true;
+    const bool tryPickup = altControls ? (pickupPressed && !attackPressed) : true;
     if (tryPickup) {
         if (!call68k(
                 cpu(),

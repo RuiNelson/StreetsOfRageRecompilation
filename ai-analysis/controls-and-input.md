@@ -155,6 +155,25 @@ After this point, the player state machine can treat bit `$10` as attack, bit
 `$20` as jump, and bit `$40` as police special regardless of the selected
 OPTIONS layout. Directions and Start are never remapped.
 
+The native port's host option `--altControls` deliberately bypasses
+`$FFFFC8 (control_scheme)`: the sampler reads the 6-button pad sequence and
+pre-translates it into the same logical bits before `$568A
+(remap_player_gameplay_input)` copies the word into each player object.
+
+| Physical button under `--altControls` | Native-port role |
+|---|---|
+| A | Sets logical B+C together, producing the rear attack input. |
+| B | Logical attack (`$10`). |
+| C | Logical jump (`$20`). |
+| X | Logical police special (`$40`), replacing original physical A. |
+| Y | Pickup-only edge tracked outside the ROM input byte. |
+| Z | No gameplay action. |
+| Start | Start only; pause/demo-abort behavior is unchanged. |
+
+Y is not written into `$FFFC04/$FFFC08` because the original active-high button
+byte has no spare bit once D-pad, B, C, X-as-special, and Start are preserved.
+The manual pickup hooks read a native per-player Y edge instead.
+
 ## Gameplay action priority
 
 The player action code consumes the logical object input produced by
@@ -166,11 +185,11 @@ normal punch. If no target is found, the same logical attack bit starts the
 attack/combo transition.
 
 This is why the original behavior gives pickup priority over attack when the
-player presses the configured attack button near an item. The native port's
-host option `--alternativePickupRoutine` changes that policy outside the
-original ROM input pipeline: attack remains on the configured attack bit, while
-the pickup attempt is moved to Start when a close item exists. Start should
-still reach the normal pause handler when no pickup is being taken.
+player presses the configured attack button near an item. With `--altControls`,
+the manual pickup hooks invert that priority: B remains attack and will not be
+converted into pickup, while Y alone requests
+`$3136 (find_close_interaction_target)`. Start is no longer overloaded for
+pickup and always reaches the normal Start path.
 
 ## Start, pause, and joining
 
