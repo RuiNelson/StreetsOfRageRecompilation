@@ -8,3 +8,4 @@ vdp_*.png
 /*.png
 code-analysis/speculative_addresses.txt
 .vscode/
+controls.yaml
