@@ -132,7 +132,9 @@ destination.
 deduplicated SQLite call graph. It uses `code-analysis/labels.csv` for readable
 names and, unless `--trust-recorded-source` is supplied, repairs older logs
 that recorded a tail-grouped C++ owner instead of the closest labelled 68000
-source entry.
+source entry. Passing `--port PORT` starts its read-only interactive web viewer
+after database generation. The viewer binds to `127.0.0.1` unless `--host` is
+explicitly provided and exposes names, flow counts, and per-flow callsites.
 
 The generated `call-map.sqlite` artifact may be kept locally in this repository
 alongside the tool, but must remain ignored and unversioned. Regenerate it from
