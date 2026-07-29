@@ -41,6 +41,9 @@ Before changing files:
 | `code-analysis/addresses.csv` | ROM data, RAM, hardware, table, and buffer symbols |
 | `code-analysis/blocks.csv` | Known data/code block boundaries |
 | `code-analysis/aux_addresses.txt` | Confirmed extra static entry points |
+| `tools/call_map.py` | Converts runtime call logs into deduplicated SQLite and Mermaid call maps |
+| `call-map.sqlite` | Versioned observed call graph generated from the current workspace `calls.csv` capture |
+| `call-map.mmd` | Versioned complete Mermaid rendering of the observed call graph |
 | `generated/Sor.*` | Ignored local C++ generated from ROM and analysis inputs |
 | `output/sor.asm` | Ignored local 68000 listing and primary code-analysis view |
 | `ai-analysis/*.md` | English topic-based reverse-engineering manuscripts |
@@ -134,6 +137,11 @@ filter only the Mermaid rendering. The tool uses `code-analysis/labels.csv`
 for readable names and, unless `--trust-recorded-source` is supplied, repairs
 older logs that recorded a tail-grouped C++ owner instead of the closest
 labelled 68000 source entry.
+
+The user wants the generated `call-map.sqlite` and `call-map.mmd` artifacts
+stored in this repository alongside the tool. Regenerate both from the
+workspace-root `calls.csv` with the command documented in the root README and
+commit them together when that capture is intentionally refreshed.
 
 ## Manual subroutines
 
