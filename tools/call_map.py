@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collapse runtime 68000 call logs into SQLite and Mermaid call maps."""
+"""Collapse runtime 68000 call logs into a SQLite call-map database."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import bisect
 import csv
 import sqlite3
 import sys
-from collections import Counter, defaultdict, deque
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -283,108 +283,12 @@ def write_database(
         connection.close()
 
 
-def mermaid_escape(value: str) -> str:
-    return (
-        value.replace("&", "&amp;")
-        .replace('"', "&quot;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace("|", "&#124;")
-    )
-
-
-def parse_cli_address(value: str) -> int:
-    normalized = value.removeprefix("$").removeprefix("0x").removeprefix("0X")
-    try:
-        address = int(normalized, 16)
-    except ValueError as error:
-        raise argparse.ArgumentTypeError(f"invalid hexadecimal address: {value}") from error
-    if not 0 <= address <= ADDRESS_LIMIT:
-        raise argparse.ArgumentTypeError(f"address outside 24-bit range: {value}")
-    return address
-
-
-def selected_edges(
-    edges: Counter[tuple[int, int]],
-    roots: list[int],
-    max_depth: int | None,
-    minimum_count: int,
-) -> dict[tuple[int, int], int]:
-    eligible = {
-        edge: count for edge, count in edges.items() if count >= minimum_count
-    }
-    if not roots:
-        return eligible
-
-    outgoing: dict[int, list[tuple[int, int]]] = defaultdict(list)
-    for (source, target), count in eligible.items():
-        outgoing[source].append((target, count))
-
-    selected: dict[tuple[int, int], int] = {}
-    best_depth: dict[int, int] = {}
-    queue = deque((root, 0) for root in roots)
-    while queue:
-        source, depth = queue.popleft()
-        if source in best_depth and best_depth[source] <= depth:
-            continue
-        best_depth[source] = depth
-        if max_depth is not None and depth >= max_depth:
-            continue
-        for target, count in outgoing.get(source, []):
-            selected[source, target] = count
-            queue.append((target, depth + 1))
-    return selected
-
-
-def write_mermaid(
-    path: Path,
-    call_map: CallMap,
-    labels: dict[int, Label],
-    *,
-    roots: list[int],
-    max_depth: int | None,
-    minimum_count: int,
-    direction: str,
-) -> tuple[int, int]:
-    edges = selected_edges(call_map.edges, roots, max_depth, minimum_count)
-    nodes = {address for edge in edges for address in edge}
-    nodes.update(root for root in roots if root in call_map.addresses)
-
-    edge_callsites: dict[tuple[int, int], list[tuple[int, int]]] = defaultdict(list)
-    for (source, callsite, target), count in call_map.targets.items():
-        if (source, target) in edges:
-            edge_callsites[source, target].append((callsite, count))
-
-    lines = [
-        "%% Generated from runtime call logs by tools/call_map.py",
-        f"flowchart {direction}",
-    ]
-    for address in sorted(nodes):
-        name = mermaid_escape(subroutine_name(address, labels))
-        lines.append(f'    n{address:06X}["{name}<br/>${address:06X}"]')
-    for (source, target), count in sorted(edges.items()):
-        callsites = ", ".join(
-            f"${callsite:06X} × {observed:,}"
-            for callsite, observed in sorted(edge_callsites[source, target])
-        )
-        edge_label = mermaid_escape(
-            f"{callsites} | total × {count:,}" if callsites else f"× {count:,}"
-        )
-        lines.append(
-            f'    n{source:06X} -->|"{edge_label}"| n{target:06X}'
-        )
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return len(nodes), len(edges)
-
-
 def build_parser() -> argparse.ArgumentParser:
     default_labels = Path(__file__).resolve().parents[1] / "code-analysis" / "labels.csv"
     parser = argparse.ArgumentParser(
         description=(
             "Collapse one or more source,callsite,target runtime CSV logs into "
-            "a queryable SQLite database and an aggregated Mermaid flowchart."
+            "a queryable SQLite database."
         )
     )
     parser.add_argument("logs", nargs="+", type=Path, help="runtime call-log CSV file")
@@ -392,37 +296,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--database", "-d", required=True, type=Path, help="output SQLite database"
     )
     parser.add_argument(
-        "--mermaid", "-m", required=True, type=Path, help="output Mermaid .mmd file"
-    )
-    parser.add_argument(
         "--labels",
         type=Path,
         default=default_labels,
         help=f"labels CSV used for readable names (default: {default_labels})",
-    )
-    parser.add_argument(
-        "--root",
-        action="append",
-        type=parse_cli_address,
-        default=[],
-        help="limit Mermaid to flows reachable from this address; repeatable",
-    )
-    parser.add_argument(
-        "--max-depth",
-        type=int,
-        help="maximum Mermaid traversal depth (requires --root)",
-    )
-    parser.add_argument(
-        "--minimum-count",
-        type=int,
-        default=1,
-        help="minimum observations required for a Mermaid edge (default: 1)",
-    )
-    parser.add_argument(
-        "--direction",
-        choices=("LR", "RL", "TB", "BT"),
-        default="LR",
-        help="Mermaid flowchart direction (default: LR)",
     )
     parser.add_argument(
         "--trust-recorded-source",
@@ -438,20 +315,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.max_depth is not None and not args.root:
-        parser.error("--max-depth requires at least one --root")
-    if args.max_depth is not None and args.max_depth < 0:
-        parser.error("--max-depth must be non-negative")
-    if args.minimum_count < 1:
-        parser.error("--minimum-count must be at least 1")
     database_path = args.database.resolve()
-    mermaid_path = args.mermaid.resolve()
     protected_paths = {path.resolve() for path in args.logs}
     protected_paths.add(args.labels.resolve())
-    if database_path == mermaid_path:
-        parser.error("--database and --mermaid must name different files")
-    if database_path in protected_paths or mermaid_path in protected_paths:
-        parser.error("output files must not overwrite an input log or labels file")
+    if database_path in protected_paths:
+        parser.error("database file must not overwrite an input log or labels file")
 
     try:
         labels = read_labels(args.labels)
@@ -465,15 +333,6 @@ def main(argv: list[str] | None = None) -> int:
             labels,
             args.logs,
             normalized_source_events,
-        )
-        node_count, edge_count = write_mermaid(
-            args.mermaid,
-            call_map,
-            labels,
-            roots=args.root,
-            max_depth=args.max_depth,
-            minimum_count=args.minimum_count,
-            direction=args.direction,
         )
     except (OSError, ValueError, sqlite3.Error) as error:
         print(f"call-map: {error}", file=sys.stderr)
@@ -490,7 +349,6 @@ def main(argv: list[str] | None = None) -> int:
             "owners to human-facing labelled source entries."
         )
     print(f"SQLite: {args.database}")
-    print(f"Mermaid: {args.mermaid} ({node_count:,} nodes, {edge_count:,} edges)")
     return 0
 
 

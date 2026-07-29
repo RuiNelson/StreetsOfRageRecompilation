@@ -41,7 +41,7 @@ Before changing files:
 | `code-analysis/addresses.csv` | ROM data, RAM, hardware, table, and buffer symbols |
 | `code-analysis/blocks.csv` | Known data/code block boundaries |
 | `code-analysis/aux_addresses.txt` | Confirmed extra static entry points |
-| `tools/call_map.py` | Converts runtime call logs into deduplicated SQLite and Mermaid call maps |
+| `tools/call_map.py` | Converts runtime call logs into a deduplicated SQLite call map |
 | `generated/Sor.*` | Ignored local C++ generated from ROM and analysis inputs |
 | `output/sor.asm` | Ignored local 68000 listing and primary code-analysis view |
 | `ai-analysis/*.md` | English topic-based reverse-engineering manuscripts |
@@ -129,17 +129,14 @@ with the original ROM source-subroutine entry, instruction address, and exact
 destination.
 
 `tools/call_map.py` consumes one or more call-log CSV files and writes a
-deduplicated SQLite call graph plus an aggregated Mermaid flowchart. The
-database is always complete; `--root`, `--max-depth`, and `--minimum-count`
-filter only the Mermaid rendering. The tool uses `code-analysis/labels.csv`
-for readable names and, unless `--trust-recorded-source` is supplied, repairs
-older logs that recorded a tail-grouped C++ owner instead of the closest
-labelled 68000 source entry.
+deduplicated SQLite call graph. It uses `code-analysis/labels.csv` for readable
+names and, unless `--trust-recorded-source` is supplied, repairs older logs
+that recorded a tail-grouped C++ owner instead of the closest labelled 68000
+source entry.
 
-Generated `call-map.sqlite` and `call-map.mmd` artifacts may be kept locally in
-this repository alongside the tool, but must remain ignored and unversioned.
-Regenerate both from the workspace-root `calls.csv` with the command documented
-in the root README.
+The generated `call-map.sqlite` artifact may be kept locally in this repository
+alongside the tool, but must remain ignored and unversioned. Regenerate it from
+the workspace-root `calls.csv` with the command documented in the root README.
 
 ## Manual subroutines
 

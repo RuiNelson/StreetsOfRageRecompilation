@@ -11,7 +11,6 @@ def test_call_map_collapses_events_and_preserves_callsites():
         log = root / "calls.csv"
         labels = root / "labels.csv"
         database = root / "calls.sqlite"
-        mermaid = root / "calls.mmd"
         log.write_text(
             "source,callsite,target\n"
             "000100,000110,000200\n"
@@ -33,8 +32,6 @@ def test_call_map_collapses_events_and_preserves_callsites():
                 str(log),
                 "--database",
                 str(database),
-                "--mermaid",
-                str(mermaid),
                 "--labels",
                 str(labels),
             ]
@@ -64,52 +61,6 @@ def test_call_map_collapses_events_and_preserves_callsites():
                 (0x200, 0x210, 0x300, 1),
             ]
 
-        diagram = mermaid.read_text(encoding="utf-8")
-        assert 'n000100["source_routine<br/>$000100"]' in diagram
-        assert 'n000100 -->|"$000110 × 2 &#124; total × 2"| n000200' in diagram
-
-
-def test_mermaid_root_and_depth_do_not_filter_database():
-    with TemporaryDirectory() as directory:
-        root = Path(directory)
-        log = root / "calls.csv"
-        labels = root / "labels.csv"
-        database = root / "calls.sqlite"
-        mermaid = root / "calls.mmd"
-        log.write_text(
-            "source,callsite,target\n"
-            "000100,000110,000200\n"
-            "000200,000210,000300\n"
-            "000400,000410,000500\n",
-            encoding="ascii",
-        )
-        labels.write_text("", encoding="utf-8")
-
-        assert main(
-            [
-                str(log),
-                "--database",
-                str(database),
-                "--mermaid",
-                str(mermaid),
-                "--labels",
-                str(labels),
-                "--root",
-                "100",
-                "--max-depth",
-                "1",
-            ]
-        ) == 0
-
-        with sqlite3.connect(database) as connection:
-            assert connection.execute("SELECT count(*) FROM call_edge").fetchone() == (3,)
-
-        diagram = mermaid.read_text(encoding="utf-8")
-        assert "n000100" in diagram
-        assert "n000200" in diagram
-        assert "n000300" not in diagram
-        assert "n000400" not in diagram
-
 
 def test_old_grouped_owner_is_normalized_to_closest_labelled_source():
     with TemporaryDirectory() as directory:
@@ -117,7 +68,6 @@ def test_old_grouped_owner_is_normalized_to_closest_labelled_source():
         log = root / "calls.csv"
         labels = root / "labels.csv"
         database = root / "calls.sqlite"
-        mermaid = root / "calls.mmd"
         log.write_text(
             "source,callsite,target\n"
             "000100,000310,000400\n",
@@ -135,8 +85,6 @@ def test_old_grouped_owner_is_normalized_to_closest_labelled_source():
                 str(log),
                 "--database",
                 str(database),
-                "--mermaid",
-                str(mermaid),
                 "--labels",
                 str(labels),
             ]
