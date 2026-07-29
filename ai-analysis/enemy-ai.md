@@ -106,6 +106,17 @@ result gives this mapping:
 This is a **visual-family mapping**, not proof that every internal ID in a
 shared row behaves identically. The type tables make the differences explicit:
 
+The dispatcher labels follow that same distinction. `$D606 (garcia_type20_dispatcher)`,
+`$D99A (garcia_type21_dispatcher)`, `$DD78 (garcia_type22_32_dispatcher)`, and
+`$E326 (garcia_type23_dispatcher)` are named as Garcia-family dispatchers because
+their object types select the Garcia art and animation resources; the retained
+type suffix records that the four internal variants still have separate state
+tables and combat values. Likewise `$E4D2 (signal_type24_dispatcher)`,
+`$E8F0 (haku_ro_type25_dispatcher)`, `$F038 (nora_type26_dispatcher)`,
+`$F27E (jack_type27_dispatcher)`, `$F7D0 (haku_ro_type2a_dispatcher)`, and
+the Jack projectile dispatcher at ROM entry `0000FC14` name the confirmed visual identities
+without collapsing the remaining behavioural differences.
+
 | Type | Identity | Animation set | Variant health bytes | Variant damage bytes |
 |---:|---|---:|---|---|
 | `$20` | Garcia | `$1FC70 (garcia_animation_set)` | `$06,$09,$0B` | `$08,$08,$08` |
