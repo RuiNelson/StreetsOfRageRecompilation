@@ -212,9 +212,10 @@ void sampleOneJoypadBody(CPU68K                   &cpu,
 
 } // namespace
 
-#define SOR_CONTROLS_CALL_68K(expression, returnPc)                                                                    \
+#define SOR_CONTROLS_CALL_68K(expression, returnPc, target)                                                            \
     do {                                                                                                               \
         const m_long sorCallSp = cpu().ssp;                                                                            \
+        logCallFromReturn(static_cast<m_long>(returnPc), static_cast<m_long>(target));                                 \
         cpu().ssp -= 4;                                                                                                \
         memory().writeLong(cpu().ssp, static_cast<m_long>(returnPc));                                                  \
         expression;                                                                                                    \
@@ -227,10 +228,10 @@ void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
 
     cpu().setDw(0, memory().readWord(kControlScheme));
     cpu().setFlag(CPU68K::FlagZ, cpu().dw(0) == 0);
-    SOR_CONTROLS_CALL_68K(options_row_nav(), 0x1398u);
+    SOR_CONTROLS_CALL_68K(options_row_nav(), 0x1398u, 0x0014F2u);
     if (cpu().ne()) {
         cpu().d[0] = 0x0Du;
-        SOR_CONTROLS_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x13CEu);
+        SOR_CONTROLS_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x13CEu, 0x00A8B8u);
         cpu().setDw(4, 0x2000u);
         setMoveWordFlags(cpu(), 0x2000u);
         options_draw_controls();
@@ -338,11 +339,11 @@ void StreetsOfRage::char_select_player_input(m_long /*entry_*/) {
     memory().writeByte(cpu().a[1] + 0x5C, 1);
 
     cpu().a[6] = kCharOldPalette + signExtendWord(cpu().dw(0));
-    SOR_CONTROLS_CALL_68K(load_palette_list_to_active(), 0x199Cu);
+    SOR_CONTROLS_CALL_68K(load_palette_list_to_active(), 0x199Cu, 0x01053Eu);
     cpu().setDw(0, static_cast<m_word>(newSlot * 2u));
     memory().writeWord(object + 0x10, memory().readWord(kCharCursorX + signExtendWord(cpu().dw(0))));
     cpu().a[6] = kCharNewPalette + signExtendWord(cpu().dw(0));
-    SOR_CONTROLS_CALL_68K(load_palette_list_to_active(), 0x19B2u);
+    SOR_CONTROLS_CALL_68K(load_palette_list_to_active(), 0x19B2u, 0x01053Eu);
 
     cpu().d[7] = 0xFFFFFFB9u;
     cpu().setNZClearVC(cpu().d[7], 0x80000000u);

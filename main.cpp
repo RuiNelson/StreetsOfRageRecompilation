@@ -21,6 +21,7 @@ int main(int argc, char *argv[]) {
     std::uint32_t turboMultiplier    = 0;
     std::string   sorRomPath         = "rom/SOR.bin";
     std::string   sorAuxAddrFile; // if set, record unknown dispatch targets here
+    std::string   sorCallLogFile;
     std::string   languagePin = "jp";
     std::string   videoHz     = "60";
 
@@ -56,6 +57,10 @@ int main(int argc, char *argv[]) {
                    sorAuxAddrFile,
                    "On an indirect dispatch to an unknown address, append it to "
                    "this aux file and exit (42) instead of aborting — for the discovery loop");
+    app.add_option("--callLog",
+                   sorCallLogFile,
+                   "Write every 68000 subroutine call to this CSV file "
+                   "(source, callsite, target)");
 
     CLI11_PARSE(app, argc, argv);
 
@@ -84,6 +89,9 @@ int main(int argc, char *argv[]) {
         sor.setStartFullscreen(fullScreenFlag);
         if (!sorAuxAddrFile.empty()) {
             sor.setAuxAddrFile(sorAuxAddrFile);
+        }
+        if (!sorCallLogFile.empty()) {
+            sor.setCallLog(sorCallLogFile);
         }
         sor.boot();
     }

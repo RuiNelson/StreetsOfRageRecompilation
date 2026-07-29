@@ -1,7 +1,10 @@
 #include "Sor.hpp"
 #include "SoRCheats.hpp"
 #include "Logger.hpp"
+#include <cerrno>
 #include <cstdio>
+#include <cstring>
+#include <stdexcept>
 
 namespace {
 
@@ -124,6 +127,42 @@ int killInstantiatedEnemies(SystemMemory &memory) {
 }
 
 } // namespace
+
+StreetsOfRage::~StreetsOfRage() {
+    if (callLog_ != nullptr)
+        std::fclose(callLog_);
+}
+
+void StreetsOfRage::setCallLog(const std::string &path) {
+    if (callLog_ != nullptr) {
+        std::fclose(callLog_);
+        callLog_ = nullptr;
+    }
+    callLogPending_ = 0;
+
+    callLog_ = std::fopen(path.c_str(), "wb");
+    if (callLog_ == nullptr) {
+        throw std::runtime_error("Cannot open call log '" + path + "': " + std::strerror(errno));
+    }
+
+    std::fputs("source,callsite,target\n", callLog_);
+    std::fflush(callLog_);
+}
+
+void StreetsOfRage::logCall(m_long source, m_long callsite, m_long target) {
+    if (callLog_ == nullptr)
+        return;
+
+    std::fprintf(callLog_,
+                 "%06X,%06X,%06X\n",
+                 static_cast<unsigned>(source & 0x00FFFFFFu),
+                 static_cast<unsigned>(callsite & 0x00FFFFFFu),
+                 static_cast<unsigned>(target & 0x00FFFFFFu));
+    if (++callLogPending_ >= 4096u) {
+        std::fflush(callLog_);
+        callLogPending_ = 0;
+    }
+}
 
 void StreetsOfRage::handleOptionHotkey(OptionHotkeyCode keyCode) {
     if (keyCode.source != OptionHotkeyCode::Source::Keyboard)

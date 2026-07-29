@@ -117,6 +117,16 @@ include temporary candidates that do not belong in a normal build.
 Review regenerated output carefully. A large unexpected change is evidence to
 investigate, not a result to accept mechanically.
 
+## Runtime call log
+
+`--callLog PATH` optionally records every emulated 68000 `bsr`/`jsr` as CSV,
+with the columns `source,callsite,target`. Addresses are uppercase, six-digit
+hexadecimal ROM addresses without a prefix. The file is truncated at startup;
+without this option, call logging is disabled and has only a null check at each
+call. Generated and hand-written subroutine calls must both invoke `logCall`
+with the original ROM source-subroutine entry, instruction address, and exact
+destination.
+
 ## Manual subroutines
 
 A manual subroutine replaces the generated body of a known ROM routine while

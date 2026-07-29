@@ -77,9 +77,10 @@ constexpr m_word wrappedStep(m_word value, m_word maximum, bool increment) {
 // A hand-written equivalent of generated/Sor.cpp's CALL/CALL_DISPATCH.  The
 // expression is a 68000 subroutine call: push the synthetic return PC, invoke
 // it, and stop this body if the callee unwound beyond our frame.
-#define SOR_CALL_68K(expression, returnPc)                                                                             \
+#define SOR_CALL_68K(expression, returnPc, target)                                                                     \
     do {                                                                                                               \
         const m_long sorCallSp = cpu().ssp;                                                                            \
+        logCallFromReturn(static_cast<m_long>(returnPc), static_cast<m_long>(target));                                 \
         cpu().ssp -= 4;                                                                                                \
         memory().writeLong(cpu().ssp, static_cast<m_long>(returnPc));                                                  \
         expression;                                                                                                    \
@@ -105,12 +106,12 @@ void StreetsOfRage::init_game_start_screen(m_long entry_) {
     memory().writeWord(0xFFFFFF06u, 1);
     memory().writeWord(0xFFFFE000u, 3);
     cpu().d[0] = 2;
-    SOR_CALL_68K(load_nemesis_art_bundle(), 0x1000u);
+    SOR_CALL_68K(load_nemesis_art_bundle(), 0x1000u, 0x00A63Au);
 
     memory().writeWord(kSelectScreenSubstate, 0);
     cpu().d[1] = 0;
     cpu().a[1] = kP1Object;
-    SOR_CALL_68K(memfill_long_128(), 0x1010u);
+    SOR_CALL_68K(memfill_long_128(), 0x1010u, 0x0103D0u);
 
     cpu().d[4] = 2;
     cpu().d[5] = 0;
@@ -120,7 +121,7 @@ void StreetsOfRage::init_game_start_screen(m_long entry_) {
         cpu().d[6] = 9;
         cpu().d[7] = memory().readLong(cpu().a[6]);
         cpu().a[6] += 4;
-        SOR_CALL_68K(vdp_write_menu_string(), 0x1026u);
+        SOR_CALL_68K(vdp_write_menu_string(), 0x1026u, 0x01290Au);
         cpu().setDw(5, memory().readWord(cpu().a[5]));
         cpu().a[5] += 2;
         cpu().setDw(4, static_cast<m_word>(cpu().dw(4) - 1));
@@ -128,7 +129,7 @@ void StreetsOfRage::init_game_start_screen(m_long entry_) {
 
     memory().writeWord(kPaletteFadeCounter, 0x40);
     cpu().a[6] = memory().readByte(kP2PadMissing) == 0 ? 0x0007267Cu : 0x00072684u;
-    SOR_CALL_68K(load_palette_list_to_target(), 0x104Au);
+    SOR_CALL_68K(load_palette_list_to_target(), 0x104Au, 0x010538u);
 
     memory().writeByte(kSelectMenuOptionCount, memory().readByte(kP2PadMissing) == 0 ? 3 : 1);
     cpu().ssp += 4;
@@ -140,7 +141,7 @@ void StreetsOfRage::game_start_screen_update(m_long /*entry_*/) {
     const m_word substate = memory().readWord(kSelectScreenSubstate);
     if (substate >= 0x10 && substate < 0x28 && (memory().readByte(kP1ButtonPress) & 0x80u) != 0) {
         cpu().d[7] = 0xFFFFFFE1u;
-        SOR_CALL_68K(queue_sound_id(), 0x10AEu);
+        SOR_CALL_68K(queue_sound_id(), 0x10AEu, 0x01069Eu);
         memory().writeWord(kSelectScreenSubstate, 0x28);
     }
 
@@ -154,7 +155,7 @@ void StreetsOfRage::game_start_screen_update(m_long /*entry_*/) {
 
 void StreetsOfRage::select_menu_wait_fade_in(m_long /*entry_*/) {
     traceEnter(0x10F2u);
-    SOR_CALL_68K(player_state_dispatcher(), 0x10F6u);
+    SOR_CALL_68K(player_state_dispatcher(), 0x10F6u, 0x001564u);
     select_menu_wait_fade(0x10F6u);
 }
 
@@ -165,13 +166,13 @@ void StreetsOfRage::select_menu_input(m_long /*entry_*/) {
     cpu().setDb(0, confirm);
     cpu().setNZClearVC(confirm, 0x80u);
     if (confirm == 0) {
-        SOR_CALL_68K(select_menu_sync_pad_count(), 0x1112u);
+        SOR_CALL_68K(select_menu_sync_pad_count(), 0x1112u, 0x001546u);
         player_state_dispatcher();
         return;
     }
 
     cpu().d[7] = 0xFFFFFFBAu;
-    SOR_CALL_68K(queue_sound_id(), 0x111Eu);
+    SOR_CALL_68K(queue_sound_id(), 0x111Eu, 0x01069Eu);
     memory().writeWord(kSelectScreenSubstate, static_cast<m_word>(memory().readWord(kSelectScreenSubstate) + 2));
     cpu().ssp += 4;
 }
@@ -202,25 +203,25 @@ void StreetsOfRage::select_menu_resolve_choice(m_long /*entry_*/) {
 void StreetsOfRage::options_menu_build(m_long /*entry_*/) {
     traceEnter(0x117Cu);
 
-    SOR_CALL_68K(sub_007f00(), 0x1180u);
+    SOR_CALL_68K(sub_007f00(), 0x1180u, 0x007F00u);
     memory().writeLong(0xFFFFDA00u, 0);
 
     cpu().d[0] = SoRCheats::altControlsEnabled() ? 0x000C0504u : 0x0D0C0504u;
-    SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1190u);
+    SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1190u, 0x00A8B8u);
     cpu().d[0] = 0x10u;
-    SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1198u);
-    SOR_CALL_68K(options_draw_sound_name(), 0x119Cu);
+    SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1198u, 0x00A8B8u);
+    SOR_CALL_68K(options_draw_sound_name(), 0x119Cu, 0x0011D4u);
 
     cpu().setDw(4, 0x2000u);
-    SOR_CALL_68K(options_draw_difficulty(), 0x11A4u);
+    SOR_CALL_68K(options_draw_difficulty(), 0x11A4u, 0x0012E4u);
     if (!SoRCheats::altControlsEnabled())
-        SOR_CALL_68K(options_draw_controls(), 0x11A8u);
+        SOR_CALL_68K(options_draw_controls(), 0x11A8u, 0x001370u);
 
     if (memory().readByte(kCheatFlag) != 0) {
-        SOR_CALL_68K(options_draw_lives_digit(), 0x11B2u);
-        SOR_CALL_68K(options_draw_level_digit(), 0x11B6u);
+        SOR_CALL_68K(options_draw_lives_digit(), 0x11B2u, 0x0013E6u);
+        SOR_CALL_68K(options_draw_level_digit(), 0x11B6u, 0x00145Au);
         cpu().d[0] = 0x00000F0Eu;
-        SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x11C2u);
+        SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x11C2u, 0x00A8B8u);
     }
 
     memory().writeWord(kSelectScreenSubstate, static_cast<m_word>(memory().readWord(kSelectScreenSubstate) + 2));
@@ -232,12 +233,12 @@ void StreetsOfRage::options_input_sound_test(m_long /*entry_*/) {
 
     cpu().setDw(0, memory().readWord(kSoundTestIndex));
     cpu().setFlag(CPU68K::FlagZ, cpu().dw(0) == 0);
-    SOR_CALL_68K(options_row_nav(), 0x1220u);
+    SOR_CALL_68K(options_row_nav(), 0x1220u, 0x0014F2u);
     if (cpu().ne()) {
         cpu().d[7] = 0xFFFFFFE1u;
-        SOR_CALL_68K(queue_sound_id(), 0x1262u);
+        SOR_CALL_68K(queue_sound_id(), 0x1262u, 0x01069Eu);
         cpu().d[0] = 0x0Bu;
-        SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x126Au);
+        SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x126Au, 0x00A8B8u);
         cpu().setDw(4, 0x2000u);
         cpu().setNZClearVC(0x2000u, 0x8000u);
         options_draw_sound_name(0x11D6u);
@@ -249,7 +250,7 @@ void StreetsOfRage::options_input_sound_test(m_long /*entry_*/) {
     cpu().setDb(2, press);
     if ((press & 0x0Cu) != 0) {
         cpu().d[7] = 0xFFFFFFE1u;
-        SOR_CALL_68K(queue_sound_id(), 0x123Au);
+        SOR_CALL_68K(queue_sound_id(), 0x123Au, 0x01069Eu);
         const bool   right = (press & 0x08u) != 0;
         const m_word value = wrappedStep(cpu().dw(0), 0x48, right);
         cpu().setDw(0, value);
@@ -280,10 +281,10 @@ void StreetsOfRage::options_input_difficulty(m_long /*entry_*/) {
 
     cpu().setDw(0, memory().readWord(kDifficulty));
     cpu().setFlag(CPU68K::FlagZ, cpu().dw(0) == 0);
-    SOR_CALL_68K(options_row_nav(), 0x1322u);
+    SOR_CALL_68K(options_row_nav(), 0x1322u, 0x0014F2u);
     if (cpu().ne()) {
         cpu().d[0] = 0x0Cu;
-        SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1358u);
+        SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1358u, 0x00A8B8u);
         cpu().setDw(4, 0x2000u);
         cpu().setNZClearVC(0x2000u, 0x8000u);
         options_draw_difficulty();
@@ -310,10 +311,10 @@ void StreetsOfRage::options_input_lives(m_long /*entry_*/) {
 
     cpu().setDw(0, memory().readWord(kLivesSetting));
     cpu().setFlag(CPU68K::FlagZ, cpu().dw(0) == 0);
-    SOR_CALL_68K(options_row_nav(), 0x140Cu);
+    SOR_CALL_68K(options_row_nav(), 0x140Cu, 0x0014F2u);
     if (cpu().ne()) {
         cpu().d[0] = 0x0Eu;
-        SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1442u);
+        SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1442u, 0x00A8B8u);
         cpu().setDw(4, 0x2000u);
         options_draw_lives_digit();
         return;
@@ -338,10 +339,10 @@ void StreetsOfRage::options_input_level(m_long /*entry_*/) {
 
     cpu().setDw(0, memory().readWord(kLevel));
     cpu().setFlag(CPU68K::FlagZ, cpu().dw(0) == 0);
-    SOR_CALL_68K(options_row_nav(), 0x147Eu);
+    SOR_CALL_68K(options_row_nav(), 0x147Eu, 0x0014F2u);
     if (cpu().ne()) {
         cpu().d[0] = 0x0Fu;
-        SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x14B4u);
+        SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x14B4u, 0x00A8B8u);
         cpu().setDw(4, 0x2000u);
         options_draw_level_digit();
         return;
@@ -364,11 +365,11 @@ void StreetsOfRage::options_input_level(m_long /*entry_*/) {
 void StreetsOfRage::options_input_exit(m_long /*entry_*/) {
     traceEnter(0x14CAu);
 
-    SOR_CALL_68K(options_row_nav(), 0x14CEu);
+    SOR_CALL_68K(options_row_nav(), 0x14CEu, 0x0014F2u);
     if (cpu().ne()) {
         cpu().d[0] = 0x10u;
         cpu().setNZClearVC(0x10u, 0x80000000u);
-        SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x14E8u);
+        SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x14E8u, 0x00A8B8u);
         cpu().ssp += 4;
         return;
     }
@@ -469,7 +470,7 @@ void StreetsOfRage::init_character_select_screen(m_long /*entry_*/) {
     cpu().setDw(7, 0x01F9u);
     cpu().d[1] = 0;
     while (cpu().dw(7) != 0xFFFFu) {
-        SOR_CALL_68K(memfill_long_128(), 0x1646u);
+        SOR_CALL_68K(memfill_long_128(), 0x1646u, 0x0103D0u);
         cpu().setDw(7, static_cast<m_word>(cpu().dw(7) - 1));
     }
 
@@ -477,7 +478,7 @@ void StreetsOfRage::init_character_select_screen(m_long /*entry_*/) {
     memory().writeWord(0xFFFFFF06u, 1);
     memory().writeWord(kPaletteFadeCounter, 0x40);
     cpu().a[6] = 0x00071F30u;
-    SOR_CALL_68K(load_palette_list_to_target(), 0x1668u);
+    SOR_CALL_68K(load_palette_list_to_target(), 0x1668u, 0x010538u);
 
     memory().writeByte(kP1Object, 6);
     memory().writeWord(kP1Object + 0x58, 0);
@@ -489,7 +490,7 @@ void StreetsOfRage::init_character_select_screen(m_long /*entry_*/) {
         memory().writeWord(kP2Object + 0x10, 0xE0);
         cpu().a[6] = 0x00001706u;
     }
-    SOR_CALL_68K(load_palette_list_to_target(), 0x16A2u);
+    SOR_CALL_68K(load_palette_list_to_target(), 0x16A2u, 0x010538u);
 
     memory().writeByte(kObjectTable, 7);
     memory().writeByte(kObjectTable + 0x50, 1);
@@ -499,17 +500,17 @@ void StreetsOfRage::init_character_select_screen(m_long /*entry_*/) {
     memory().writeByte(kObjectTable + 0x150, 2);
 
     cpu().d[0] = 0x00352003u;
-    SOR_CALL_68K(load_nemesis_art_bundle(), 0x16D2u);
+    SOR_CALL_68K(load_nemesis_art_bundle(), 0x16D2u, 0x00A63Au);
     cpu().a[0] = 0x00071C6Cu;
     cpu().a[1] = 0x00FF8000u;
-    SOR_CALL_68K(kosinskidec(), 0x16E4u);
+    SOR_CALL_68K(kosinskidec(), 0x16E4u, 0x0085A2u);
     cpu().d[0] = 4;
-    SOR_CALL_68K(load_vdp_tilemap_bundle(), 0x16ECu);
+    SOR_CALL_68K(load_vdp_tilemap_bundle(), 0x16ECu, 0x00A5F4u);
     cpu().d[0] = 0x14131211u;
-    SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x16F8u);
+    SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x16F8u, 0x00A8B8u);
     cpu().d[0] = 0x00001615u;
     cpu().setNZClearVC(cpu().d[0], 0x80000000u);
-    SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1704u);
+    SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1704u, 0x00A8B8u);
     cpu().ssp += 4;
 }
 
@@ -526,15 +527,15 @@ void StreetsOfRage::screen_state_dispatcher(m_long /*entry_*/) {
 void StreetsOfRage::char_select_play_music(m_long /*entry_*/) {
     traceEnter(0x1726u);
     cpu().d[7] = 0xFFFFFF8Au;
-    SOR_CALL_68K(queue_sound_id(), 0x172Eu);
+    SOR_CALL_68K(queue_sound_id(), 0x172Eu, 0x01069Eu);
     memory().writeWord(kCharSelectSubstate, static_cast<m_word>(memory().readWord(kCharSelectSubstate) + 2));
     update_objects_and_build_sprites();
 }
 
 void StreetsOfRage::char_select_interactive(m_long /*entry_*/) {
     traceEnter(0x175Au);
-    SOR_CALL_68K(char_select_idle_tick(), 0x175Eu);
-    SOR_CALL_68K(update_objects_and_build_sprites(), 0x1764u);
+    SOR_CALL_68K(char_select_idle_tick(), 0x175Eu, 0x0017DAu);
+    SOR_CALL_68K(update_objects_and_build_sprites(), 0x1764u, 0x00AD8Eu);
 
     const m_word required = memory().readByte(kPlayerMode) == 1 ? 1 : 2;
     cpu().d[0]            = required;
@@ -577,9 +578,9 @@ void StreetsOfRage::init_selectscreenmode(m_long /*entry_*/) {
     traceEnter(0x9170u);
     memory().writeWord(kVdpControl, memory().readWord(0xFFFFFF48u));
     cpu().setStatus(0x2500u);
-    SOR_CALL_68K(reset_vdp_and_graphics_state(), 0x9180u);
-    SOR_CALL_68K(init_game_start_screen(), 0x9186u);
-    SOR_CALL_68K(clear_player_input(), 0x918Au);
+    SOR_CALL_68K(reset_vdp_and_graphics_state(), 0x9180u, 0x007FB8u);
+    SOR_CALL_68K(init_game_start_screen(), 0x9186u, 0x000FE8u);
+    SOR_CALL_68K(clear_player_input(), 0x918Au, 0x010526u);
     memory().writeWord(kVdpControl, memory().readWord(0xFFFFFF46u));
     cpu().setStatus(0x2700u);
     memory().writeWord(kGameState, static_cast<m_word>(memory().readWord(kGameState) + 2));
@@ -595,10 +596,10 @@ void StreetsOfRage::init_characterselectscreen(m_long /*entry_*/) {
     traceEnter(0x927Cu);
     memory().writeWord(kVdpControl, memory().readWord(0xFFFFFF48u));
     cpu().setStatus(0x2500u);
-    SOR_CALL_68K(reset_vdp_and_graphics_state(), 0x928Cu);
-    SOR_CALL_68K(init_character_select_screen(), 0x9290u);
-    SOR_CALL_68K(load_z80_dac_driver(), 0x9294u);
-    SOR_CALL_68K(clear_player_input(), 0x9298u);
+    SOR_CALL_68K(reset_vdp_and_graphics_state(), 0x928Cu, 0x007FB8u);
+    SOR_CALL_68K(init_character_select_screen(), 0x9290u, 0x001634u);
+    SOR_CALL_68K(load_z80_dac_driver(), 0x9294u, 0x01061Cu);
+    SOR_CALL_68K(clear_player_input(), 0x9298u, 0x010526u);
     memory().writeWord(kVdpControl, memory().readWord(0xFFFFFF46u));
     cpu().setStatus(0x2700u);
     memory().writeWord(kGameState, static_cast<m_word>(memory().readWord(kGameState) + 2));
@@ -630,8 +631,8 @@ void StreetsOfRage::update_objects_and_build_sprites(m_long entry_) {
                 cpu().a[1] = kObjectTypeJumpTable;
                 cpu().setDw(0, memory().readWord(cpu().a[1] + signExtendWord(cpu().dw(0))));
                 cpu().a[1] = cpu().d[0];
-                SOR_CALL_68K(dispatch(cpu().a[1]), 0xADB4u);
-                SOR_CALL_68K(sub_00b132(), 0xADB8u);
+                SOR_CALL_68K(dispatch(cpu().a[1]), 0xADB4u, cpu().a[1]);
+                SOR_CALL_68K(sub_00b132(), 0xADB8u, 0x00B132u);
                 cpu().setDw(7, memory().readWord(cpu().ssp));
                 cpu().ssp += 2;
             }
@@ -641,12 +642,12 @@ void StreetsOfRage::update_objects_and_build_sprites(m_long entry_) {
 
         const m_word state = memory().readWord(kGameState);
         if (state == 0x14 || state == 0x16) {
-            SOR_CALL_68K(resolve_player_vs_player_collision(), 0xADD6u);
-            SOR_CALL_68K(update_cameras_and_queue_tilemaps(), 0xADDCu);
+            SOR_CALL_68K(resolve_player_vs_player_collision(), 0xADD6u, 0x004478u);
+            SOR_CALL_68K(update_cameras_and_queue_tilemaps(), 0xADDCu, 0x018AF8u);
         }
-        SOR_CALL_68K(sub_0051cc(), 0xADE0u);
-        SOR_CALL_68K(sub_0043aa(), 0xADE4u);
-        SOR_CALL_68K(wait_vblank_without_graphics_upload(), 0xADE8u);
+        SOR_CALL_68K(sub_0051cc(), 0xADE0u, 0x0051CCu);
+        SOR_CALL_68K(sub_0043aa(), 0xADE4u, 0x0043AAu);
+        SOR_CALL_68K(wait_vblank_without_graphics_upload(), 0xADE8u, 0x010514u);
 
         memory().writeWord(kP1Object + 0x54, memory().readWord(kP1ButtonHeld));
         memory().writeWord(kP2Object + 0x54, memory().readWord(kP2ButtonHeld));
@@ -654,9 +655,9 @@ void StreetsOfRage::update_objects_and_build_sprites(m_long entry_) {
         memory().writeByte(0xFFFFFA48u, memory().readByte(kP2ButtonPress));
 
         cpu().a[0] = kP1Object;
-        SOR_CALL_68K(enqueue_object_render_bucket(), 0xAE06u);
+        SOR_CALL_68K(enqueue_object_render_bucket(), 0xAE06u, 0x00AE4Cu);
         cpu().a[0] = kP2Object;
-        SOR_CALL_68K(enqueue_object_render_bucket(), 0xAE0Cu);
+        SOR_CALL_68K(enqueue_object_render_bucket(), 0xAE0Cu, 0x00AE4Cu);
         cpu().a[0] = kObjectTable;
     }
 
@@ -675,9 +676,9 @@ void StreetsOfRage::update_objects_and_build_sprites(m_long entry_) {
             cpu().a[1] = kObjectTypeJumpTable;
             cpu().setDw(0, memory().readWord(cpu().a[1] + signExtendWord(tableOffset)));
             cpu().a[1] = cpu().d[0];
-            SOR_CALL_68K(dispatch(cpu().a[1]), 0xAE32u);
-            SOR_CALL_68K(sub_00b132(), 0xAE36u);
-            SOR_CALL_68K(enqueue_object_render_bucket(), 0xAE38u);
+            SOR_CALL_68K(dispatch(cpu().a[1]), 0xAE32u, cpu().a[1]);
+            SOR_CALL_68K(sub_00b132(), 0xAE36u, 0x00B132u);
+            SOR_CALL_68K(enqueue_object_render_bucket(), 0xAE38u, 0x00AE4Cu);
 
             cpu().setDw(7, memory().readWord(cpu().ssp));
             cpu().ssp += 2;

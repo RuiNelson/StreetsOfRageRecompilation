@@ -213,6 +213,7 @@ void StreetsOfRage::player_normal_attack_input(m_long entry_) {
 
     const bool tryPickup = altControls ? (pickupPressed && !attackPressed && !comboPending) : true;
     if (tryPickup) {
+        logCallFromReturn(0x3050u, 0x003136u);
         if (!call68k(
                 cpu(),
                 memory(),
@@ -240,6 +241,7 @@ void StreetsOfRage::player_normal_attack_input(m_long entry_) {
         cpu().setDw(0, action);
         if (static_cast<m_byte>(action) < 0x20u) {
             memory().writeByte(player + kPlayerComboState, static_cast<m_byte>(action));
+            logCallFromReturn(0x3080u, 0x002EE8u);
             if (!call68k(
                     cpu(),
                     memory(),
@@ -257,6 +259,7 @@ void StreetsOfRage::player_normal_attack_input(m_long entry_) {
     memory().writeByte(player + kPlayerTimer, 0x10u);
     cpu().d[0] = 0x18u;
     memory().writeByte(player + kPlayerComboState, cpu().db(0));
+    logCallFromReturn(0x3080u, 0x002EE8u);
     if (!call68k(
             cpu(),
             memory(),
@@ -287,6 +290,7 @@ void StreetsOfRage::player_held_object_attack_input(m_long entry_) {
 
     const bool tryPickup = altControls ? (pickupPressed && !attackPressed) : true;
     if (tryPickup) {
+        logCallFromReturn(0x3092u, 0x003136u);
         if (!call68k(
                 cpu(),
                 memory(),
@@ -314,6 +318,7 @@ void StreetsOfRage::player_held_object_attack_input(m_long entry_) {
 
     if (heldType == 0x0Au || heldType == 0x0Bu) {
         cpu().d[7] = 0xFFFFFFA7u;
+        logCallFromReturn(0x3122u, 0x0035D6u);
         if (!call68k(
                 cpu(),
                 memory(),
@@ -333,6 +338,7 @@ void StreetsOfRage::player_held_object_attack_input(m_long entry_) {
         }
     }
 
+    logCallFromReturn(0x3132u, 0x002DE6u);
     if (!call68k(
             cpu(),
             memory(),
@@ -358,6 +364,7 @@ void StreetsOfRage::find_close_interaction_target(m_long entry_) {
 
     reservePickupTarget(memory(), player, target);
     cpu().d[0] = 0x28u;
+    logCallFromReturn(0x31EAu, 0x002DE6u);
     if (!call68k(
             cpu(),
             memory(),

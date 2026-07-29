@@ -56,8 +56,9 @@ constexpr m_word kStatusIrqEnabled = 0x2500u;
 void StreetsOfRage::game_infinite_loop(m_long entry_) {
     // Soft 68000 jsr/rts. Mirrors CALL / CALL_DISPATCH in generated code: push
     // return PC, call, abort if the callee unwound past this frame.
-    const auto call68k = [this](auto &&fn, m_long retPc) -> bool {
+    const auto call68k = [this](auto &&fn, m_long retPc, m_long target) -> bool {
         const m_long spBefore = cpu().ssp;
+        logCallFromReturn(retPc, target);
         cpu().ssp -= 4;
         memory().writeLong(cpu().ssp, retPc);
         fn();
@@ -68,13 +69,13 @@ void StreetsOfRage::game_infinite_loop(m_long entry_) {
         // Checksum mismatch path from init ($348 bne.w $412).
         traceEnter(0x0412u);
 
-        if (!call68k([this] { init_joypad(); }, 0x0418u))
+        if (!call68k([this] { init_joypad(); }, 0x0418u, 0x007F50u))
             return;
 
         cpu().a[1] = 0x00C00000u; // vdp_data
         cpu().d[1] = 0x000E000Eu;
         memory().writeLong(0x00C00004u, 0xC0000000u); // CRAM write address
-        if (!call68k([this] { memfill_long_64(); }, 0x0434u))
+        if (!call68k([this] { memfill_long_64(); }, 0x0434u, 0x0103F0u))
             return;
 
         // Host-friendly stand-in for `bra.s *`: sleep on IRQs/quit, do not spin.
@@ -100,11 +101,11 @@ void StreetsOfRage::game_infinite_loop(m_long entry_) {
         cpu().a[0] = handler;
 
         // jsr (a0) — state init/update handler
-        if (!call68k([this, handler] { dispatch(handler); }, 0x03B2u))
+        if (!call68k([this, handler] { dispatch(handler); }, 0x03B2u, handler))
             return;
 
         // jsr wait_vblank_and_upload_graphics — service IRQs while waiting
-        if (!call68k([this] { wait_vblank_and_upload_graphics(); }, 0x03B8u))
+        if (!call68k([this] { wait_vblank_and_upload_graphics(); }, 0x03B8u, 0x010502u))
             return;
     }
 }
@@ -119,8 +120,9 @@ void StreetsOfRage::game_infinite_loop(m_long entry_) {
 void StreetsOfRage::try_activate_police_special(m_long /*entry_*/) {
     traceEnter(0x3FCCu);
 
-    const auto call68k = [this](auto &&fn, m_long retPc) -> bool {
+    const auto call68k = [this](auto &&fn, m_long retPc, m_long target) -> bool {
         const m_long spBefore = cpu().ssp;
+        logCallFromReturn(retPc, target);
         cpu().ssp -= 4;
         memory().writeLong(cpu().ssp, retPc);
         fn();
@@ -157,7 +159,7 @@ void StreetsOfRage::try_activate_police_special(m_long /*entry_*/) {
         memory().writeByte(specialCounter, static_cast<m_byte>(memory().readByte(specialCounter) - 1u));
     memory().writeByte(kPoliceSpecialCaller, cpu().db(0));
 
-    if (!call68k([this] { draw_player_lives_and_specials(); }, 0x4038u))
+    if (!call68k([this] { draw_player_lives_and_specials(); }, 0x4038u, 0x004E14u))
         return;
 
     memory().writeByte(kPoliceSpecialImpactFlags, 0u);
@@ -165,13 +167,13 @@ void StreetsOfRage::try_activate_police_special(m_long /*entry_*/) {
     memory().writeWord(kPoliceSpecialBlastLane, 0u);
     memory().writeByte(kScreenShakeActive, 0u);
 
-    if (!call68k([this] { prepare_ordinary_enemies_for_police_special(); }, 0x404Cu))
+    if (!call68k([this] { prepare_ordinary_enemies_for_police_special(); }, 0x404Cu, 0x009566u))
         return;
 
     memory().writeWord(kPoliceSpecialActive, 0x0101u);
     cpu().a[1] = kPalette;
     cpu().a[2] = kPoliceSpecialPalette;
-    if (!call68k([this] { memcopy_128(); }, 0x4060u))
+    if (!call68k([this] { memcopy_128(); }, 0x4060u, 0x010454u))
         return;
 
     if (level == 2u)
