@@ -116,7 +116,47 @@ In `$904E (game_mode_intro)`, Start can route execution to:
 
 Without input, the shared `$B6DE (story_scene_timeline_update)` routine creates narrative objects from a timed list. When the list ends, it writes the next state configured for that scene. `$3F65E (story_scene_select_script)` reads this configuration from `$3F680 (story_scene_config_table)`: the opening configuration ends with state `$00`, which `$904E (game_mode_intro)` converts into entry into attract mode.
 
-### 3.3 Attract mode is not a normal campaign
+### 3.3 Timed scene object infrastructure
+
+The object types observed as low-count `$AD8E->$AE30` calls in `calls.csv` belong
+to presentation scenes, not to level enemy AI. They are dispatched by the same
+global object pass as gameplay objects because the opening, endings, round
+presentation, and some boss-presentation scenes reuse the ordinary 128-byte
+object slots.
+
+The shared helpers are:
+
+| Address | Role |
+|---:|---|
+| `$12B02 (clear_presentation_object_slot)` | Clears the current 128-byte scene object slot. |
+| `$12B0A (find_presentation_object_slot)` | Searches the selected object pool for either a free slot or a requested type byte. |
+| `$12B3C (dispatch_presentation_object_state_table)` | Dispatches scene object `+$30` through the caller-provided state table. |
+
+The remaining low-count dynamic callees from `$AD8E->$AE30` map through
+`$B236 (object_type_update_jt)` as follows:
+
+| Object type | Handler | Technical role |
+|---:|---:|---|
+| `$60` | `$CD22 (presentation_type60_plane_fill_dispatcher)` | Timed plane/tile-buffer fill using `$FFFF` until object lifetime expires. |
+| `$61` | `$D112 (presentation_type61_palette_fade_dispatcher)` | Loads palette list 7 and steps active palette RAM toward the target palette. |
+| `$63` | `$D2A4 (presentation_type63_palette_swap_dispatcher)` | Delayed palette-word cycling through `$F43A/$F43C`. |
+| `$64` | `$CBE6 (presentation_type64_tile_strip_anim_dispatcher)` | Timed tile-strip animation from ROM source tables, with region-dependent art source. |
+| `$65` | `$CCE8 (presentation_type65_camera_y_drift_dispatcher)` | Increments `$FFE00E (camera_y)` every four frames during a presentation lifetime. |
+| `$6E/$6F` | `$C6E0/$C756` | Screen-space sprites that slide horizontally into fixed X positions, then idle. |
+| `$75/$76` | `$C7D0/$C846` | Low screen-space sprite variants that can slide to X `$58`, then idle. |
+| `$78` | `$C924 (presentation_type78_blinking_sprite_dispatcher)` | Fixed sprite that toggles its render flag every `$14` frames. |
+| `$79` | `$C58C (presentation_type79_palette_cycle_dispatcher)` | Four-frame palette cycle copied into active palette RAM. |
+| `$7A/$7B/$7C` | `$C97A/$C9D0/$CA26` | Small sprite-motion variants with simple X/Z velocity and clamp behavior. |
+| `$7F` | `$D5C8 (presentation_type7f_palette_fade_signal_dispatcher)` | Runs a short multi-palette fade and signals completion through object `+$58`. |
+| `$8E` | `$BB58 (presentation_type8e_static_sprite_dispatcher)` | Static screen-space sprite, choosing one of two X positions from object `+$58`. |
+
+These names intentionally describe the ROM-level contract rather than assigning
+specific visual identities to every sprite. The `calls.csv` sample proves that
+these handlers were reached through the object table; the assembly proves they
+are scene/presentation objects because they use `$12B3C (dispatch_presentation_object_state_table)`, direct palette/VRAM
+helpers, and short local timers rather than the ordinary enemy subsystem.
+
+### 3.4 Attract mode is not a normal campaign
 
 When the title times out, code at `$90AA` prepares attract mode:
 

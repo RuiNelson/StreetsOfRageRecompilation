@@ -636,6 +636,13 @@ dispatches through `$B236 (object_type_update_jt)`, so their observed counts
 reflect active object populations rather than extra fixed stages in the render
 pipeline.
 
+The low-count `$AE30` callees that previously remained as `sub_*` are also
+object-table entries. Types `$60/$61/$63/$64/$65/$6E/$6F/$75/$76/$78/$79/$7A/$7B/$7C/$7F/$8E`
+are presentation/story-scene objects that use `$12B3C
+(dispatch_presentation_object_state_table)`, palette/tile-buffer helpers, and
+short local timers. They should not be interpreted as ordinary enemy or item
+logic simply because they appear below the same `$AD8E (update_objects_and_build_sprites)` object pass.
+
 There are 64 buckets, each `$20` bytes:
 
 ```text
