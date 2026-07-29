@@ -632,7 +632,7 @@ void StreetsOfRage::update_objects_and_build_sprites(m_long entry_) {
                 cpu().setDw(0, memory().readWord(cpu().a[1] + signExtendWord(cpu().dw(0))));
                 cpu().a[1] = cpu().d[0];
                 SOR_CALL_68K(dispatch(cpu().a[1]), 0xADB4u, cpu().a[1]);
-                SOR_CALL_68K(sub_00b132(), 0xADB8u, 0x00B132u);
+                SOR_CALL_68K(ensure_object_ground_shadow(), 0xADB8u, 0x00B132u);
                 cpu().setDw(7, memory().readWord(cpu().ssp));
                 cpu().ssp += 2;
             }
@@ -645,8 +645,8 @@ void StreetsOfRage::update_objects_and_build_sprites(m_long entry_) {
             SOR_CALL_68K(resolve_player_vs_player_collision(), 0xADD6u, 0x004478u);
             SOR_CALL_68K(update_cameras_and_queue_tilemaps(), 0xADDCu, 0x018AF8u);
         }
-        SOR_CALL_68K(sub_0051cc(), 0xADE0u, 0x0051CCu);
-        SOR_CALL_68K(sub_0043aa(), 0xADE4u, 0x0043AAu);
+        SOR_CALL_68K(nudge_players_to_walkable_floor(), 0xADE0u, 0x0051CCu);
+        SOR_CALL_68K(clamp_players_to_gameplay_bounds(), 0xADE4u, 0x0043AAu);
         SOR_CALL_68K(wait_vblank_without_graphics_upload(), 0xADE8u, 0x010514u);
 
         memory().writeWord(kP1Object + 0x54, memory().readWord(kP1ButtonHeld));
@@ -677,7 +677,7 @@ void StreetsOfRage::update_objects_and_build_sprites(m_long entry_) {
             cpu().setDw(0, memory().readWord(cpu().a[1] + signExtendWord(tableOffset)));
             cpu().a[1] = cpu().d[0];
             SOR_CALL_68K(dispatch(cpu().a[1]), 0xAE32u, cpu().a[1]);
-            SOR_CALL_68K(sub_00b132(), 0xAE36u, 0x00B132u);
+            SOR_CALL_68K(ensure_object_ground_shadow(), 0xAE36u, 0x00B132u);
             SOR_CALL_68K(enqueue_object_render_bucket(), 0xAE38u, 0x00AE4Cu);
 
             cpu().setDw(7, memory().readWord(cpu().ssp));

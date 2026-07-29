@@ -369,7 +369,7 @@ Indexed by `$FFF904 (char_select_substate)`, table `$171A (char_select_jt)`:
 
 Each frame during interactive select:
 
-1. For P1 and P2 slots: if type ≠ 0, dispatch via object-type jump table `$B236`
+1. For P1 and P2 slots: if type ≠ 0, dispatch via object-type jump table `$B236 (object_type_update_jt)`
 2. Copy held/press input into object fields
 3. Process animated character-preview objects in the object table
 4. `$10514 (wait_vblank_without_graphics_upload)` (VBlank wait)

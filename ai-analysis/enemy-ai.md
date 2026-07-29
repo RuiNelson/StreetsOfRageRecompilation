@@ -366,7 +366,7 @@ because they use the same health offset and occur in late waves.
 
 ### Object dispatch and boss identity
 
-The global object dispatcher at `$AD8E (update_objects_and_build_sprites)` indexes the word table at `$B236`.
+The global object dispatcher at `$AD8E (update_objects_and_build_sprites)` indexes the word table at `$B236 (object_type_update_jt)`.
 Several entries are trampolines because the real handler lies outside the
 signed 16-bit address range.
 

@@ -625,6 +625,17 @@ non-render flag is set. It clamps object lane Y to `0..$F0`, quantizes it, and
 inserts the object's 16-bit RAM pointer into
 `$FFE200 (render_depth_buckets)`.
 
+The `calls.csv` sample exposes two distinct call classes under `$AD8E
+(update_objects_and_build_sprites)`. Fixed helper calls run once per object pass:
+`$B132 (ensure_object_ground_shadow)` may allocate a linked type-$4A shadow in
+the `$C900` auxiliary slots, `$51CC (nudge_players_to_walkable_floor)` probes
+nearby collision-floor samples for active players, and `$43AA
+(clamp_players_to_gameplay_bounds)` clamps players to the gameplay camera/lane
+window. The high-volume calls at `$AE30` are different: they are object-type
+dispatches through `$B236 (object_type_update_jt)`, so their observed counts
+reflect active object populations rather than extra fixed stages in the render
+pipeline.
+
 There are 64 buckets, each `$20` bytes:
 
 ```text

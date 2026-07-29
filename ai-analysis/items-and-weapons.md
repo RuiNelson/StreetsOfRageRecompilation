@@ -18,7 +18,7 @@ rendered art observed during play.
 
 ## Object-type map
 
-The global object dispatcher at `$B236` indexes a word table by object type. The relevant entries are:
+The global object dispatcher at `$B236 (object_type_update_jt)` indexes a word table by object type. The relevant entries are:
 
 | Object type | Handler | Role |
 |---:|---:|---|
@@ -32,12 +32,17 @@ The global object dispatcher at `$B236` indexes a word table by object type. The
 | `$1E` | `$61BE (bottle_shard_dispatcher)` | Bottle-shard/debris projectile emitted by type `$09`. |
 | `$3F` | `$68E2` | 3,000-point pickup. |
 | `$40` | `$6904` | 10,000-point pickup. |
-| `$47` | `$6988` | Full-health food pickup (`+$50`, 80 health; visually the large food). |
-| `$4B` | `$6926` | Small-health food pickup (`+$14`, 20 health; visually the apple). |
+| `$47` | `$6988 (full_health_pickup_dispatcher)` | Full-health food pickup (`+$50`, 80 health; visually the large food). |
+| `$48` | `$67A4 (wave_go_prompt_dispatcher)` | Flashing wave-advance prompt spawned after a camera boundary opens; not a collectible pickup. |
+| `$49` | `$6862 (player_contact_effect_dispatcher)` | Short-lived player/contact visual effect spawned by attack/collision helpers; not a collectible pickup. |
+| `$4B` | `$6926 (small_health_pickup_dispatcher)` | Small-health food pickup (`+$14`, 20 health; visually the apple). |
 | `$4C` | `$6948` | Extra-life pickup. |
 | `$4F` | `$6968` | Extra police-special pickup. |
 
 The six pickup handlers are tiny wrappers. Each chooses an item-effect index in object `+$50`, installs its art/animation pointer, and then enters the shared pickup logic at `$699E`.
+The adjacent type `$48/$49` handlers share the same object-dispatch region but
+are effect/prompt objects rather than consumables; `$3136
+(find_close_interaction_target)` never accepts them.
 
 ## Confirmed visible behavior and code interpretation
 
@@ -437,6 +442,8 @@ void apply_pickup_effect(Player *p, unsigned effect) {
 | `$62DA (throw_pepper_spray)` | Applies the pepper-spray throw position and X/Z velocity. |
 | `$6328 (begin_pepper_smoke_emission)` | Converts an impact into the first smoke/effect object. |
 | `$6372 (emit_pepper_smoke_sequence)` | Emits the remaining smoke/effect sequence. |
+| `$67A4 (wave_go_prompt_dispatcher)` | Type-$48 screen-space prompt flashed after a wave camera boundary opens. |
+| `$6862 (player_contact_effect_dispatcher)` | Type-$49 short-lived player/contact visual effect emitted by player attack/collision helpers. |
 | `$69CC (consume_collected_pickup)` | Converts a reserved pickup into an effect on its collector, then deletes it. |
 | `$69E6 (dispatch_pickup_effect)` | Dispatches pickup effect index 0..5. |
 | `$6A04 (apply_health_pickup)` | Full/small health pickup effects. |
