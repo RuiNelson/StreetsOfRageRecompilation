@@ -127,6 +127,14 @@ call. Generated and hand-written subroutine calls must both invoke `logCall`
 with the original ROM source-subroutine entry, instruction address, and exact
 destination.
 
+`tools/call_map.py` consumes one or more call-log CSV files and writes a
+deduplicated SQLite call graph plus an aggregated Mermaid flowchart. The
+database is always complete; `--root`, `--max-depth`, and `--minimum-count`
+filter only the Mermaid rendering. The tool uses `code-analysis/labels.csv`
+for readable names and, unless `--trust-recorded-source` is supplied, repairs
+older logs that recorded a tail-grouped C++ owner instead of the closest
+labelled 68000 source entry.
+
 ## Manual subroutines
 
 A manual subroutine replaces the generated body of a known ROM routine while
