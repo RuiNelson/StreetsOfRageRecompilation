@@ -1078,7 +1078,7 @@ The principal new RAM symbols cover:
 3. Trace a deliberately crowded fight to determine which visible artifacts are
    caused by the 20-sprites/320-pixels per-line hardware limits rather than the
    79-visible-record software cap.
-4. Record the special per-level VDP command block at `$181BC` for every round
+4. Record the special per-level VDP command block at `$181BC (upload_special_player_art_dma_step)` for every round
    where `$FFFA5A` is active and attach each DMA to its visible effect.
 5. Decode the remaining animation-frame header bytes into a formal mapping
    schema, including the exact collision-box metadata shared with gameplay.

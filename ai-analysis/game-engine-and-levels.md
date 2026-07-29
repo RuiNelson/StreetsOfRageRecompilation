@@ -104,22 +104,34 @@ On the normal, unpaused path, `$1087A (game_mode_ingame)` performs the
 following calls in order:
 
 ```text
-demo timeout
-clock
-pause/start handling
-timer/HUD support
-P2 drop-in handling
-Mr. X offer state machine
-stage-clear monitor
-round-specific effects
-animated palette updates
-player/enemy/object update and sprite construction
-miscellaneous round effects
-art-transfer maintenance
-level sub-state dispatcher
+$11A36 (update_demo_timeout)
+$10D2E (handle_pause_start_input)
+$10C88 (update_game_clock)
+$115CC (update_join_and_continue_hud)
+$11B4C (mr_x_offer_update)
+$117FC (stage_clear_monitor)
+$112F2 (dispatch_per_level_ambient_effects)
+$11210 (update_animated_palettes)
+$AD8E  (update_objects_and_build_sprites)
+$11346 (update_round3_background_effect)
+$17FC2 (prepare_special_player_art_dma_step)
+$84BA  (begin_incremental_nemesis_decode)
+$436   (sub_state_dispatcher)
 ```
 
-The final call is `$436 (sub_state_dispatcher)`. This ordering matters. An
+The `calls.csv` runtime sample records the 12 direct `jsr`/`bsr` targets from
+`$1087A (game_mode_ingame)` 6,658 times each before the final jump to
+`$436 (sub_state_dispatcher)`. That proves the stable frame order, not that
+every conditional body did useful work in the captured level. In particular,
+`$112F2 (dispatch_per_level_ambient_effects)` indexes `$11300
+(per_level_ambient_effect_jt)` by `$FFFF02 (level)`, and the table entries for
+level indexes 0 and 1 both return immediately through `$11344
+(per_level_ambient_effect_noop_b)`. Likewise `$11346
+(update_round3_background_effect)` is called every gameplay frame, but it only
+updates frame/palette data after `$112C0 (init_round3_background_effect)` has
+armed `$FFFA0C` for level index 2.
+
+The final jump is `$436 (sub_state_dispatcher)`. This ordering matters. An
 entity may die or a camera/object routine may raise a flag during the frame, and
 the level pipeline consumes it at the end of that same frame.
 
@@ -879,6 +891,9 @@ their stated, bounded behavior:
 | `$936 (select_deferred_spawn)` | Scan the filtered section and select a record whose ordinary-enemy palette/art residency can be satisfied. | Record/type checks feed the `$FFFA60..$FFFA70` residency counters and save the selected pointer at `$FFFC28 (pending_spawn_record_ptr)`. |
 | `$B76 (load_deferred_spawn_art_and_spawn)` | Finish any required resource load, spawn the selected record, and compact the remainder over it. | It waits for `$FFDCD0 (art_array_cue)`, calls the resource loader/spawner, then shifts six-byte records through the `$99` terminator. |
 | `$8454 (queue_nemesis_art_cues)` | Resolve an art-set list and append six-byte source/destination records to the incremental Nemesis queue. | The producer and `$84BA/$8510` consumer agree on the exact longword-source/word-VRAM record layout. |
+| `$112F2 (dispatch_per_level_ambient_effects)` | Dispatch per-frame level-specific ambient effects without implying they run in every level. | `$11300 (per_level_ambient_effect_jt)` maps level indexes 0 and 1 to a no-op, level index 2 to `$11310 (round3_delayed_sfx_burst_update)`, and level index 4 to `$1132E (round5_periodic_sfx_update)`; the early-level `calls.csv` sample observes the dispatcher call, not an active effect body. |
+| `$11346 (update_round3_background_effect)` | Poll the level-index-2 background effect state during gameplay. | `$112C0 (init_round3_background_effect)` only arms `$FFFA0C` when `$FFFF02 (level) == 2`; otherwise `$11346 (update_round3_background_effect)` returns without changing the decoded frame/palette pointers. |
+| `$17FC2 (prepare_special_player_art_dma_step)` | Stage one chunk of special player-art DMA metadata for the VBlank-side uploader. | It runs only while `$FFFA5A` is set, advances `$FFFB54` by ten bytes, writes `$FFFB64..$FFFB6E`, and `$181BC (upload_special_player_art_dma_step)` emits those prepared VDP commands during VBlank. |
 | `$18F32 (advance_round7_vertical_wave)` | Consume the round-7 wave request and start its vertical-camera transition. | It clears the request, increments `$FFFF04 (wave)`, and writes the round-7 camera/transition flags and bounds. |
 | `$19848 (load_level_graphics_maps_and_camera)` | Load the per-level mixed-codec graphics/map package and initialize both camera-plane structures. | Its fixed table walk performs two Kosinski uploads, two Enigma RAM decodes, map construction, then two calls to `$19922 (init_camera_plane)`. |
 
