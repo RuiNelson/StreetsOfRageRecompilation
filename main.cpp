@@ -59,8 +59,8 @@ int main(int argc, char *argv[]) {
                    "this aux file and exit (42) instead of aborting — for the discovery loop");
     app.add_option("--callLog",
                    sorCallLogFile,
-                   "Write every 68000 subroutine call to this CSV file "
-                   "(source, callsite, target)");
+                   "Write every 68000 subroutine entry and call to this typed CSV file "
+                   "(event, source, callsite, target)");
 
     CLI11_PARSE(app, argc, argv);
 

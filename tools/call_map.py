@@ -30,11 +30,14 @@ class Label:
 class CallMap:
     callsites: Counter[tuple[int, int]]
     targets: Counter[tuple[int, int, int]]
+    entries: Counter[int]
     total_events: int = 0
+    call_events: int = 0
+    entry_events: int = 0
 
     @classmethod
     def empty(cls) -> "CallMap":
-        return cls(Counter(), Counter())
+        return cls(Counter(), Counter(), Counter())
 
     @property
     def edges(self) -> Counter[tuple[int, int]]:
@@ -49,6 +52,7 @@ class CallMap:
         for source, target in self.edges:
             result.add(source)
             result.add(target)
+        result.update(self.entries)
         return result
 
 
@@ -72,15 +76,33 @@ def read_call_logs(paths: Iterable[Path]) -> CallMap:
     for path in paths:
         with path.open(newline="", encoding="ascii") as stream:
             reader = csv.DictReader(stream)
-            if reader.fieldnames != ["source", "callsite", "target"]:
+            legacy = reader.fieldnames == ["source", "callsite", "target"]
+            typed = reader.fieldnames == ["event", "source", "callsite", "target"]
+            if not legacy and not typed:
                 raise ValueError(
-                    f"{path}: expected CSV header source,callsite,target; "
+                    f"{path}: expected CSV header event,source,callsite,target "
+                    f"or legacy source,callsite,target; "
                     f"got {','.join(reader.fieldnames or [])!r}"
                 )
             for line_number, row in enumerate(reader, 2):
+                event = "call" if legacy else row["event"].strip().lower()
                 source = parse_address(
                     row["source"], source=path, line_number=line_number, field="source"
                 )
+                if event == "entry":
+                    if row["callsite"].strip() or row["target"].strip():
+                        raise ValueError(
+                            f"{path}:{line_number}: entry event must have empty "
+                            "callsite and target fields"
+                        )
+                    call_map.entries[source] += 1
+                    call_map.entry_events += 1
+                    call_map.total_events += 1
+                    continue
+                if event != "call":
+                    raise ValueError(
+                        f"{path}:{line_number}: unknown event type {event!r}"
+                    )
                 callsite = parse_address(
                     row["callsite"], source=path, line_number=line_number, field="callsite"
                 )
@@ -89,6 +111,7 @@ def read_call_logs(paths: Iterable[Path]) -> CallMap:
                 )
                 call_map.callsites[source, callsite] += 1
                 call_map.targets[source, callsite, target] += 1
+                call_map.call_events += 1
                 call_map.total_events += 1
     return call_map
 
@@ -155,6 +178,11 @@ CREATE TABLE subroutine (
     description TEXT NOT NULL
 );
 
+CREATE TABLE subroutine_entry (
+    address INTEGER PRIMARY KEY REFERENCES subroutine(address),
+    observed_count INTEGER NOT NULL CHECK (observed_count > 0)
+);
+
 CREATE TABLE callsite (
     address INTEGER NOT NULL,
     source_address INTEGER NOT NULL REFERENCES subroutine(address),
@@ -181,6 +209,20 @@ CREATE TABLE callsite_target (
 
 CREATE INDEX call_edge_target_idx ON call_edge(target_address);
 CREATE INDEX callsite_target_target_idx ON callsite_target(target_address);
+
+CREATE VIEW subroutine_activity AS
+SELECT
+    printf('$%06X', routine.address) AS address,
+    routine.name,
+    routine.description,
+    COALESCE(entry.observed_count, 0) AS entry_count,
+    COUNT(DISTINCT incoming.source_address) AS incoming_flows,
+    COUNT(DISTINCT outgoing.target_address) AS outgoing_flows
+FROM subroutine AS routine
+LEFT JOIN subroutine_entry AS entry ON entry.address = routine.address
+LEFT JOIN call_edge AS incoming ON incoming.target_address = routine.address
+LEFT JOIN call_edge AS outgoing ON outgoing.source_address = routine.address
+GROUP BY routine.address;
 
 CREATE VIEW subroutine_flow AS
 SELECT
@@ -227,9 +269,11 @@ def write_database(
                 """
                 DROP VIEW IF EXISTS callsite_flow;
                 DROP VIEW IF EXISTS subroutine_flow;
+                DROP VIEW IF EXISTS subroutine_activity;
                 DROP TABLE IF EXISTS callsite_target;
                 DROP TABLE IF EXISTS call_edge;
                 DROP TABLE IF EXISTS callsite;
+                DROP TABLE IF EXISTS subroutine_entry;
                 DROP TABLE IF EXISTS subroutine;
                 DROP TABLE IF EXISTS metadata;
                 """
@@ -238,8 +282,10 @@ def write_database(
             connection.executemany(
                 "INSERT INTO metadata(key, value) VALUES (?, ?)",
                 (
-                    ("format_version", "1"),
+                    ("format_version", "2"),
                     ("total_events", str(call_map.total_events)),
+                    ("call_events", str(call_map.call_events)),
+                    ("entry_events", str(call_map.entry_events)),
                     ("normalized_source_events", str(normalized_source_events)),
                     ("input_files", "\n".join(str(path) for path in input_paths)),
                 ),
@@ -252,8 +298,15 @@ def write_database(
                         subroutine_name(address, labels),
                         labels.get(address, Label("", "")).description,
                     )
-                    for address in sorted(call_map.addresses)
+                    for address in sorted(call_map.addresses | labels.keys())
                 ),
+            )
+            connection.executemany(
+                """
+                INSERT INTO subroutine_entry(address, observed_count)
+                VALUES (?, ?)
+                """,
+                sorted(call_map.entries.items()),
             )
             connection.executemany(
                 """
@@ -304,15 +357,20 @@ def load_web_data(path: Path) -> dict[str, object]:
                 "address": format_address(address),
                 "name": name,
                 "description": description,
+                "entries": entries,
                 "incoming": incoming,
                 "outgoing": outgoing,
             }
-            for address, name, description, incoming, outgoing in connection.execute(
+            for address, name, description, entries, incoming, outgoing
+            in connection.execute(
                 """
                 SELECT routine.address, routine.name, routine.description,
+                       COALESCE(entry.observed_count, 0),
                        COUNT(DISTINCT incoming.source_address),
                        COUNT(DISTINCT outgoing.target_address)
                 FROM subroutine AS routine
+                LEFT JOIN subroutine_entry AS entry
+                    ON entry.address = routine.address
                 LEFT JOIN call_edge AS incoming
                     ON incoming.target_address = routine.address
                 LEFT JOIN call_edge AS outgoing
@@ -357,7 +415,12 @@ def load_web_data(path: Path) -> dict[str, object]:
     return {
         "summary": {
             "events": int(metadata.get("total_events", "0")),
+            "callEvents": int(
+                metadata.get("call_events", metadata.get("total_events", "0"))
+            ),
+            "entryEvents": int(metadata.get("entry_events", "0")),
             "subroutines": len(subroutines),
+            "executed": sum(routine["entries"] > 0 for routine in subroutines),
             "flows": len(flows),
             "callsites": sum(len(flow["callsites"]) for flow in flows),
         },
@@ -381,7 +444,7 @@ SFMono-Regular,Menlo,monospace} header,main{width:min(1500px,calc(100% - 32px));
 margin:auto} header{padding:32px 0 18px} h1{font:700 clamp(24px,4vw,42px)/1.05
 system-ui;margin:0 0 8px;letter-spacing:-.04em} h1 span{color:var(--accent)}
 .subtitle,.muted{color:var(--muted)} .stats{display:grid;
-grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:22px 0}
+grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:22px 0}
 .stat,.panel{background:color-mix(in srgb,var(--panel) 92%,transparent);
 border:1px solid var(--line);border-radius:10px;box-shadow:0 16px 48px #0005}
 .stat{padding:15px}.stat strong{display:block;font-size:23px;color:var(--cyan)}
@@ -411,17 +474,26 @@ letter-spacing:.08em}tbody tr:hover{background:#1a2434}
 .routine-link{border:0;background:none;color:var(--cyan);font:inherit;padding:0;
 cursor:pointer;text-align:left}.routine-link:hover{text-decoration:underline}
 .count{text-align:right;font-variant-numeric:tabular-nums}
+.matches{display:none;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+gap:8px;margin:-4px 0 14px}.matches.visible{display:grid}.match{border:1px solid
+var(--line);border-radius:8px;background:#0b111c;color:var(--text);padding:10px;
+font:inherit;text-align:left;cursor:pointer}.match:hover{border-color:var(--cyan)}
+.match b,.match small{display:block;overflow:hidden;text-overflow:ellipsis;
+white-space:nowrap}.match small{color:var(--muted)}.entry-count{margin-top:8px;
+color:var(--cyan)}
+@media(max-width:1050px){.stats{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:800px){.stats{grid-template-columns:1fr 1fr}.focus{
 grid-template-columns:1fr}.center{grid-row:1}.toolbar{display:block}}
 </style>
 </head>
 <body>
 <header><h1>Call <span>map</span></h1>
-<div class="subtitle">Observed 68000 subroutine flows, collapsed by route and callsite.</div>
+<div class="subtitle">Known 68000 routines and observed runtime flows, collapsed by route and callsite.</div>
 <div class="stats" id="stats"></div></header>
 <main>
 <div class="toolbar"><input id="search" type="search"
 placeholder="Search label or address…"></div>
+<div class="matches" id="matches"></div>
 <section class="panel"><h2 id="focus-title">Subroutine neighbourhood</h2>
 <div class="focus"><div class="lane" id="incoming"></div>
 <div class="center" id="center"></div><div class="lane" id="outgoing"></div></div>
@@ -444,7 +516,8 @@ function select(address){
  const ins=data.flows.filter(f=>f.target===address).slice(0,8);
  const outs=data.flows.filter(f=>f.source===address).slice(0,8);
  document.getElementById("center").innerHTML=`<b>${esc(routine.name)}</b>
- <code>${routine.address}</code><div class="muted">${esc(routine.description||"No description")}</div>`;
+ <code>${routine.address}</code><div class="muted">${esc(routine.description||"No description")}</div>
+ <div class="entry-count">${fmt(routine.entries)} observed entries</div>`;
  document.getElementById("incoming").innerHTML=`<div class="lane-label">Called by</div>`+
  (ins.map(f=>button(data.subroutines.find(r=>r.address===f.source),f)).join("")||
  '<div class="empty">No incoming calls observed</div>');
@@ -453,8 +526,19 @@ function select(address){
  '<div class="empty">No outgoing calls observed</div>');
  document.querySelectorAll(".node").forEach(n=>n.onclick=()=>select(n.dataset.address));
 }
+function renderMatches(q){
+ const matches=q?data.subroutines.filter(r=>[r.name,r.address,r.description]
+ .some(v=>(v||"").toLowerCase().includes(q))).slice(0,24):[];
+ const element=document.getElementById("matches");
+ element.classList.toggle("visible",matches.length>0);
+ element.innerHTML=matches.map(r=>`<button class="match" data-address="${r.address}">
+ <b>${esc(r.name)}</b><small>${r.address} · ${fmt(r.entries)} entries ·
+ ${fmt(r.incoming+r.outgoing)} flows</small></button>`).join("");
+ element.querySelectorAll(".match").forEach(r=>r.onclick=()=>select(r.dataset.address));
+}
 function renderFlows(query=""){
  const q=query.trim().toLowerCase();
+ renderMatches(q);
  const rows=data.flows.filter(f=>!q||[f.source,f.sourceName,f.target,f.targetName,
  ...f.callsites.map(c=>c.address)].some(v=>v.toLowerCase().includes(q)));
  const exact=data.subroutines.filter(r=>r.name.toLowerCase()===q||
@@ -473,10 +557,12 @@ function renderFlows(query=""){
 }
 fetch("/api/data").then(r=>{if(!r.ok)throw Error(r.statusText);return r.json()})
 .then(payload=>{data=payload;const s=data.summary;
- document.getElementById("stats").innerHTML=[["Events",s.events],["Subroutines",s.subroutines],
- ["Flows",s.flows],["Callsites",s.callsites]].map(([k,v])=>
+ document.getElementById("stats").innerHTML=[["Events",s.events],
+ ["Calls",s.callEvents],["Entries",s.entryEvents],["Known routines",s.subroutines],
+ ["Executed",s.executed],["Flows",s.flows]].map(([k,v])=>
  `<div class="stat"><strong>${fmt(v)}</strong><small>${k}</small></div>`).join("");
- selected=[...data.subroutines].sort((a,b)=>b.outgoing-a.outgoing)[0]?.address;
+ selected=[...data.subroutines].sort((a,b)=>
+ (b.entries+b.outgoing)-(a.entries+a.outgoing))[0]?.address;
  renderFlows();if(selected)select(selected);
 }).catch(e=>document.body.textContent=`Could not load call map: ${e}`);
 document.getElementById("search").addEventListener("input",e=>renderFlows(e.target.value));
@@ -536,8 +622,8 @@ def build_parser() -> argparse.ArgumentParser:
     default_labels = Path(__file__).resolve().parents[1] / "code-analysis" / "labels.csv"
     parser = argparse.ArgumentParser(
         description=(
-            "Collapse one or more source,callsite,target runtime CSV logs into "
-            "a queryable SQLite database."
+            "Collapse one or more runtime subroutine-entry and call CSV logs "
+            "into a queryable SQLite database."
         )
     )
     parser.add_argument("logs", nargs="+", type=Path, help="runtime call-log CSV file")
@@ -600,7 +686,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(
-        f"Processed {call_map.total_events:,} call events into "
+        f"Processed {call_map.call_events:,} call events and "
+        f"{call_map.entry_events:,} entry events into "
         f"{len(call_map.edges):,} unique subroutine flows and "
         f"{len(call_map.targets):,} unique callsite targets."
     )

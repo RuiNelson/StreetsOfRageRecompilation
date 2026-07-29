@@ -156,7 +156,10 @@ def test_web_data_and_http_server_expose_labelled_flows():
         payload = load_web_data(database)
         assert payload["summary"] == {
             "events": 2,
+            "callEvents": 2,
+            "entryEvents": 0,
             "subroutines": 2,
+            "executed": 0,
             "flows": 1,
             "callsites": 1,
         }
@@ -180,6 +183,7 @@ def test_web_data_and_http_server_expose_labelled_flows():
                 assert "Call <span>map</span>" in page
                 assert 'class="routine-link"' in page
                 assert "r.address.slice(1).toLowerCase()===q" in page
+                assert 'class="matches"' in page
             with urllib.request.urlopen(f"{base_url}/api/data", timeout=2) as response:
                 api_payload = json.load(response)
                 assert api_payload["flows"][0]["sourceName"] == "player_update"
@@ -187,3 +191,68 @@ def test_web_data_and_http_server_expose_labelled_flows():
             server.shutdown()
             server.server_close()
             thread.join(timeout=2)
+
+
+def test_typed_log_records_entries_and_catalogues_unobserved_labels():
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        log = root / "calls.csv"
+        labels = root / "labels.csv"
+        database = root / "calls.sqlite"
+        log.write_text(
+            "event,source,callsite,target\n"
+            "entry,000100,,\n"
+            "entry,000100,,\n"
+            "call,000100,000110,000200\n",
+            encoding="ascii",
+        )
+        labels.write_text(
+            "00000100,observed_routine,Observed entry\n"
+            "00000200,called_routine,Observed only as a target\n"
+            "00000464,level_flow_handler,Never observed in this run\n",
+            encoding="utf-8",
+        )
+
+        assert main(
+            [str(log), "--database", str(database), "--labels", str(labels)]
+        ) == 0
+
+        with sqlite3.connect(database) as connection:
+            assert connection.execute(
+                "SELECT address, observed_count FROM subroutine_entry"
+            ).fetchall() == [(0x100, 2)]
+            assert connection.execute(
+                """
+                SELECT address, name FROM subroutine
+                WHERE address = 0x464
+                """
+            ).fetchone() == (0x464, "level_flow_handler")
+            metadata = dict(connection.execute("SELECT key, value FROM metadata"))
+            assert {
+                "format_version": "2",
+                "total_events": "3",
+                "call_events": "1",
+                "entry_events": "2",
+            }.items() <= metadata.items()
+            assert connection.execute(
+                """
+                SELECT entry_count, incoming_flows, outgoing_flows
+                FROM subroutine_activity WHERE address = '$000464'
+                """
+            ).fetchone() == (0, 0, 0)
+
+        payload = load_web_data(database)
+        unobserved = next(
+            routine
+            for routine in payload["subroutines"]
+            if routine["name"] == "level_flow_handler"
+        )
+        assert unobserved == {
+            "address": "$000464",
+            "name": "level_flow_handler",
+            "description": "Never observed in this run",
+            "entries": 0,
+            "incoming": 0,
+            "outgoing": 0,
+        }
+        assert payload["summary"]["executed"] == 1

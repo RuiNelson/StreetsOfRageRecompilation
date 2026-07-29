@@ -145,8 +145,21 @@ void StreetsOfRage::setCallLog(const std::string &path) {
         throw std::runtime_error("Cannot open call log '" + path + "': " + std::strerror(errno));
     }
 
-    std::fputs("source,callsite,target\n", callLog_);
+    std::fputs("event,source,callsite,target\n", callLog_);
     std::fflush(callLog_);
+}
+
+void StreetsOfRage::logEntry(m_long entry) {
+    if (callLog_ == nullptr)
+        return;
+
+    std::fprintf(callLog_,
+                 "entry,%06X,,\n",
+                 static_cast<unsigned>(entry & 0x00FFFFFFu));
+    if (++callLogPending_ >= 4096u) {
+        std::fflush(callLog_);
+        callLogPending_ = 0;
+    }
 }
 
 void StreetsOfRage::logCall(m_long source, m_long callsite, m_long target) {
@@ -154,7 +167,7 @@ void StreetsOfRage::logCall(m_long source, m_long callsite, m_long target) {
         return;
 
     std::fprintf(callLog_,
-                 "%06X,%06X,%06X\n",
+                 "call,%06X,%06X,%06X\n",
                  static_cast<unsigned>(source & 0x00FFFFFFu),
                  static_cast<unsigned>(callsite & 0x00FFFFFFu),
                  static_cast<unsigned>(target & 0x00FFFFFFu));

@@ -120,24 +120,27 @@ investigate, not a result to accept mechanically.
 
 ## Runtime call log
 
-`--callLog PATH` optionally records every emulated 68000 `bsr`/`jsr` as CSV,
-with the columns `source,callsite,target`. Addresses are uppercase, six-digit
-hexadecimal ROM addresses without a prefix. The file is truncated at startup;
-without this option, call logging is disabled and has only a null check at each
-call. Generated and hand-written subroutine calls must both invoke `logCall`
-with the original ROM source-subroutine entry, instruction address, and exact
-destination.
+`--callLog PATH` optionally records emulated 68000 subroutine entries and
+`bsr`/`jsr` calls as typed CSV with the columns
+`event,source,callsite,target`. A `call` event contains the original ROM
+source-subroutine entry, instruction address, and exact destination. An
+`entry` event contains the entered address in `source` and empty `callsite` and
+`target` fields. Addresses are uppercase, six-digit hexadecimal ROM addresses
+without a prefix. The file is truncated at startup; without this option,
+logging is disabled and the entry/call hooks only perform a null check.
+Generated and hand-written subroutines must trace their true dynamic entry.
 
 `tools/call_map.py` consumes one or more call-log CSV files and writes a
-deduplicated SQLite call graph. It uses `code-analysis/labels.csv` for readable
-names and preserves source addresses that are already labelled. Unless
+deduplicated SQLite call graph. It inserts every `code-analysis/labels.csv`
+routine, even when it has zero observed activity, and preserves source
+addresses that are already labelled. Unless
 `--trust-recorded-source` is supplied, it approximates anonymous sources in
 older grouped-owner logs from the closest label; that approximation cannot
 reconstruct every non-contiguous dynamic entry, so regenerate important logs
 with the current recompiler. Passing `--port PORT` starts its read-only
 interactive web viewer after database generation. The viewer binds to
-`127.0.0.1` unless `--host` is explicitly provided and exposes names, flow
-counts, and per-flow callsites.
+`127.0.0.1` unless `--host` is explicitly provided and exposes all labelled
+routines, dynamic entry counts, flow counts, and per-flow callsites.
 
 The generated `call-map.sqlite` artifact may be kept locally in this repository
 alongside the tool, but must remain ignored and unversioned. Regenerate it from
