@@ -374,7 +374,10 @@ The same state machine supports additional cases in 2P mode:
 
 The ROM jump and control tables establish the raw route matrix completely.
 `$11F74 (mr_x_offer_compare_2p_choices)` performs the equal/different test, and
-`$120EC (mr_x_offer_player_choice_input)` owns per-player selection and confirm.
+`$120EC (poll_mr_x_offer_player_choice_input)` is called from every player
+update but returns immediately unless object `+$59` bit 4 marks that player's
+Mr. X offer-choice UI as active. Only then does it own per-player selection and
+confirm handling.
 `object+$59` bit 3 is the selected side in each choice UI:
 
 | Phase | P1 bit 3 | P2 bit 3 | Static route |
