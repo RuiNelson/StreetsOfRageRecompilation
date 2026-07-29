@@ -130,11 +130,14 @@ destination.
 
 `tools/call_map.py` consumes one or more call-log CSV files and writes a
 deduplicated SQLite call graph. It uses `code-analysis/labels.csv` for readable
-names and, unless `--trust-recorded-source` is supplied, repairs older logs
-that recorded a tail-grouped C++ owner instead of the closest labelled 68000
-source entry. Passing `--port PORT` starts its read-only interactive web viewer
-after database generation. The viewer binds to `127.0.0.1` unless `--host` is
-explicitly provided and exposes names, flow counts, and per-flow callsites.
+names and preserves source addresses that are already labelled. Unless
+`--trust-recorded-source` is supplied, it approximates anonymous sources in
+older grouped-owner logs from the closest label; that approximation cannot
+reconstruct every non-contiguous dynamic entry, so regenerate important logs
+with the current recompiler. Passing `--port PORT` starts its read-only
+interactive web viewer after database generation. The viewer binds to
+`127.0.0.1` unless `--host` is explicitly provided and exposes names, flow
+counts, and per-flow callsites.
 
 The generated `call-map.sqlite` artifact may be kept locally in this repository
 alongside the tool, but must remain ignored and unversioned. Regenerate it from

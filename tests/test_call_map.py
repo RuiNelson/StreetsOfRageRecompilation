@@ -77,7 +77,6 @@ def test_old_grouped_owner_is_normalized_to_closest_labelled_source():
             encoding="ascii",
         )
         labels.write_text(
-            "00000100,cpp_owner,owner\n"
             "00000300,human_entry,human entry\n"
             "00000400,target,target\n",
             encoding="utf-8",
@@ -100,6 +99,37 @@ def test_old_grouped_owner_is_normalized_to_closest_labelled_source():
             assert connection.execute(
                 "SELECT value FROM metadata WHERE key = 'normalized_source_events'"
             ).fetchone() == ("1",)
+
+
+def test_labelled_dynamic_source_is_not_replaced_by_a_later_label():
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        log = root / "calls.csv"
+        labels = root / "labels.csv"
+        database = root / "calls.sqlite"
+        log.write_text(
+            "source,callsite,target\n"
+            "019D16,01A0A8,072914\n",
+            encoding="ascii",
+        )
+        labels.write_text(
+            "00019D16,vblank_handler,VBlank handler\n"
+            "00019DA6,vblank_helper,VBlank helper\n"
+            "00072914,sound_engine,Sound engine\n",
+            encoding="utf-8",
+        )
+
+        assert main(
+            [str(log), "--database", str(database), "--labels", str(labels)]
+        ) == 0
+
+        with sqlite3.connect(database) as connection:
+            assert connection.execute(
+                "SELECT source_address, target_address FROM call_edge"
+            ).fetchone() == (0x19D16, 0x72914)
+            assert connection.execute(
+                "SELECT value FROM metadata WHERE key = 'normalized_source_events'"
+            ).fetchone() == ("0",)
 
 
 def test_web_data_and_http_server_expose_labelled_flows():
@@ -148,6 +178,8 @@ def test_web_data_and_http_server_expose_labelled_flows():
                 page = response.read().decode()
                 assert response.status == 200
                 assert "Call <span>map</span>" in page
+                assert 'class="routine-link"' in page
+                assert "r.address.slice(1).toLowerCase()===q" in page
             with urllib.request.urlopen(f"{base_url}/api/data", timeout=2) as response:
                 api_payload = json.load(response)
                 assert api_payload["flows"][0]["sourceName"] == "player_update"

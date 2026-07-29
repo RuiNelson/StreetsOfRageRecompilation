@@ -120,12 +120,17 @@ def normalize_sources(call_map: CallMap, labels: dict[int, Label]) -> int:
     normalized_targets: Counter[tuple[int, int, int]] = Counter()
     normalized_events = 0
     for (source, callsite, target), count in call_map.targets.items():
-        index = bisect.bisect_right(label_addresses, callsite)
-        if index:
-            labelled_source = label_addresses[index - 1]
-            if source < labelled_source <= callsite:
-                source = labelled_source
-                normalized_events += count
+        # Current logs record the dynamic 68000 entry and labels.csv identifies
+        # it directly. Only apply the legacy approximation to anonymous grouped
+        # C++ owners; otherwise a later label inside a non-contiguous routine
+        # can incorrectly replace a valid source such as vblank_handler.
+        if source not in labels:
+            index = bisect.bisect_right(label_addresses, callsite)
+            if index:
+                labelled_source = label_addresses[index - 1]
+                if source < labelled_source <= callsite:
+                    source = labelled_source
+                    normalized_events += count
         normalized_targets[source, callsite, target] += count
 
     if normalized_events:
@@ -401,8 +406,10 @@ border-radius:7px}.table-wrap{overflow:auto;max-height:52vh}
 table{border-collapse:collapse;width:100%;white-space:nowrap}th,td{padding:10px 12px;
 border-bottom:1px solid var(--line);text-align:left}th{position:sticky;top:0;
 background:var(--panel);color:var(--muted);font-size:11px;text-transform:uppercase;
-letter-spacing:.08em}tbody tr{cursor:pointer}tbody tr:hover{background:#1a2434}
-td.name{color:var(--cyan)}.callsites{white-space:normal;color:var(--muted)}
+letter-spacing:.08em}tbody tr:hover{background:#1a2434}
+.callsites{white-space:normal;color:var(--muted)}
+.routine-link{border:0;background:none;color:var(--cyan);font:inherit;padding:0;
+cursor:pointer;text-align:left}.routine-link:hover{text-decoration:underline}
 .count{text-align:right;font-variant-numeric:tabular-nums}
 @media(max-width:800px){.stats{grid-template-columns:1fr 1fr}.focus{
 grid-template-columns:1fr}.center{grid-row:1}.toolbar{display:block}}
@@ -450,13 +457,19 @@ function renderFlows(query=""){
  const q=query.trim().toLowerCase();
  const rows=data.flows.filter(f=>!q||[f.source,f.sourceName,f.target,f.targetName,
  ...f.callsites.map(c=>c.address)].some(v=>v.toLowerCase().includes(q)));
+ const exact=data.subroutines.filter(r=>r.name.toLowerCase()===q||
+ r.address.toLowerCase()===q||r.address.slice(1).toLowerCase()===q);
+ if(exact.length===1)select(exact[0].address);
  document.getElementById("shown").textContent=`(${fmt(rows.length)} shown)`;
- document.getElementById("flows").innerHTML=rows.map(f=>`<tr data-address="${f.source}">
- <td class="name">${esc(f.sourceName)} <span class="muted">${f.source}</span></td>
- <td class="name">${esc(f.targetName)} <span class="muted">${f.target}</span></td>
+ document.getElementById("flows").innerHTML=rows.map(f=>`<tr>
+ <td><button class="routine-link" data-address="${f.source}">${esc(f.sourceName)}
+ <span class="muted">${f.source}</span></button></td>
+ <td><button class="routine-link" data-address="${f.target}">${esc(f.targetName)}
+ <span class="muted">${f.target}</span></button></td>
  <td class="callsites">${f.callsites.map(c=>`${c.address} × ${fmt(c.count)}`).join("<br>")}</td>
  <td class="count">${fmt(f.count)}</td></tr>`).join("");
- document.querySelectorAll("#flows tr").forEach(r=>r.onclick=()=>select(r.dataset.address));
+ document.querySelectorAll(".routine-link").forEach(
+ r=>r.onclick=()=>select(r.dataset.address));
 }
 fetch("/api/data").then(r=>{if(!r.ok)throw Error(r.statusText);return r.json()})
 .then(payload=>{data=payload;const s=data.summary;
@@ -541,8 +554,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--trust-recorded-source",
         action="store_true",
         help=(
-            "do not repair source addresses from the closest labels.csv entry; "
-            "use for logs produced after the grouped-entry logger fix"
+            "do not approximate anonymous legacy source addresses from the "
+            "closest labels.csv entry"
         ),
     )
     parser.add_argument(
