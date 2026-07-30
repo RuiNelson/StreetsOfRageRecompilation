@@ -457,18 +457,7 @@ Deep sequence helpers remain largely unnamed `sub_072xxx` / `sub_073xxx` in gene
 
 ---
 
-## 14. Dynamic call-map confirmation
-
-`$19D16 (vblank_handler)` called `$72914 (sound_engine)` 48,671 times in the
-recorded run. The engine in turn called `$72B08 (sound_update_fm_channel)`
-258,298 times, `$7388C (sound_update_psg_channel)` 128,898, `$72D08
-(sound_process_queue)` 48,670, `$73066 (sound_fade_music)` 48,749, and
-`$72A4E (sound_update_dac_channel)` 47,643. The YM bus wrapper called both
-its write and BUSREQ-acquire helpers 102,440 times. This is direct runtime
-evidence for the frame-driven 68000 mixer and its FM/PSG/DAC lanes; it does
-not identify the musical content of the queued IDs.
-
-## 15. One-line summary
+## 14. One-line summary
 
 ***Streets of Rage* runs a custom 68000 frame sequencer (`$72914 (sound_engine)`) for FM and PSG music/SFX, uses the `$FFF00A (play_se)` work-RAM queue as the only game-facing API, and relegates the Z80 to a BUSREQ-guarded YM2612 DAC sample player driven by `$A01FFF (z80_dac_command)` / `$A01FFD (z80_dac_busy)` in the top of Z80 RAM.**
 

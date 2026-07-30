@@ -911,20 +911,7 @@ recorded in `labels.csv`.
 
 ---
 
-## 12. Dynamic call-map confirmation
-
-The runtime map records the global loop taking the expected mode sequence:
-`$3A2 (game_infinite_loop)` called Sega-screen update 208 times, intro update
-39, title update 20, select-screen update 147, character-select update 156,
-level-start update 1,340, gameplay update 21,331, and round-clear update 246.
-In gameplay, `$1087A (game_mode_ingame)` called the object pass, clock, pause
-handling, animated palettes, ambient-effects dispatcher, join/continue HUD,
-stage-clear monitor, demo timeout, and Mr. X-offer updater exactly 20,947
-times each. Camera/tilemap update was observed only 258 times, consistent with
-its state-gated nature. This establishes a concrete observed frame path while
-leaving unvisited levels and alternate branches outside the log's coverage.
-
-## 13. Remaining uncertainties and useful next experiments
+## 12. Remaining uncertainties and useful next experiments
 
 1. **Resource descriptor field names.** `$F46` combines nibbles, table families,
    and overlapping words. Runtime logging of calls to `$10538/$1053E` would

@@ -1086,21 +1086,7 @@ The principal new RAM symbols cover:
 
 ---
 
-## 15. Dynamic call-map confirmation
-
-The recorded run provides high-volume confirmation of the per-frame renderer:
-`$AD8E (update_objects_and_build_sprites)` was entered 20,962 times and called
-`$AE4C (enqueue_object_render_bucket)` 254,353 times,
-`$B132 (ensure_object_ground_shadow)` 233,391 times, and
-`$6894 (object_ground_shadow_dispatcher)` 86,127 times. `$AE96
-(build_sprite_attribute_table)` entered 21,037 times and reached `$AF46
-(emit_object_sprite_mapping)` 123,242 times; that mapper then performed
-504,055 Y-culls and 476,214 X-culls. Separately, the VBlank handler called
-`$19DA6 (vblank_write_scroll_and_backgrounds)` 23,442 times. These counts
-show that bucket construction, mapping emission, culling, and VBlank handoff
-are live production paths, while their ratios remain scene-dependent.
-
-## 16. Remaining useful experiments
+## 15. Remaining useful experiments
 
 1. Capture one stable frame in every level and correlate each R11 mode with the
    exact `$196B2 (background_vblank_upload_table)` target selected by the

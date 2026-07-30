@@ -532,18 +532,6 @@ section remain separate visual/asset-identification questions.
 1. Which exact VRAM tile ranges correspond to every ID in the Nemesis table at `$A662 (nemesis_art_bundle_table)`?
 2. Which data fields in `$FFDD14` and `$FFDD18` merit semantic names beyond saved decoder scratch state?
 
-## Dynamic call-map confirmation
-
-The recorded run entered `$84BA (begin_incremental_nemesis_decode)` 20,946
-times and `$8510 (continue_incremental_nemesis_decode)` 44,482 times. The
-latter was also called 44,404 times directly from `$19D16 (vblank_handler)`,
-confirming that queued art is serviced in the normal VBlank cadence and that
-initialization need not imply a one-frame completion. Blocking decoders were
-also observed, but much less often: `$8192 (nemesisdec_vram)` 53 entries,
-`$81A4 (nemesisdec_ram)` 17, `$82D6 (enigmadec)` 11, and `$85A2 (kosinskidec)`
-37. These are coverage facts for this boot-to-gameplay log; they do not bound
-the number of compressed streams in the ROM.
-
 ## Analysis-data update ledger
 
 These findings were integrated into the shared CSV files. Where another manuscript

@@ -597,19 +597,6 @@ Downstream consumers:
 
 ---
 
-## 12. Dynamic call-map confirmation
-
-The global-loop trace observed 147 calls to `$919A
-(game_mode_selectscreenmode)` and 156 to `$92A8
-(game_mode_characterselectscreen)`. It entered `$108E
-(game_start_screen_update)` 148 times and `$170A (screen_state_dispatcher)`
-157 times, then called the shared `$AD8E (update_objects_and_build_sprites)`
-from the character-select route. That object pass dynamically reached the
-character-preview dispatcher 30 times and the cursor dispatcher 10 times.
-The trace therefore corroborates that these screens are mode-local state
-machines built on the shared object renderer; it does not enumerate every
-OPTIONS row or cheat outcome.
-
-## 13. Open follow-ups
+## 12. Open follow-ups
 
 - Trace `$106EA (init_levelstart)` / `$1077C (game_mode_levelstart)` (`$28`/`$2A`) end-to-end: how `$FFFF02 (level)`, character IDs, and difficulty are applied to the first wave spawn.

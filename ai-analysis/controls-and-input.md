@@ -208,19 +208,6 @@ player's input buffer to activate a waiting player or continue display state,
 while the main pause path only considers players whose bits are already set in
 `$FFFF18 (player_mode)`.
 
-## Dynamic call-map confirmation
-
-The typed `calls.csv` run entered `$19D16 (vblank_handler)` 48,749 times. Its
-observed edges reached `$810C (sample_all_joypads)` 44,404 times and
-`$8510 (continue_incremental_nemesis_decode)` the same 44,404 times, confirming
-their shared VBlank tail in sustained gameplay rather than merely their static
-adjacency. `$568A (remap_player_gameplay_input)` was entered 20,952 times from
-the object update pass, closely matching the 20,947 observed player-object
-updates. `$3028 (player_normal_attack_input)` called
-`$3136 (find_close_interaction_target)` 264 times; 22 searches then reached
-its pickup/interaction continuation. Counts reflect this particular recorded
-playthrough, not a frequency ranking for all possible inputs.
-
 ## Evidence map
 
 | Reference | Role |

@@ -566,19 +566,6 @@ The dynamic probe exercised the actual per-frame object dispatcher. It did not
 call either target directly or infer execution merely from a successful remote
 connection.
 
-## Dynamic call-map confirmation
-
-The observed gameplay loop invoked `$AD8E (update_objects_and_build_sprites)`
-20,962 times and reached `$556E (update_player_object)` 20,952 times,
-confirming that the player update is part of the regular object pass rather
-than a separate game-mode loop. `$568A (remap_player_gameplay_input)` has the
-same 20,952 dynamic entries. The ordinary attack input path was entered 8,697
-times and called `$3136 (find_close_interaction_target)` 264 times, with 22
-observed interaction continuations. The log also saw the P1 police-blast
-dispatcher 7,351 times and its enemy-sweep trampoline 2,416 times. These
-counts demonstrate exercised paths, not damage totals or a complete combat
-coverage matrix.
-
 ## Remaining uncertainties and useful runtime checks
 
 1. `$FFFF35 (respawn_specials_continue_override)` has a second, nonzero-only
