@@ -244,6 +244,7 @@
 00019CC6, initialize_parallax_strip_state, "100% - Seeds each strip's current/previous parallax X and Y coordinates from the camera"
 00019D92, vblank_mode_dispatch_table, "100% - Five BRA.w entries selecting gameplay, character/menu, story, bad-ending, or round-clear VBlank work from vblank_mode"
 00019DA6, vblank_write_scroll_and_backgrounds, "100% - Writes the two base horizontal-scroll words at VRAM $F400 and dispatches queued background uploads"
+00019E1E, vblank_upload_title_screen_dma, "100% - One-shot title-screen VBlank DMA: uploads $0B00 words from $FF1600 with VDP command $73400081, then joins the common presentation VBlank DMA tail"
 0001A0B4, upload_dirty_player_art_dma, "100% - For P1 and P2 dirty frame-art IDs, programs ROM-to-VRAM DMA into the four reserved player-art regions"
 0001A160, player_art_dma_upper_table, "100% - Six-byte VDP DMA parameter records selected by object+$52 for the upper player sprite-art region"
 0001A53E, player_art_dma_lower_table, "100% - Six-byte VDP DMA parameter records selected by object+$53 for the lower player sprite-art region"
