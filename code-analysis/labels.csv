@@ -248,10 +248,13 @@
 00072914, sound_engine, "100% - Per-VBlank sound engine: drains play_se queue, fades stop_music, ticks music FM/DAC/PSG and SFX FM/PSG channel blocks"
 00072A4E, sound_update_dac_channel, "100% - Advances the music DAC channel ($FFF130); posts sample/command bytes to Z80 $1FFF under BUSREQ"
 00072B08, sound_update_fm_channel, "100% - Advances one FM channel block ($30 bytes): sequence duration, $F0+ cmds, pitch via $732D2, YM2612 key-on/freq writes"
+00072C1A, sound_advance_channel_vibrato, "100% - Advances the channel vibrato timer, direction and accumulated pitch offset at +$1C..+$22 when flag bit 3 is enabled"
 00072D08, sound_process_queue, "100% - Drains play_se queue with priority table $72824; dispatches music $81–$9F, SFX $A0–$CF, PCM $D0–$DF, special $E0–$E3"
+00072F82, sound_resolve_table_pointer, "100% - Multiplies d0 by four and resolves the longword pointer in the a0-based sound table into a0"
 00072F8A, sound_reset_all, "100% - Full audio reset: DAC/YM cleanup, zero $FFF000 workspace, silence PSG"
 0007302E, sound_start_music_fade, "100% - Starts BGM fade from command $E0: sets stop_music=$10 and fade timer $FFF003=4"
 00073066, sound_fade_music, "100% - Per-frame BGM fade: every 4 frames raise FM attenuation then call sound_reset_all when stop_music hits 0"
+000731DE, sound_ym2612_key_off_channel, "100% - Unless channel flags suppress it, writes YM2612 register $28 with the channel index to key that FM channel off"
 000731A2, sound_psg_silence, "100% - Writes $9F/$BF/$DF/$FF to SN76489 to silence all PSG channels"
 000731FA, sound_ym2612_write_channel, "100% - YM2612 write with channel index from channel block; part 0 or part 1 selected by channel flags"
 00073206, sound_ym2612_write, "100% - Wait YM busy, write reg to $A04000 and data to $A04001 (part 0)"
@@ -260,6 +263,7 @@
 00073298, sound_ym2612_acquire, "100% - BUSREQ Z80, wait ACK, spin while Z80 $1FFD bit7 (DAC busy), wait YM2612 ready"
 000732EA, sound_seq_command, "100% - Sequence command dispatcher for bytes >= $F0 (separate FM vs PSG jump tables)"
 0007388C, sound_update_psg_channel, "100% - Advances one PSG channel block: sequence, pitch via $73A64, volume envelopes, SN76489 writes"
+000739AC, sound_update_psg_volume_envelope, "100% - Steps PSG envelope bytes through table $728D0, updates channel attenuation, and writes the SN76489 volume command"
 
 # Memory Utility Routines
 ; Unrolled fall-through entry points: each label enters a chain of move.l instructions
