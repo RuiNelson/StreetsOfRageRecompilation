@@ -229,8 +229,8 @@ $19DA6 (vblank_write_scroll_and_backgrounds)
 $1A0B4 (upload_dirty_player_art_dma)
 $181BC special per-level VDP command upload
 SAT DMA: 320 words from $FFDA00 to VRAM $F000
-$10F80 gameplay HUD writes
-$114DA queued dialogue / rectangular tilemap writes
+`$10F80 (vblank_update_gameplay_health_bars)` player/boss HUD writes
+`$114DA (vblank_upload_gameplay_vdp_updates)` dialogue and queued rectangular VDP writes
 ```
 
 The SAT length is programmed as `$0140` words, exactly `80 * 8 / 2`. This is a
@@ -858,9 +858,19 @@ HUD logic generally edits RAM tile-word blocks during game time:
 
 - clock digits are written in the `$FF6000` workspace;
 - score and life/special routines patch their tile words;
-- boss-health pointers feed `$10F80` during VBlank;
+- player-health source pointers at `$FC0C/$FC10` and registered boss objects feed
+  `$10F80 (vblank_update_gameplay_health_bars)` during VBlank;
 - dialogue and rectangular updates are queued around `$FFED80`;
-- `$114DA` flushes those requests through the generic VDP writers.
+- `$114DA (vblank_upload_gameplay_vdp_updates)` clears Mr. X dialogue regions,
+  flushes `$FFED80/$FFED84` through
+  `$1152A (vblank_flush_vdp_copy_queue)`, and uploads the pending level-index-2
+  background frame when present.
+
+The two health-bar helpers have deliberately different contracts:
+`$11072 (vblank_upload_player_health_bar)` consumes and clears one pending
+player source pointer, whereas `$1108E (vblank_upload_boss_health_bar)` reads
+the currently registered boss object. This lets ordinary player damage redraw
+only a changed row while a boss HUD follows the live encounter registration.
 
 Small menus may write tile words directly while the display is disabled.
 Gameplay and animated screens defer volatile writes to their VBlank mode.

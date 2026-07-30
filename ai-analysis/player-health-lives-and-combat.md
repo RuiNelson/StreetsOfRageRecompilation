@@ -10,7 +10,7 @@ The strongest conclusions come from following both players through the fixed obj
 
 The game separates three kinds of player resource:
 
-1. **Health** is a binary word in each live player object at offset `+$32`. Full health is `$0050` (80 units). `$4E6C (adjust_player_health)` is the shared saturating adjustment routine and also redraws the health bar.
+1. **Health** is a binary word in each live player object at offset `+$32`. Full health is `$0050` (80 units). `$4E6C (adjust_player_health)` is the shared saturating adjustment routine and prepares the changed row; `$10F80 (vblank_update_gameplay_health_bars)` later uploads it through `$11072 (vblank_upload_player_health_bar)`.
 2. **Lives** are one-byte packed-BCD counters at `$FFFF20 (p1_lives)` and `$FFFF23 (p2_lives)`. A life is deducted only after the KO animation reaches its death-resolution state, not at the instant health reaches zero.
 3. **Continues** are words at `$FFFF1A (p1_continues)` and `$FFFF1C (p2_continues)`. They begin at 3. Accepting a continue subtracts one, clears that player's score and extra-life threshold progress, restores the configured starting lives, and re-enters the current round.
 

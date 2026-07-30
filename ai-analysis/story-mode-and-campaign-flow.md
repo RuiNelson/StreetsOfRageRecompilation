@@ -350,7 +350,7 @@ The observable phases include:
 - enabling `$FFFA43 (duel_damage_modifier)` during a P1-versus-P2 duel;
 - returning to normal combat or marking the narrative outcome.
 
-The choices themselves are stored in player-object state, particularly bits in `object+$59`. `$FFDE0E (mr_x_dialogue_clear_flags)` does not store the answers. Routine `$12576` consumes bit 0 to clear the main dialogue area and bit 1 to clear both player-choice tile areas. The connection between accepting the offer and the bad ending is unambiguous.
+The choices themselves are stored in player-object state, particularly bits in `object+$59`. `$FFDE0E (mr_x_dialogue_clear_flags)` does not store the answers. During gameplay VBlank, `$12576 (vblank_update_mr_x_offer_tilemaps)` consumes bit 0 to clear the main dialogue area and bit 1 to clear both player-choice tile areas. It then consumes the two pending copy slots at `$FFDE60` and `$FFDEA0` through `$125E6 (vblank_flush_mr_x_dialogue_copy_slot)`. The connection between accepting the offer and the bad ending is unambiguous.
 
 ### 7.3 One-player path
 
