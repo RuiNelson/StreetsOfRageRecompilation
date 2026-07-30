@@ -265,6 +265,19 @@ Ordinary enemies and bosses share the 128-byte object format, fixed-point positi
 
 Boss type `$30` and types `$55-$58` use byte-sized primary/tactical states, bespoke target selectors, pair/link metadata and multi-object attack choreography. Their code is useful for understanding collision/grab conventions, but it is not evidence for ordinary-enemy archetypes.
 
+## Dynamic call-map confirmation
+
+The object pass `$AD8E (update_objects_and_build_sprites)` dynamically
+dispatched the ordinary visual families in the recorded gameplay: type-22/32
+Garcia 14,244 times, type-21 Garcia 10,213, Signal 9,931, Haku-Ro 5,294, Nora
+4,176, and Jack 729. `$937A (ordinary_enemy_activate)` was entered 17,892
+times; 99 observed calls reached `$938C (ordinary_enemy_init_type_data)`, and
+that initializer reached each of its four table-driven setup helpers 102 times.
+This supports the shared lifecycle and data-driven initialization model. The
+same trace reached Antonio's trampoline 1,696 times, but it is not a complete
+boss survey: later-family and ending routes absent from the run remain static
+evidence rather than negative results.
+
 ## Confidence and open questions
 
 The code labels for the ordinary-enemy entries audited in this manuscript are

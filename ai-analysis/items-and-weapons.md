@@ -478,6 +478,17 @@ This does not resolve the separate visual question of which ELC container owns
 every hidden reward; that relationship is external to the local type-`$19`
 dispatcher and remains correctly listed below.
 
+## Dynamic call-map confirmation
+
+The shared object dispatcher observed the principal live item paths: knife
+4,404 times, steel pipe 4,206, bottle 2,514, baseball bat 1,312, and pepper
+spray 922. It also reached small-health and full-health pickup dispatchers 654
+and 612 times, telephone booth 4,421 times, type-19 breakables 254 times, and
+bottle shards 184 times. `$3028 (player_normal_attack_input)` reached
+`$3136 (find_close_interaction_target)` 264 times, directly corroborating the
+attack-to-interaction bridge. This run did not exercise every reward variant or
+drop source, so zero/absent flows must not be read as proof of absence.
+
 ## Uncertainties and recommended traces
 
 1. Map every type-`$0C` animation selector to the thrown canister, smoke/powder cloud, and lingering immobilization frames.

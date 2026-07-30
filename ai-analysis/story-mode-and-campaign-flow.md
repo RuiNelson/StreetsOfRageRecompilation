@@ -551,7 +551,20 @@ The dynamic run therefore confirms the manuscript's central claims about the nar
 
 ---
 
-## 12. Conclusions
+## 12. Dynamic call-map confirmation
+
+The aggregate typed log corroborates the dispatcher-level timeline discussed
+above: `$3A2 (game_infinite_loop)` reached every normal init/update route from
+Sega through menu, character select, level start, gameplay, and one
+round-clear cycle. It recorded 21,331 gameplay updates, 1,340 level-start
+updates, and 246 round-clear updates. During gameplay, `$1087A
+(game_mode_ingame)` called `$11B4C (mr_x_offer_update)` 20,947 times, proving
+that the offer machine is polled from the ordinary gameplay frame even though
+this particular route did not reach its final decision branch. Thus the map
+supports placement and cadence, while the ending matrix remains established by
+static control-flow evidence and targeted remote observations.
+
+## 13. Conclusions
 
 - The campaign's persistent unit of progress is `$FFFF02 (level)`; `$FFFF04 (wave)` describes only progress within a round.
 - Normal advancement between rounds belongs to the round-clear screen, not to the logic that defeats the boss.
