@@ -42,12 +42,12 @@ Before changing files:
 | `code-analysis/blocks.csv` | Known data/code block boundaries |
 | `code-analysis/aux_addresses.txt` | Confirmed extra static entry points |
 | `tools/call_map.py` | Converts runtime call logs into a deduplicated SQLite call map |
-| `generated/Sor.*` | Ignored local C++ generated from ROM and analysis inputs |
+| `generated/SoR*` | Ignored local C++ generated from ROM and analysis inputs |
 | `output/sor.asm` | Ignored local 68000 listing and primary code-analysis view |
 | `ai-analysis/*.md` | English topic-based reverse-engineering manuscripts |
 | `sync_ai_analysis.py` | Symbol-reference synchronization and validation |
 
-Do not hand-edit `generated/Sor.cpp` or `output/sor.asm` to make a durable
+Do not hand-edit `generated/SoR-XXX.cpp` or `output/sor.asm` to make a durable
 semantic change. Update the appropriate analysis input, generator, or manual
 implementation, then regenerate the derived files.
 
@@ -76,7 +76,8 @@ Use the centralized meta-repository scripts:
 ```
 
 `--full` is mandatory after a fresh clone because `generated/` is ignored by
-Git. Once `generated/Sor.cpp` and `generated/Sor.hpp` exist locally,
+Git. Once `generated/SoR.hpp`, `generated/SoR-common.hpp`, and the
+`generated/SoR-XXX.cpp` files exist locally,
 subsequent builds may omit it until their inputs change.
 
 `../scripts/build` reconfigures only when necessary. Use `--clean` when
@@ -111,7 +112,7 @@ inputs change:
 ../scripts/generate_cpp
 ```
 
-`--full` runs the sibling `RageDecompiler` and rewrites `generated/Sor.*`.
+`--full` runs the sibling `RageDecompiler` and rewrites `generated/SoR*`.
 Use `--full --discover` only inside the speculative discovery workflow; it can
 include temporary candidates that do not belong in a normal build.
 
@@ -236,7 +237,7 @@ delivery. When a code label changes, also regenerate the derived views:
 ../scripts/generate_cpp_and_build
 ```
 
-Never rename symbols directly in `output/sor.asm` or `generated/Sor.cpp`.
+Never rename symbols directly in `output/sor.asm` or generated `SoR-XXX.cpp`.
 
 ## Address conventions
 

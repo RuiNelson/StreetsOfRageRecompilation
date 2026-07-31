@@ -1,5 +1,5 @@
 #include "SoRCheats.hpp"
-#include "Sor.hpp"
+#include "SoR.hpp"
 
 #include <cstdint>
 

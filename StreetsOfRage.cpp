@@ -1,4 +1,4 @@
-#include "Sor.hpp"
+#include "SoR.hpp"
 #include "SoRCheats.hpp"
 #include "Logger.hpp"
 #include <cerrno>

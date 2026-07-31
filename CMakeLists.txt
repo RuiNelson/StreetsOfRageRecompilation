@@ -45,8 +45,11 @@ list(FILTER SOR_SOURCES EXCLUDE REGEX ".*/build/.*")
 
 add_executable(sor ${SOR_SOURCES})
 
+file(GLOB SOR_GENERATED_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/generated/SoR-[0-9A-F][0-9A-F][0-9A-F].cpp"
+)
 set_source_files_properties(
-    "${CMAKE_CURRENT_SOURCE_DIR}/generated/Sor.cpp"
+    ${SOR_GENERATED_SOURCES}
     PROPERTIES COMPILE_OPTIONS
         "$<$<AND:$<CONFIG:Debug>,$<NOT:$<CXX_COMPILER_ID:MSVC>>>:-O2>"
 )

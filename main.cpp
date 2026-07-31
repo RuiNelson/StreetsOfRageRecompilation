@@ -1,5 +1,5 @@
 #include "SoRCheats.hpp"
-#include "Sor.hpp"
+#include "SoR.hpp"
 #include "config/controls/ControlsConfigUI.hpp"
 #include <CLI/CLI.hpp>
 #include <cstdint>

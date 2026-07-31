@@ -1,4 +1,4 @@
-#include "Sor.hpp"
+#include "SoR.hpp"
 
 #include <array>
 #include <cstddef>

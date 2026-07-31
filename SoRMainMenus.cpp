@@ -1,5 +1,5 @@
 #include "SoRCheats.hpp"
-#include "Sor.hpp"
+#include "SoR.hpp"
 
 #include <cstdint>
 
@@ -74,7 +74,7 @@ constexpr m_word wrappedStep(m_word value, m_word maximum, bool increment) {
 
 } // namespace
 
-// A hand-written equivalent of generated/Sor.cpp's CALL/CALL_DISPATCH.  The
+// A hand-written equivalent of generated SoR-XXX.cpp's CALL/CALL_DISPATCH. The
 // expression is a 68000 subroutine call: push the synthetic return PC, invoke
 // it, and stop this body if the callee unwound beyond our frame.
 #define SOR_CALL_68K(expression, returnPc, target)                                                                     \
