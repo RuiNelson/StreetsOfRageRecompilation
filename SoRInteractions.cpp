@@ -246,7 +246,7 @@ void StreetsOfRage::player_normal_attack_input(m_long entry_) {
                     cpu(),
                     memory(),
                     [this] {
-                        sub_001aae(0x2EE8u);
+                        dispatch(0x2EE8u);
                     },
                     0x3080u))
                 return;
@@ -264,7 +264,7 @@ void StreetsOfRage::player_normal_attack_input(m_long entry_) {
             cpu(),
             memory(),
             [this] {
-                sub_001aae(0x2EE8u);
+                dispatch(0x2EE8u);
             },
             0x3080u))
         return;
@@ -343,7 +343,7 @@ void StreetsOfRage::player_held_object_attack_input(m_long entry_) {
             cpu(),
             memory(),
             [this] {
-                sub_001aae(0x2DE6u);
+                dispatch(0x2DE6u);
             },
             0x3132u))
         return;
@@ -369,7 +369,7 @@ void StreetsOfRage::find_close_interaction_target(m_long entry_) {
             cpu(),
             memory(),
             [this] {
-                sub_001aae(0x2DE6u);
+                dispatch(0x2DE6u);
             },
             0x31EAu))
         return;
