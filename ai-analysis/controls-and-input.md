@@ -177,12 +177,22 @@ The manual pickup hooks read a native per-player Y edge instead.
 ## Gameplay action priority
 
 The player action code consumes the logical object input produced by
-`$568A (remap_player_gameplay_input)`. `$3028 (player_normal_attack_input)` is
-the ordinary logical attack path. It first calls
-`$3136 (find_close_interaction_target)`; if a nearby free weapon or consumable
-pickup is found, the player enters the pickup action instead of starting a
-normal punch. If no target is found, the same logical attack bit starts the
-attack/combo transition.
+`$568A (remap_player_gameplay_input)`. On the idle/ground path around `$2CD2`
+the priority chain is:
+
+```text
+resolve contact/throw state ($3266)
+resolve attack+jump chord / rear attack ($322A)
+resolve jump press, bit 5 ($2FCC)
+resolve normal attack, bit 4 ($3028 / player_normal_attack_input)
+otherwise directional movement from the low input nibble
+```
+
+`$3028 (player_normal_attack_input)` is the ordinary logical attack path. It
+first calls `$3136 (find_close_interaction_target)`; if a nearby free weapon or
+consumable pickup is found, the player enters the pickup action instead of
+starting a normal punch. If no target is found, the same logical attack bit
+starts the attack/combo transition.
 
 This is why the original behavior gives pickup priority over attack when the
 player presses the configured attack button near an item. With `--altControls`,
@@ -190,6 +200,193 @@ the manual pickup hooks invert that priority: B remains attack and will not be
 converted into pickup, while Y alone requests
 `$3136 (find_close_interaction_target)`. Start is no longer overloaded for
 pickup and always reaches the normal Start path.
+
+### Attack+jump chord versus jump-kick
+
+Two different moves share the same face buttons. The order of presses decides
+which one the ROM selects:
+
+| Input pattern | Result | Action family |
+|---|---|---|
+| **B and C on the same decision** (held+edge either order) | Rear / escape attack | `$20+` via `$322A (player_attack_jump_chord)` |
+| **C only** to leave the ground, then **B later** while airborne | Jump-kick | `$10 → $12 → $16` |
+
+`$322A (player_attack_jump_chord)` runs **before** `$2FCC` in the ground
+priority chain, so a simultaneous B+C chord never becomes a jump. Jump-kick is
+strictly sequential: jump edge first, attack edge only after free flight.
+
+## Jump and jump-kick (ROM physics)
+
+This section is the mathematical model of the unarmed jump-kick. Addresses are
+ROM code/data unless prefixed with `FF` (work RAM). Player objects live at
+`$FFB800 (p1_object)` and `$FFB880 (p2_object)`. Action state is object `+$30`
+(bit 0 = facing left). Velocities and positions are 16.16 fixed-point longs at
+`+$1C` (X), `+$20` (lane Y), `+$24` (height Z) and `+$10` / `+$14` / `+$18`.
+
+### Action state machine
+
+`$1C44 (update_player_object)` dispatches `+$30` through the word table at
+`$1CE2`:
+
+| Action | Name | Handler | Role |
+|---:|---|---:|---|
+| `$10/$11` | Jump start | `$1FC0` | Crouch timer, then launch |
+| `$12/$13` | Free flight | `$1FDC` | Gravity, air steer, attack edge |
+| `$16/$17` | Jump attack (kick) | `$2000` | Lighter fall gravity + damage |
+| `$14/$15` | Jump land | `$1FE8` | Recovery → ground `$02` |
+
+Held-weapon jumps use the parallel family `$3C–$43` (`$2158` / `$2174` /
+`$2198` / `$2180`) with the same physics helpers.
+
+```text
+ground ──C ($2FCC)──► $10 JUMP_START ──(timer)──► $12 FREE FLIGHT
+                              │                         │
+                              │                    B ($3914)
+                              │                         ▼
+                              │                    $16 JUMP_ATK
+                              │                         │
+                              └──────── land ($3E78) ───┴──► $14 LAND ──► $02
+```
+
+### Jump press and crouch
+
+`$2FCC` on a new jump edge (object `+$55` bit 5):
+
+1. queues sound id `$A0` through `$35D6`;
+2. sets action `$10` (plus facing) via `$2EE8`.
+
+`$2EE8` / `$2EF2` always call `$3614`, which loads character walk speeds from
+the tables at `$3670` / `$3706` / `$379C`. **Jump rows of those tables are
+zero**, so entering `$10` clears horizontal and lane velocity. Walk momentum
+does not carry into a jump.
+
+Jump-start handler `$1FC0` only decrements frame timer `+$0D`. All three
+characters use jump anim bank `c = $04` with frame-0 duration **5**, so crouch
+lasts **5 frames** before launch. Animation does not advance during crouch.
+
+### Launch (end of crouch)
+
+When the crouch timer expires, `$1FC0`:
+
+1. advances action by 2 (`$10 → $12`);
+2. `$2EF2` re-enters free-flight anim and again zeros X/Y via `$3614`;
+3. `$3832` writes initial Z velocity from the character table at `$3842`;
+4. `$384E` sets X velocity to **±`$00030000` (±3.0 px/frame)** if Left or
+   Right is held, and updates facing; if neither is held, **X stays 0**.
+
+On that same transition frame, gravity is **not** applied yet; `$442C`
+integrates position once with the launch velocities.
+
+| Character | ID | `$3842` long | Launch \(v_z\) |
+|---|---:|---:|---:|
+| Axel | 0 | `$FFF88000` | **−7.5** px/frame |
+| Adam | 1 | `$FFF78000` | **−8.5** px/frame |
+| Blaze | 2 | `$FFF68000` | **−9.5** px/frame |
+
+Negative Z velocity raises the character (object `+$18` decreases). Positive Z
+velocity falls toward the floor sample from `$AD2A`.
+
+### Free flight
+
+Each free-flight frame (`$1FDC`):
+
+| Step | Routine | Effect |
+|---|---|---|
+| Gravity | `$389A` | \(v_z \mathrel{+}= `$E800`\) (**+0.90625** px/f²) |
+| Air steer | `$38C0` | Left/Right adds **±`$6000` (±0.375)** to \(v_x\); clamp **±`$38000` (±3.5)**; updates facing |
+| Kick edge | `$3914` | If attack bit 4 is newly pressed: set `+$58` bit 2, action ← `(action & $FE) + 4` (`$12 → $16`), re-init anim, play kick sound |
+| Fall clamp | `$3886` | \(v_z \le `$C0000` (**12.0**) |
+| Integrate | `$442C` | \(x \mathrel{+}= v_x\), \(y \mathrel{+}= v_y\), \(z \mathrel{+}= v_z\) |
+
+There is **no mid-air lane (Up/Down) control**. Lane Y is frozen at takeoff.
+`$3914` sets `+$58` bit 2 before `$2EE8` so `$3614` **preserves** the current
+X velocity when entering the kick (it does not re-zero it).
+
+### Jump-kick gravity and damage
+
+Kick handler `$2000` uses `$38AE`:
+
+- while rising (\(v_z < 0\)): full gravity `$E800`;
+- while falling (\(v_z \ge 0\)): lighter gravity **`$8800` (+0.53125)** so a
+  kick mid-air lengthens hang time and horizontal range.
+
+`$41EA (compute_player_attack_descriptor)` indexes anim `$14/$16` descriptors:
+
+| Character | Kick anim behaviour | Damage (low nibble) | Reaction (high nibble) |
+|---|---|---:|---:|
+| Axel / Adam | Stay on frame 0 for the whole kick | **3** every kick frame | 1 |
+| Blaze | Advances frames until frame 3 | **0** on f0–f1, **2** on f2–f3 | 1 |
+
+Free flight (anim `$10`) has **0** damage on frame 0. A duel flag at
+`$FFFA43 (duel_damage_modifier)` triples the damage nibble modulo 16.
+
+### Kick hitboxes
+
+`$4140` builds body (`+$64`) and attack (`+$70`) AABBs from anim frame box IDs
+into tables `$1ABA8` / `$1AB8E`. Jump-kick attack boxes (relative to the
+player origin; bit0 of action selects facing):
+
+| Char | Facing right (bit0=0) | Facing left (bit0=1) |
+|---|---|---|
+| Axel | x[+6..+16] y[−8..+8] z[−52..−38] | x[−16..−6] y[−8..+8] z[−52..−38] |
+| Adam | x[+10..+21] y[−8..+8] z[−49..−33] | x[−21..−10] y[−8..+8] z[−49..−33] |
+| Blaze | x[−8..+3] y[−8..+8] z[−48..−28] | x[−3..+8] y[−8..+8] z[−48..−28] |
+
+Lane half-width is about **8** pixels. The Z band sits high on the body, so a
+kick connects best while the player is not at maximum apex against a grounded
+foe—timing the B edge on the way down (or early at close range) matters.
+
+On connect, `$21B4` can set `+$59` bit 7 (hit freeze); `$442C` then skips
+position integration for the jump-attack anim group.
+
+### Landing
+
+When falling collision in `$3E78` finds floor height `d6`: snap `+$18` to the
+floor, clear \(v_z\), play land sound, set action `$14` (or weapon `$40`). Land
+handler `$1FE8` uses another **5-frame** timer, then returns to ground idle
+`$02` via `(action & $FE) − $12`.
+
+### Closed-form trajectory summary
+
+With constant \(v_x = 3.0\) (direction held), crouch 5 frames, no early kick:
+
+| Char | Free-flight frames to land | Approx. horizontal range | Apex (relative) |
+|---|---:|---:|---:|
+| Axel | 18 | **54** px | ≈ −35 |
+| Adam | 20 | **60** px | ≈ −44 |
+| Blaze | 22 | **66** px | ≈ −55 |
+
+Kicking from the first free-flight frame (lighter fall gravity) extends that
+to about **60 / 69 / 75** px. Air steer can push \(|v_x|\) to 3.5. Stationary
+launches (\(v_x = 0\) at takeoff) only gain range from mid-air L/R.
+
+Discrete recurrence (faithful agent solver form):
+
+```text
+// After 5 crouch frames at ground z_g:
+vz ← vz0[char];  vx ← ±3.0 if dir held else 0
+// First free-flight frame (no gravity yet):
+x ← x + vx;  z ← z + vz
+// Later free-flight / kick frames:
+if kick and vz ≥ 0:  vz ← vz + 0.53125
+else:                vz ← vz + 0.90625
+vx ← clamp(vx + air_steer, −3.5, +3.5)
+vz ← min(vz, 12)
+x ← x + vx;  z ← z + vz
+// Land when z ≥ z_g after a falling integrate (ROM uses collision probe)
+```
+
+Multi-enemy use: the kick remains active for the rest of the airtime after B.
+Any foe whose body AABB intersects the moving attack box on some kick frame is
+hit. Same-lane packs on the flight path are therefore one of the strongest
+uses of jump-kick; a predictive solver should score plans by **how many live
+hostiles the arc will damage**, not only primary-target distance bands.
+
+### Partner vault high jump (related)
+
+From a partner hold, `$2FE4` can enter higher jump actions (`$76` / `$80`
+family). That path is a co-op boost, not the ordinary ground C→B kick, but the
+airborne attack edge rule is the same once free flight is reached.
 
 ## Start, pause, and joining
 
@@ -224,5 +421,16 @@ while the main pause path only considers players whose bits are already set in
 | `$568A (remap_player_gameplay_input)` | Copies global input into player object `+$54` and applies configurable A/B/C remap. |
 | `$3028 (player_normal_attack_input)` | Logical attack path that gives original pickup/search priority over a normal attack. |
 | `$3136 (find_close_interaction_target)` | Close-range search for pickup and weapon acquisition targets. |
+| `$322A (player_attack_jump_chord)` | Same-decision B+C rear/escape attack (blocks jump-kick). |
+| `$2FCC` | Jump edge → action `$10`. |
+| `$1CE2` | Player primary-state jump table (includes jump family). |
+| `$1FC0` / `$1FDC` / `$2000` / `$1FE8` | Jump start / free flight / kick / land handlers. |
+| `$3832` / `$3842` | Character launch Z-velocity table. |
+| `$384E` / `$38C0` | Launch X velocity and air L/R steer. |
+| `$389A` / `$38AE` | Full and kick-fall gravity. |
+| `$3914` | Free-flight attack edge → jump-kick action `$16`. |
+| `$41EA (compute_player_attack_descriptor)` | Per-frame kick damage / reaction nibbles. |
+| `$4140` / `$1ABA8` | Body and attack AABB construction. |
+| `$442C` / `$3E78` | Position integrate and ground landing → `$14`. |
 | `$10D2E (handle_pause_start_input)` | Start buffering, pause toggle, and demo abort. |
 | `$115CC (update_join_and_continue_hud)` | Inactive-player Start join and continue HUD path. |
