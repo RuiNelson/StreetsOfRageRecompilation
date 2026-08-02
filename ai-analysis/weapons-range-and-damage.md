@@ -323,14 +323,15 @@ wear < 3 ∧ held ∧ swing frame collision bit set ∧ box overlap
 
 ---
 
-## 9. Open measurements (for live traces)
+## 9. Closed claims and remaining live probes
 
-1. Exact hand-height \(Z_0\) at throw release per character (locks the closed-form
-   range in §4.4).
-2. Per-frame bat/pipe attachment offsets + shape ids during swing (locks max
-   melee reach per character).
-3. Pepper immobilize duration in frames (state `$0400` timer).
-4. Whether bottle shards ever apply `+$34` (currently treated as debris).
+| Claim | Status | Evidence |
+| --- | --- | --- |
+| Bottle shards deal no damage | **Closed** | `$61BE`–`$61E0`: no `+$34`, no `$95CE`; play observation |
+| Pepper immobilize = 160 frames | **Closed** | `$A43E`: `move.b #$A0, $50(a0)`; expire → `$0100` |
+| `+$51` ∈ {0 free, 1 held, 2 drop, 3 throw} | **Closed** | `$3136`, `$21E6`, `$5D84`, `$5E2E`, enemy detach |
+| Hand height \(Z_0\) at throw | **Open** | Live sample at launch frame |
+| Bat/pipe max reach per character | **Open** | Live sample while registered attacker |
 
 ---
 
@@ -345,5 +346,6 @@ wear < 3 ∧ held ∧ swing frame collision bit set ∧ box overlap
 | Wear three uses | `$5C66` `cmpi.b #3,$50` |
 | Pickup box ±20/±16/±8 | `$3136` immediate arithmetic |
 | Enemy HP table | `$26FCE` + `$93CE` |
-| Pepper reaction `$0400` | `$9C1E` type `$0C` branch |
+| Pepper reaction `$0400` + 160 fr | `$9C1E` → `$A43E` timer `$A0` |
+| Shards not damaging | `$61BE` physics-only; no attacker registration |
 | Attacker list | `$95CE` writes `$FFFB24` slots, count `$FFFB22` |
