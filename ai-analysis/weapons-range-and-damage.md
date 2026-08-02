@@ -143,36 +143,25 @@ Position integration (`$B20E`):
 X += vx;  Y += vy;  Z += vz;   // all 16.16
 ```
 
-### 4.4 Approximate ballistic horizontal range
+### 4.4 Launch geometry (ROM + live)
 
-Closed form depends on spawn height above the floor. With Z increasing down,
-spawn height above floor \(h = G - Z_0\) (positive if above floor), initial
-\(v_{z0}\) (negative = up), accel \(a = g/65536\):
+Live probe (Axel, Round 1, `Z_stand = 160`, port 6969):
 
-\[
-Z(t) = Z_0 + v_{z0}\,t + \tfrac12 a t^2,\quad
-\text{land when } Z(t)=G
-\]
+| | Knife `$5D84` | Pepper `$62DA` |
+| --- | ---: | ---: |
+| Launch \(\Delta x\) | ±48 | ±48 |
+| Launch \(\Delta z\) | +16 | +16 |
+| \(v_x\) | ±16 | ±6 |
+| \(v_z\) | 0 | −3 |
+| Bounce | \(v_x \leftarrow -v_x/4\) (live: −16→+4) | smoke emitter path |
 
-\[
-R = |v_x| \cdot t_{\text{land}}
-\]
-
-Order-of-magnitude on flat ground (hand-height style offsets):
-
-| Spawn above floor | Knife \(v_x=16\), \(v_{z0}=0\), \(a≈0.53\) | Pepper \(v_x=6\), \(v_{z0}=-3\), \(a≈0.66\) |
-| ---: | ---: | ---: |
-| 16 px | ~128 px | ~78 px |
-| 24 px | ~160 px | ~84 px |
-| 32 px | ~176 px | ~90 px |
-| 48 px | ~208 px | ~102 px |
+So \(Z_{\mathrm{launch}} = Z_{\mathrm{stand}} + 16\) always; there is no separate
+unknown hand-height parameter on flat ground. Hang time still depends on the
+`$AD2A` floor sample for the cell. Bottle is **not** attack-thrown (`$21E6`
+only `$08`/`$0C`).
 
 Policy heuristics in `autoplay` use throwable mid-range **20–100** px and ally
-exclusion **140** px for throws — consistent with these arcs.
-
-Knife/bottle also **bounce** on ground contact during the active impact state
-(`$5D34`): \(v_x \leftarrow -v_x / 4\) (`neg.l` + `asr.l #2`), then land/exhaust
-path. A direct hit deletes the knife projectile.
+exclusion **140** px for throws.
 
 ### 4.5 Bottle shards (type `$1E`)
 
@@ -232,8 +221,8 @@ Empirical first-punch body boxes (unarmed) measured for autoplay:
 | Adam | ~54 px |
 | Blaze | ~68 px |
 
-Armed bat/pipe policy uses a conservative **≤ 36 px** commit band and co-op
-ally melee exclusion **80 px** — inside the long shape widths above.
+Live Axel bat/pipe: max **|w_x − p_x| = 36** while in `$FFFB22` (action `$48`),
+with **w_z − p_z = −42**. Co-op ally melee exclusion **80 px**.
 
 Lane filter used by the agent for weapon use: \(|\Delta Y| \le 12\) (policy),
 while pickup allows ±16. Exact combat lane thickness comes from shape lane
@@ -327,13 +316,13 @@ wear < 3 ∧ held ∧ swing frame collision bit set ∧ box overlap
 
 | Claim | Status | Evidence |
 | --- | --- | --- |
-| Bottle shards deal no damage | **Closed** | `$61BE`–`$61E0`: no `+$34`, no `$95CE`; play observation |
-| Pepper immobilize = 160 frames | **Closed** | `$A43E`: `move.b #$A0, $50(a0)`; expire → `$0100` |
-| `+$51` ∈ {0 free, 1 held, 2 drop, 3 throw} | **Closed** | `$3136`, `$21E6`, `$5D84`, `$5E2E`, enemy detach |
-| Hand height \(Z_0\) at throw | **Open** | Live sample at launch frame |
-| Bat/pipe max reach per character | **Open** | Live sample while registered attacker |
-
----
+| Bottle shards deal no damage | **Closed** | `$61BE`–`$61E0`; play observation |
+| Pepper immobilize = 160 frames | **Closed** | `$A43E` timer `$A0` |
+| `+$51` ∈ {0,1,2,3} | **Closed** | static writers |
+| Throw spawn ±48 X, +16 Z; knife/pepper velocities | **Closed** | live Axel R1 + ROM |
+| Bat/pipe origin reach 36 px (Axel) | **Closed** | live, attacker list |
+| Adam/Blaze bat reach; full hang-time map | **Open** | repeat probe / floor samples |
+| Booth/crate reward producer | **Open** | level-script search |
 
 ## 10. Evidence checklist
 

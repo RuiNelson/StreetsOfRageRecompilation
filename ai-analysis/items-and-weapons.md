@@ -371,10 +371,34 @@ pepper:        x(t) = x0 + 48 +  6·t
                vz(t) = -3 + a·t     (a = 0xA800/65536)
 ```
 
-Order-of-magnitude horizontal range on flat ground depends on hand height above
-the floor (typical 16–48 px above → knife ~128–208 px, pepper ~78–102 px).
-Knife/bottle bounce on ground in the active impact state (`$5D34`):
-\(v_x \leftarrow -v_x/4\) (`neg.l` + `asr.l #2`); a solid hit deletes the knife.
+### Live probe (Axel, Round 1 floor, 2026-08-03, port 6969)
+
+Standing player/object floor plane \(Z_{\mathrm{stand}} = 160\). Forced launch via
+the same command/state paths the ROM uses:
+
+| Event | Knife (`$5D84`) | Pepper (`$62DA`) |
+| --- | ---: | ---: |
+| \(\Delta x\) at launch | **−48** (weapon facing left) | **+48** (facing right) |
+| \(\Delta z\) at launch | **+16** | **+16** |
+| \(v_x\) | **−16** | **+6** |
+| \(v_z\) | **0** | **−3** |
+| Bounce sample | \(v_x: -16 \rightarrow +4\) (= \(-v_x/4\)) | (smoke path) |
+
+So the closed-form spawn is not an unknown hand height: on flat ground the
+throw **always** starts at
+
+\[
+Z_{\mathrm{launch}} = Z_{\mathrm{stand}} + 16,\quad
+X_{\mathrm{launch}} = X_{\mathrm{pre}} \pm 48
+\]
+
+with the ROM velocities above. (Ballistic hang time still depends on the map
+floor sample in `$AD2A`; on this floor the knife entered impact/bounce within a
+few frames at \(Z=176\).)
+
+**Bottle is not attack-thrown.** `$21E6 (player_release_thrown_weapon)` only
+commands types `$08` and `$0C`. Bottle damage is on the held/impact object;
+shatter is `$614E`.
 
 ### Melee reach (bat / pipe)
 
@@ -391,10 +415,20 @@ X_right = X_left + u8(b1)     // width = b1
 ```
 
 Long melee examples: shape `$06` width 44 forward; `$07` width 44 mirrored;
-`$0C`/`$0D` width 40. Effective reach ≈ attach offset + shape extent (not a
-single constant). Unarmed first-punch boxes measured for autoplay: Axel ~57 px,
-Adam ~54 px, Blaze ~68 px. Policy commit band for bat/pipe is conservative
-≤ 36 px with co-op ally exclusion 80 px.
+`$0C`/`$0D` width 40. Effective reach ≈ attach offset + shape extent (not a single constant).
+
+**Live (Axel, bat and pipe):** while the weapon was in the `$FFFB22` attacker
+list during action `$48`, max origin offset was
+
+\[
+|w_x - p_x| = 36 \quad (w_z - p_z = -42)
+\]
+
+so the policy ≤ 36 px band matches the **weapon origin** lag behind the player
+on connecting frames. Shape bytes observed as `(254,0)` during those frames are
+not ordinary low shape-table ids; treat origin Δx + list membership as the
+hard live signal until cel→shape mapping is fully decoded. Unarmed first-punch
+boxes (autoplay): Axel ~57, Adam ~54, Blaze ~68. Co-op ally melee exclusion 80.
 
 ### Bottle shard velocities (type `$1E`)
 
@@ -673,36 +707,17 @@ dispatcher and remains correctly listed below.
 
 ## Closed vs still open
 
-| Item | Status | How closed / how to close |
+| Item | Status | Evidence |
 | --- | --- | --- |
-| Bottle shard damage | **Closed** | ROM: no `+$34`, no `$95CE`; play observation agrees. Debris only. |
-| Weapon `+$51` = 0..3 | **Closed** | Static writers/consumers above (pickup, drop, throw, hold). |
-| Pepper immobilize length | **Closed** | `$A43E`: timer `+$50 = $A0` (160 frames) → state `$0100`. |
-| Pepper smoke anim 4 / 6 | **Closed enough** | Spawn paths write `+$08 = 4` then `6`; full cel map optional. |
-| Throw hand height \(Z_0\) | **Open** | Live probe at release frame (see below). |
-| Bat/pipe max reach per char | **Open** | Live probe of weapon X + shape during swing, or dump attach tables + active shape id per frame. |
-| Booth/crate hidden rewards | **Open** | Separate spawn-producer search (not in local `$11`/`$19` handlers or regular ELC collectible records). |
-
-### Live probes for the two remaining combat unknowns
-
-Prefer static dumps first; use `megadrive_remote` only when origin Z / attach
-offsets must be measured on a real frame. Sketch:
-
-```python
-# After gameplay: hold knife/bat, press attack, poll each vsync
-# P1 = 0xFFB800; weapon ptr = word at P1+0x5E (absolute in low RAM)
-# weapon Z high word = +(0x18), X = +(0x10), type = +(0x00)
-# shape ids = +(0x02), +(0x03); damage = +(0x34); wear = +(0x50)
-# enemy primary state word = +(0x30); stun timer = +(0x50) when state hi=4
-```
-
-1. **Throw \(Z_0\)**: on the frame `weapon[+$51]` becomes 0 after throw (launch
-   cleared it) and `vx` is ±16 or ±6, record `weapon.z - floor_z` (or
-   `weapon.z - player.z` before gravity accumulates). Plug into the ballistic
-   table in [weapons-range-and-damage.md](weapons-range-and-damage.md).
-2. **Bat/pipe reach**: while `weapon` is in `$FFFB22` attacker list and
-   `+$34 == 4`, record `weapon.x`, facing, shape id `+$03`, and nearest enemy
-   \(x\). Max \(\lvert\Delta x\rvert\) over connecting frames is empirical reach.
+| Bottle shard damage | **Closed** | ROM: no `+$34`, no `$95CE`; play observation. |
+| Weapon `+$51` = 0..3 | **Closed** | Static writers/consumers (pickup, drop, throw, hold). |
+| Pepper immobilize length | **Closed** | `$A43E`: `+$50 = $A0` (160 frames) → `$0100`. |
+| Throw spawn \(\Delta x,\Delta z\), \(v\) | **Closed** | Live Axel R1: ±48 X, +16 Z; knife \(v_x=\pm16\); pepper \(v_x=\pm6,v_z=-3\); bounce \(-v_x/4\). |
+| Bat/pipe origin reach | **Closed (Axel)** | Live: max \(\lvert w_x-p_x\rvert=36\) while in `$FFFB22`; \(w_z-p_z=-42\). |
+| Bottle attack-throw | **Closed (no)** | `$21E6` only types `$08`/`$0C`. |
+| Adam/Blaze bat reach | **Open** | Same probe on other character IDs. |
+| Full hang-time vs map floor | **Open** | Needs floor samples from `$AD2A` across lanes/heights. |
+| Booth/crate hidden rewards | **Open** | Spawn-producer search outside `$11`/`$19` handlers. |
 
 See also [weapons-range-and-damage.md](weapons-range-and-damage.md) for full
 hits-to-kill tables, shape-id catalogue, and formula summary.
