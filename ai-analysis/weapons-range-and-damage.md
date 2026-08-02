@@ -6,6 +6,11 @@ Closed-form model of Streets of Rage carried weapons (object types `$08`–`$0C`
 derived from `output/sor.asm`, ROM bytes in `rom/SOR.bin`, and the existing
 item/combat analyses. Addresses are ROM offsets unless prefixed with `FF`.
 
+Narrative context, ownership protocol, and pickups live in
+**[items-and-weapons.md](items-and-weapons.md)** (which also restates the core
+constants). This file keeps the full hits-to-kill matrices, shape catalogue,
+and formula summary.
+
 Primary evidence:
 
 | Topic | Location |

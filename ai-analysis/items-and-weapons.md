@@ -16,8 +16,13 @@ anonymous long-weapon handlers: type `$0A` is the baseball bat and type `$0B` is
 the steel pipe. Their code is nearly identical; the distinction comes from the
 rendered art observed during play.
 
-For closed-form damage, throw velocities, pickup geometry, hits-to-kill tables,
-and range math, see **[weapons-range-and-damage.md](weapons-range-and-damage.md)**.
+ROM init bytes fix the outgoing damage ranking exactly:
+
+**knife 5 > bat/pipe 4 > bottle 3 > pepper 2**.
+
+A deeper closed-form companion with hits-to-kill matrices and ballistic tables
+lives in **[weapons-range-and-damage.md](weapons-range-and-damage.md)**; the
+same constants are restated in context below so this document stays self-contained.
 
 ## Object-type map
 
@@ -25,11 +30,11 @@ The global object dispatcher at `$B236 (object_type_update_jt)` indexes a word t
 
 | Object type | Handler | Role |
 |---:|---:|---|
-| `$08` | `$5C1E (knife_weapon_dispatcher)` | Knife; damage 5, limited use count, and a straight-line attack-button throw. |
-| `$09` | `$6114 (bottle_weapon_dispatcher)` | Bottle; damage 3, breaks and emits three shard objects. |
-| `$0A` | `$61F6 (baseball_bat_weapon_dispatcher)` | Baseball bat; damage 4. |
-| `$0B` | `$6226 (steel_pipe_weapon_dispatcher)` | Steel pipe; damage 4. |
-| `$0C` | `$6256 (pepper_spray_weapon_dispatcher)` | Thrown pepper spray; damage 2, immobilizing reaction, and smoke/effect-emission states. |
+| `$08` | `$5C1E (knife_weapon_dispatcher)` | Knife; `+$34 = 5`; attack-button throw at \(v_x=\pm 16\). |
+| `$09` | `$6114 (bottle_weapon_dispatcher)` | Bottle; `+$34 = 3`; breaks into three type-`$1E` shards. |
+| `$0A` | `$61F6 (baseball_bat_weapon_dispatcher)` | Baseball bat; `+$34 = 4`; held melee, three counted uses. |
+| `$0B` | `$6226 (steel_pipe_weapon_dispatcher)` | Steel pipe; `+$34 = 4`; same mechanics as bat, different art. |
+| `$0C` | `$6256 (pepper_spray_weapon_dispatcher)` | Pepper spray; `+$34 = 2`; arc throw, smoke, immobilize reaction `$0400`. |
 | `$11` | `$6AF4 (phone_booth_dispatcher)` | Telephone booth; shatters into up to ten type-$11 glass/booth fragments. |
 | `$19` | `$6C84 (breakable_type19_dispatcher)` | Second breakable prop family; launches/bounces when struck, then despawns. |
 | `$1E` | `$61BE (bottle_shard_dispatcher)` | Bottle-shard/debris projectile emitted by type `$09`. |
@@ -106,13 +111,20 @@ current facing bit through `$2DE6`.
 `$3136 (find_close_interaction_target)` first refuses to run when the player is
 already in action family `$28`; this prevents the pickup animation from
 re-reserving the same target every frame. Otherwise it builds a small
-three-dimensional search box around the player:
+three-dimensional search box around the player (decimal widths in parentheses):
 
-| Axis | Search range relative to player |
-|---|---:|
-| X | `player.x - $14` through `player.x + $14` |
-| Lane Y | `player.y - $10` through `player.y + $10` |
-| Height Z | `player.z - $08` through `player.z + $08` |
+| Axis | Search range relative to player | Width |
+|---|---:|---:|
+| X | `player.x - $14` … `player.x + $14` | 40 px total (±20) |
+| Lane Y | `player.y - $10` … `player.y + $10` | 32 px total (±16) |
+| Height Z | `player.z - $08` … `player.z + $08` | 16 px total (±8) |
+
+Predicate for a free, still-usable weapon origin \(o\):
+
+```text
+|o.x − p.x| ≤ 20  ∧  |o.y − p.y| ≤ 16  ∧  |o.z − p.z| ≤ 8
+∧ type ∈ [$08,$0C]  ∧  +$51 == 0  ∧  +$50 < 3
+```
 
 The routine scans the gameplay object table in slot order and accepts the first
 matching ground object whose origin lies inside all three ranges. This slot
@@ -268,61 +280,199 @@ reserved/held (weapon +$52 = holder; player +$5E = weapon)
     `---- throw command ----------> detach, apply X/Z velocity, become collision projectile
                                         |
                                         +--> hit/break/despawn
-                                        `--> ground impact consumes wear; become reusable if durability remains
+                                        `--> ground impact may exhaust wear or shatter
 ```
 
 The byte at weapon `+$51` is a command/state handshake rather than a simple Boolean. Values observed around `$5D84/$5E2E` mean approximately: 0 free/settling, 1 held/used, 2 dropped, and 3 thrown. The exact moment at which the player state machine writes each value varies by weapon action.
 
-Durability is not universal across all five weapon types, but the knife,
-baseball bat, and steel pipe do share one exact rule. Their state tables all
-enter `$5C66`, which increments `+$50` when a held-use command begins and
-retires the weapon when the counter has reached 3. The bottle instead has a
-one-way intact-to-shattered transition; pepper spray uses `+$50` for its effect
-lifecycle rather than this three-use rule.
+### Durability by family
+
+| Family | Rule | Code |
+| --- | --- | --- |
+| Bat / pipe | `+$50` use counter. While `+$50 < 3` and `+$51 == 1`, each held-use entry does `+$50++`. When `+$50 >= 3`, retire (hide, `+$56 = $10` frames, then delete). | `$5C66` |
+| Knife | Shares `$5C66` in the state table, but player attack **throws** (`+$51 = 3` → `$5D84`). Solid hit deletes the object; ground settle at `$5DEA` forces `+$50 = 3` (no longer pickable). Effective lifetime is one throw arc, not three melee swings. | `$5D34`, `$5DEA`, `$21E6` |
+| Bottle | One-way shatter on first impact (`+$54` guard); three shards; never re-collectable as a bottle. | `$614E` |
+| Pepper | `+$50` is effect lifecycle, not a three-swing counter; canister becomes a timed smoke emitter. | `$6270+`, `$6328` |
+
+Pickup eligibility always requires free (`+$51 == 0`) and **`+$50 < 3`**.
+
+## Weapon damage and range (mathematical model)
+
+### Outgoing damage constants
+
+| Type | Name | Style | Init `+$34` | ROM init |
+| ---: | --- | --- | ---: | --- |
+| `$08` | Knife | Straight throw | **5** | `$5C54` `move.b #5, $34(a0)` |
+| `$09` | Bottle | Throw / break | **3** | `$613C` `move.b #3, $34(a0)` |
+| `$0A` | Baseball bat | Held melee | **4** | `$6214` `move.b #4, $34(a0)` |
+| `$0B` | Steel pipe | Held melee | **4** | `$6244` `move.b #4, $34(a0)` |
+| `$0C` | Pepper spray | Arc throw + immobilize | **2** | `$627A` `move.b #2, $34(a0)` |
+
+Weapons never add a bonus onto the player's punch descriptor. Damage is the
+weapon object's own `+$34`. Player max health is 80 (`$50`). The forced-duel
+flag `$FFFA43` triples **player attack-descriptor** low nibbles only; it does
+not rewrite these weapon constants.
+
+### Damage application law
+
+While damaging, a weapon is registered in the short attacker list at
+`$FFFB22` (`$95CE` insert / `$95E8` remove). Ordinary enemies call `$AA22`,
+resolve box overlap, then:
+
+```c
+// ordinary_enemy_apply_contact_damage ($9B88)
+attacker = ptr(enemy[+0x3E]);
+enemy.health_word_at_32 -= attacker[+0x34];
+```
+
+Players use the same `+$34` preference in `$351E (apply_player_damage)` (else
+deferred `+$56`).
+
+Pepper special case when collision result is `$05` and attacker type is `$0C`
+(`$9C1E`):
+
+```c
+enemy.primary_state = 0x0400;   // immobilize / smoke reaction
+// damage nibble remains 2; the extra effect is the forced state
+```
+
+Hits to kill ordinary enemies:
+
+\[
+\text{hits} = \left\lceil \frac{H}{D} \right\rceil
+\]
+
+with enemy health \(H\) from `$26FCE` (index `6*(type−$20)+variant`; hardest
+difficulty adds +4 to \(H\)). Full matrices are in
+[weapons-range-and-damage.md](weapons-range-and-damage.md) §6. Examples
+(variant 0, Easy/Normal): Garcia `$20` \(H=6\) dies in 2 knife / 2 bat / 3
+pepper hits; Jack `$27` \(H=9\) dies in 2 / 3 / 5.
+
+### Throw spawn and velocities
+
+Coordinate convention: object `+$18` (Z) **increases downward** toward the
+floor. Ground test `$AD2A` is on-floor when `Z ≥ floor_height(map cell)`.
+Upward motion uses **negative** Z velocity. Integration is `$B20E`
+(`X += vx; Y += vy; Z += vz` as 16.16 longs).
+
+| Quantity | Knife / bottle (`$5D84`) | Pepper (`$62DA`) |
+| --- | ---: | ---: |
+| X spawn delta | \(\pm\$30\) (±48) by facing | \(\pm\$30\) (±48) |
+| Z spawn delta | `+$10` (+16) | `+$10` (+16) |
+| \(v_x\) (`+$1C` high word) | \(\pm 16\) px/frame | \(\pm 6\) px/frame |
+| \(v_z\) (`+$24` high word) | 0 initially | `−3` (up) |
+| Gravity on \(v_z\) / frame | `+$8800` ≈ 0.53125 px/fr² | `+$A800` ≈ 0.65625 px/fr² |
+
+Facing-right projectiles (integer form):
+
+```text
+knife/bottle:  x(t) = x0 + 48 + 16·t
+pepper:        x(t) = x0 + 48 +  6·t
+               vz(t) = -3 + a·t     (a = 0xA800/65536)
+```
+
+Order-of-magnitude horizontal range on flat ground depends on hand height above
+the floor (typical 16–48 px above → knife ~128–208 px, pepper ~78–102 px).
+Knife/bottle bounce on ground in the active impact state (`$5D34`):
+\(v_x \leftarrow -v_x/4\) (`neg.l` + `asr.l #2`); a solid hit deletes the knife.
+
+### Melee reach (bat / pipe)
+
+Bat and pipe remain linked via `$5E2E (update_held_weapon)`. On attachment
+frames whose collision enable bit is set, the weapon registers in `$FFFB22`,
+runs `$AA22`, and deals **4**. Attach tables: `$5FC8` (player), `$60A0` (enemy).
+
+Collision shapes are 5-byte records at `$1A68E`. For shape id with bytes
+\((b_0,b_1,\ldots)\):
+
+```text
+X_left  = origin_x + s8(b0)
+X_right = X_left + u8(b1)     // width = b1
+```
+
+Long melee examples: shape `$06` width 44 forward; `$07` width 44 mirrored;
+`$0C`/`$0D` width 40. Effective reach ≈ attach offset + shape extent (not a
+single constant). Unarmed first-punch boxes measured for autoplay: Axel ~57 px,
+Adam ~54 px, Blaze ~68 px. Policy commit band for bat/pipe is conservative
+≤ 36 px with co-op ally exclusion 80 px.
+
+### Bottle shard velocities (type `$1E`)
+
+Tables `$61B2` (Z) / `$61B8` (X); X sign flipped by facing. Gravity `+$8800`
+per frame (`$61E0`). Treated as debris (not re-collectable weapons).
+
+| Shard | \(v_z\) | \(v_x\) |
+| ---: | ---: | ---: |
+| 0 | −6 | +3 |
+| 1 | −7 | +4 |
+| 2 | −7 | −4 |
 
 ## Individual weapon families
 
 ### Type `$08`: knife
 
-The handler at `$5C1E (knife_weapon_dispatcher)` initializes damage `+$34 = 5`, the highest of the ordinary carried weapons here. It supports ground settling, holder attachment, a directed throw with X velocity, collision bounce, and eventual deletion.
+The handler at `$5C1E (knife_weapon_dispatcher)` initializes damage `+$34 = 5`
+(`$5C54`), the highest of the ordinary carried weapons. It supports ground
+settling, holder attachment, a directed throw, collision bounce, and deletion.
 
 The player action path at `$21E6-$222E` checks whether the carried object is type
 `$08` (or the pepper weapon `$0C`). On the attack animation's release frame it
 writes command 3 to weapon `+$51` and clears the player's carried-weapon type.
-`$5D84 (launch_released_weapon)` then detaches the knife and assigns signed horizontal velocity according
-to facing. This is the straight-line knife throw produced by the attack button.
+`$5D84 (launch_released_weapon)` then detaches the knife, offsets spawn by
+\(\pm 48\) X and +16 Z, and sets \(v_x = \pm 16\). This is the straight-line
+knife throw produced by the attack button.
 
-Object `+$50` is a use counter. While it is below 3, a new held-use phase increments it. At 3 it enters a terminal state, hides/disables normal collision, starts a `$10`-frame timer in `+$56`, and deletes itself when the timer expires. Static code therefore gives this weapon three counted uses; whether a particular pickup/throw animation consumes a count can be confirmed by watching `+$50` during play.
+Although `$5C66` is in the knife state table (shared three-use wear for
+bat/pipe), the player attack path throws rather than counting three held swings.
+On a solid hit the projectile is deleted; on ground settle `$5DEA` forces
+`+$50 = 3`, after which `$3136` will not re-pick it up. Effective lifetime is
+therefore **one throw arc**.
 
 ### Type `$09`: bottle
 
-The bottle handler at `$6114 (bottle_weapon_dispatcher)` initializes damage 3. When its collision result becomes nonzero for the first time, it changes to broken art, plays the break sound, and spawns three objects of type `$1E` with different X/Z velocities. Object `+$54` prevents the shatter path from running twice.
+The bottle handler at `$6114 (bottle_weapon_dispatcher)` initializes damage 3
+(`$613C`). When its collision result becomes nonzero for the first time, it
+changes to broken art, plays the break sound, and spawns three objects of type
+`$1E` with the velocities in the shard table above. Object `+$54` prevents the
+shatter path from running twice.
 
-The type `$1E` children use the small debris handler at `$61BE (bottle_shard_dispatcher)`: they move under gravity and delete on ground contact. The original bottle continues through common holder/drop code until its broken state is retired. This is a one-way transition; there is no path from shards back to a collectable bottle.
+The type `$1E` children use the small debris handler at `$61BE (bottle_shard_dispatcher)`: they move under gravity and delete on ground contact. The original bottle continues through common holder/drop code until its broken state is retired. This is a one-way transition; there is no path from shards back to a collectable bottle. Launch uses the same `$5D84` path as the knife when thrown (\(v_x=\pm 16\)).
 
 ### Types `$0A` and `$0B`: long melee weapons
 
-The two handlers at `$61F6 (baseball_bat_weapon_dispatcher)` and `$6226 (steel_pipe_weapon_dispatcher)` differ mainly in art data (`$6FA9A` versus `$6FB5A`) and both initialize damage 4. Type `$0A` is the baseball bat and type `$0B` is the steel pipe. Their six-entry dispatch tables are identical after the family-specific initializer and route through the knife's shared `$5C66`, `$5CE4`, `$5D34`, `$5DDE`, and `$5DE0` states. They therefore use the same `+$50` three-use limit; unlike the bottle, they have no shatter flag or shard-spawn path.
+The two handlers at `$61F6 (baseball_bat_weapon_dispatcher)` and `$6226 (steel_pipe_weapon_dispatcher)` differ mainly in art data (`$6FA9A` versus `$6FB5A`) and both initialize damage 4. Type `$0A` is the baseball bat and type `$0B` is the steel pipe. Their dispatch tables route through the shared `$5C66` wear path (three held uses), `$5CE4`, `$5D34`, `$5DDE` → `update_held_weapon` (not the knife throw launcher), and `$5DE0`. Unlike the bottle, they have no shatter flag or shard-spawn path.
 
 The visual mapping was confirmed during gameplay. Mechanically the distinction
 is small: both provide the same outgoing damage, can be dropped and collected
 again while the shared use counter remains below 3, and use identical
-impact/landing transitions.
+impact/landing transitions. Melee collision is attachment-frame driven (§
+Weapon damage and range).
 
 ### Type `$0C`: pepper spray and smoke
 
-The `$6256 (pepper_spray_weapon_dispatcher)` handler initializes damage 2. Its initial animation/state depends on object `+$08`, and a used/thrown instance can become a short-lived effect emitter. The terminal path sets a timer, spawns additional type-`$0C` objects with special animation selectors (`+$08 = 4` or `6`), and emits a sequence of effect objects from a ROM position table before deleting the source.
+The `$6256 (pepper_spray_weapon_dispatcher)` handler initializes damage 2
+(`$627A`). Its initial animation/state depends on object `+$08`, and a
+used/thrown instance can become a short-lived effect emitter. The terminal path
+sets a timer, spawns additional type-`$0C` objects with special animation
+selectors (`+$08 = 4` or `6`), and emits a sequence of effect objects from a ROM
+position table before deleting the source.
 
 The player release path treats `$0C` like the knife and throws it from the
-holder. On impact, `$6328-$63C2` converts the source into a timed emitter and
-creates additional type-`$0C` objects with animation selectors 4 and 6. These
-are the visible pepper cloud/smoke sequence. The collision reaction written to
-the enemy keeps it in a non-controllable reaction state while the effect runs,
-which is the observed temporary immobilization rather than ordinary knockback.
+holder via `$62DA (throw_pepper_spray)`: spawn \(\pm 48\) X / +16 Z,
+\(v_x=\pm 6\), \(v_z=-3\), then gravity `+$A800`. On impact, `$6328-$63C2`
+converts the source into a timed emitter and creates additional type-`$0C`
+objects with animation selectors 4 and 6 (visible pepper cloud/smoke). Enemies
+hit with result `$05` from a type-`$0C` attacker enter primary state `$0400`
+(temporary immobilization rather than ordinary knockback).
 
 ## Collision, damage, and credit
 
-Weapon objects participate in the shared object collision routines at `$97E6` and `$AA22`. Their `+$34` field is the damage offered to a struck player/enemy, just as player attack frames expose damage in player `+$34`. The common handlers use collision result `+$7C` and the collided object returned in `a1` to:
+Weapon objects participate in the shared object collision routines at `$97E6`
+(on-screen gate) and `$AA22` / `$ABA4` (shape AABB via `$1A68E`). Damaging
+phases register the weapon in `$FFFB22` through `$95CE`. Their `+$34` field is
+the damage offered to a struck player/enemy, just as player attack frames expose
+damage in player `+$34`. The common handlers use collision result `+$7C` and the
+collided object returned in `a1` to:
 
 - set the victim's reaction selector (`+$7D`);
 - clear stale reciprocal collision state when an impact is ignored;
@@ -432,19 +582,25 @@ void apply_pickup_effect(Player *p, unsigned effect) {
 | Reference | Analytical role |
 | --- | --- |
 | `$21E6 (player_release_thrown_weapon)` | Commands a carried knife or pepper spray to detach on the attack-animation release frame. |
-| `$3136 (find_close_interaction_target)` | Finds free weapon types `$08-$0C` and six consumable pickup types in the player's close-interaction box. |
-| `$5C1E (knife_weapon_dispatcher)` | Type-$08 knife dispatcher and counted-use lifecycle. |
-| `$5D84 (launch_released_weapon)` | Detaches and launches a command-3 weapon according to holder facing. |
-| `$5E2E (update_held_weapon)` | Shared held/drop/throw ownership and attachment logic. |
-| `$6114 (bottle_weapon_dispatcher)` | Type-$09 bottle dispatcher. |
-| `$614E (break_bottle_into_shards)` | Bottle break and three-shard spawn. |
-| `$61BE (bottle_shard_dispatcher)` | Type-$1E bottle-shard/debris dispatcher. |
-| `$61F6 (baseball_bat_weapon_dispatcher)` | Type-$0A baseball-bat dispatcher. |
-| `$6226 (steel_pipe_weapon_dispatcher)` | Type-$0B steel-pipe dispatcher. |
-| `$6256 (pepper_spray_weapon_dispatcher)` | Type-$0C thrown pepper-spray and smoke/effect dispatcher. |
-| `$62DA (throw_pepper_spray)` | Applies the pepper-spray throw position and X/Z velocity. |
-| `$6328 (begin_pepper_smoke_emission)` | Converts an impact into the first smoke/effect object. |
-| `$6372 (emit_pepper_smoke_sequence)` | Emits the remaining smoke/effect sequence. |
+| `$3136 (find_close_interaction_target)` | Finds free weapon types `$08-$0C` and six consumable pickup types in the ±20/±16/±8 box. |
+| `$5C1E (knife_weapon_dispatcher)` | Type-$08 knife dispatcher; damage 5 at `$5C54`. |
+| `$5C66` | Shared bat/pipe three-use wear (`+$50`); retire when `+$50 >= 3`. |
+| `$5D34` | Active throw impact: collide, bounce \(v_x \leftarrow -v_x/4\), or delete on hit. |
+| `$5D84 (launch_released_weapon)` | Command-3 launch: spawn ±48 X / +16 Z, \(v_x=\pm 16\). |
+| `$5DEA` | Ground settle forces `+$50 = 3` (exhaust pickability). |
+| `$5E2E (update_held_weapon)` | Shared held/drop/throw ownership, attach tables `$5FC8`/`$60A0`, collision enable. |
+| `$6114 (bottle_weapon_dispatcher)` | Type-$09 bottle dispatcher; damage 3 at `$613C`. |
+| `$614E (break_bottle_into_shards)` | Bottle break and three-shard spawn (vel tables `$61B2`/`$61B8`). |
+| `$61BE (bottle_shard_dispatcher)` | Type-$1E bottle-shard/debris dispatcher; gravity `+$8800`. |
+| `$61F6 (baseball_bat_weapon_dispatcher)` | Type-$0A baseball-bat dispatcher; damage 4 at `$6214`. |
+| `$6226 (steel_pipe_weapon_dispatcher)` | Type-$0B steel-pipe dispatcher; damage 4 at `$6244`. |
+| `$6256 (pepper_spray_weapon_dispatcher)` | Type-$0C pepper dispatcher; damage 2 at `$627A`. |
+| `$62DA (throw_pepper_spray)` | Pepper launch: ±48 X / +16 Z, \(v_x=\pm 6\), \(v_z=-3\). |
+| `$6312` / `$6328` / `$6372` | Pepper flight gravity `+$A800`, smoke emission sequence. |
+| `$95CE` / `$95E8` | Register/unregister weapon in attacker list `$FFFB22`. |
+| `$9B88 (ordinary_enemy_apply_contact_damage)` | `health -= attacker[+$34]`; pepper branch `$9C1E` → state `$0400`. |
+| `$AA22` / `$ABA4` / `$1A68E` | Attacker-list collision and shape AABB table. |
+| `$26FCE (ordinary_enemy_combat_value_table)` | Enemy HP/damage by type×variant for hits-to-kill. |
 | `$67A4 (wave_go_prompt_dispatcher)` | Type-$48 screen-space prompt flashed after a wave camera boundary opens. |
 | `$6862 (player_contact_effect_dispatcher)` | Type-$49 short-lived player/contact visual effect emitted by player attack/collision helpers. |
 | `$69CC (consume_collected_pickup)` | Converts a reserved pickup into an effect on its collector, then deletes it. |
@@ -483,7 +639,13 @@ dispatcher and remains correctly listed below.
 
 ## Uncertainties and recommended traces
 
-1. Map every type-`$0C` animation selector to the thrown canister, smoke/powder cloud, and lingering immobilization frames.
+1. Map every type-`$0C` animation selector to the thrown canister, smoke/powder cloud, and lingering immobilization frames; measure state-`$0400` duration in frames.
 2. Trace the producer that creates or converts hidden rewards; the regular ELC
    wave records contain the props but no direct collectible-type records.
 3. Name weapon interaction values `+$51 = 0..3` only after a per-frame trace across player pickup, enemy pickup, knockdown drop, and throw; the high-level phases are clear, but some values are momentary commands rather than durable states.
+4. Measure per-character hand height \(Z_0\) at throw release (locks closed-form ballistic range).
+5. Capture per-frame bat/pipe attachment offsets and shape ids during a full swing (locks max melee reach per character).
+6. Confirm whether bottle shards ever publish nonzero `+$34` (currently treated as debris only).
+
+See also [weapons-range-and-damage.md](weapons-range-and-damage.md) for full
+hits-to-kill tables, shape-id catalogue, and formula summary.
