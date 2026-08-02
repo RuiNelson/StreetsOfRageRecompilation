@@ -235,7 +235,11 @@ Proven difficulty effects are:
 - continue timed stun;
 - `$0300` for damaging/airborne reaction or lethal transition;
 - `$0500` when the collision result indicates a held/grabbed condition;
-- `$0400` for scripted removal/control cases.
+- `$0400` for scripted control **and** pepper-spray immobilization. Shared
+  handler `$A43E` (every ordinary type’s state-table entry 4): when police
+  special is inactive, loads stun timer `+$50 = $A0` (160 frames) then returns
+  to `$0100`. Police-special prep also forces `$0400` with health `$FFFF` for
+  sweep removal — same state index, different intent.
 
 `$009C50` handles another airborne/grab reaction, including vertical launch and collision tests. `$00A04A` dispatches responses from the interacting player's `$7D` state. `$00A0C2` positions an enemy relative to a holding/throwing player and selects facing/animation.
 

@@ -407,6 +407,39 @@ per frame (`$61E0`). Treated as debris (not re-collectable weapons).
 | 1 | −7 | +4 |
 | 2 | −7 | −4 |
 
+**Shards deal no damage.** Type `$1E` never writes `+$34`, never calls `$95CE`
+(attacker-list registration), and only runs gravity + ground-delete
+(`$61CA`/`$61E0`). Confirmed in ROM and by play observation.
+
+### Weapon `+$51` command values (static)
+
+| Value | Meaning | Producers / consumers |
+| ---: | --- | --- |
+| 0 | Free / settled on ground | Cleared by launch, drop settle, retire; required by `$3136` pickup |
+| 1 | Reserved / held | `$3136` on pickup; enemy attach spawn; `$5C66` held-use gate |
+| 2 | Drop / detach | `$5E2E` drop branch; enemy knockdown writes `#2` to held weapon |
+| 3 | Throw command | `$21E6 (player_release_thrown_weapon)` on knife/pepper release frame; consumed by `$5D84` / `$62DA` |
+
+### Pepper immobilize duration
+
+Ordinary-enemy primary state word `$0400` selects shared handler `$A43E` (every
+Garcia/Signal/Nora/Jack table entry 4). When `$FFFA1A (police_special_active)`
+is clear (normal pepper hit, not police sweep):
+
+```text
+first entry:  enemy[+$50] = $A0   // 160 frames
+each frame:   enemy[+$50]--
+when zero:    enemy primary state → $0100  // resume normal AI
+```
+
+So immobilize lasts **160 frames** (≈ 2.67 s at 60 Hz). The police-special
+path also forces `$0400` but pairs it with health `$FFFF` and sweep logic; that
+is a different use of the same state index.
+
+Pepper object `+$08` animation selectors observed in spawn paths: **4** (first
+smoke object) and **6** (sequence emissions). Intact/held canister uses the
+default init anim from table `$6FD42`.
+
 ## Individual weapon families
 
 ### Type `$08`: knife
@@ -436,7 +469,7 @@ changes to broken art, plays the break sound, and spawns three objects of type
 `$1E` with the velocities in the shard table above. Object `+$54` prevents the
 shatter path from running twice.
 
-The type `$1E` children use the small debris handler at `$61BE (bottle_shard_dispatcher)`: they move under gravity and delete on ground contact. The original bottle continues through common holder/drop code until its broken state is retired. This is a one-way transition; there is no path from shards back to a collectable bottle. Launch uses the same `$5D84` path as the knife when thrown (\(v_x=\pm 16\)).
+The type `$1E` children use the small debris handler at `$61BE (bottle_shard_dispatcher)`: they move under gravity and delete on ground contact. They never install damage or register as attackers (no damage). The original bottle continues through common holder/drop code until its broken state is retired. This is a one-way transition; there is no path from shards back to a collectable bottle. Launch uses the same `$5D84` path as the knife when thrown (\(v_x=\pm 16\)).
 
 ### Types `$0A` and `$0B`: long melee weapons
 
@@ -462,8 +495,9 @@ holder via `$62DA (throw_pepper_spray)`: spawn \(\pm 48\) X / +16 Z,
 \(v_x=\pm 6\), \(v_z=-3\), then gravity `+$A800`. On impact, `$6328-$63C2`
 converts the source into a timed emitter and creates additional type-`$0C`
 objects with animation selectors 4 and 6 (visible pepper cloud/smoke). Enemies
-hit with result `$05` from a type-`$0C` attacker enter primary state `$0400`
-(temporary immobilization rather than ordinary knockback).
+hit with result `$05` from a type-`$0C` attacker enter primary state `$0400`,
+handled by shared routine `$A43E` with a **160-frame** (`$A0`) timer on enemy
+`+$50` before returning to state `$0100`.
 
 ## Collision, damage, and credit
 
@@ -637,15 +671,38 @@ This does not resolve the separate visual question of which ELC container owns
 every hidden reward; that relationship is external to the local type-`$19`
 dispatcher and remains correctly listed below.
 
-## Uncertainties and recommended traces
+## Closed vs still open
 
-1. Map every type-`$0C` animation selector to the thrown canister, smoke/powder cloud, and lingering immobilization frames; measure state-`$0400` duration in frames.
-2. Trace the producer that creates or converts hidden rewards; the regular ELC
-   wave records contain the props but no direct collectible-type records.
-3. Name weapon interaction values `+$51 = 0..3` only after a per-frame trace across player pickup, enemy pickup, knockdown drop, and throw; the high-level phases are clear, but some values are momentary commands rather than durable states.
-4. Measure per-character hand height \(Z_0\) at throw release (locks closed-form ballistic range).
-5. Capture per-frame bat/pipe attachment offsets and shape ids during a full swing (locks max melee reach per character).
-6. Confirm whether bottle shards ever publish nonzero `+$34` (currently treated as debris only).
+| Item | Status | How closed / how to close |
+| --- | --- | --- |
+| Bottle shard damage | **Closed** | ROM: no `+$34`, no `$95CE`; play observation agrees. Debris only. |
+| Weapon `+$51` = 0..3 | **Closed** | Static writers/consumers above (pickup, drop, throw, hold). |
+| Pepper immobilize length | **Closed** | `$A43E`: timer `+$50 = $A0` (160 frames) → state `$0100`. |
+| Pepper smoke anim 4 / 6 | **Closed enough** | Spawn paths write `+$08 = 4` then `6`; full cel map optional. |
+| Throw hand height \(Z_0\) | **Open** | Live probe at release frame (see below). |
+| Bat/pipe max reach per char | **Open** | Live probe of weapon X + shape during swing, or dump attach tables + active shape id per frame. |
+| Booth/crate hidden rewards | **Open** | Separate spawn-producer search (not in local `$11`/`$19` handlers or regular ELC collectible records). |
+
+### Live probes for the two remaining combat unknowns
+
+Prefer static dumps first; use `megadrive_remote` only when origin Z / attach
+offsets must be measured on a real frame. Sketch:
+
+```python
+# After gameplay: hold knife/bat, press attack, poll each vsync
+# P1 = 0xFFB800; weapon ptr = word at P1+0x5E (absolute in low RAM)
+# weapon Z high word = +(0x18), X = +(0x10), type = +(0x00)
+# shape ids = +(0x02), +(0x03); damage = +(0x34); wear = +(0x50)
+# enemy primary state word = +(0x30); stun timer = +(0x50) when state hi=4
+```
+
+1. **Throw \(Z_0\)**: on the frame `weapon[+$51]` becomes 0 after throw (launch
+   cleared it) and `vx` is ±16 or ±6, record `weapon.z - floor_z` (or
+   `weapon.z - player.z` before gravity accumulates). Plug into the ballistic
+   table in [weapons-range-and-damage.md](weapons-range-and-damage.md).
+2. **Bat/pipe reach**: while `weapon` is in `$FFFB22` attacker list and
+   `+$34 == 4`, record `weapon.x`, facing, shape id `+$03`, and nearest enemy
+   \(x\). Max \(\lvert\Delta x\rvert\) over connecting frames is empirical reach.
 
 See also [weapons-range-and-damage.md](weapons-range-and-damage.md) for full
 hits-to-kill tables, shape-id catalogue, and formula summary.

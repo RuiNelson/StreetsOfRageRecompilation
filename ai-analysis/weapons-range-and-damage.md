@@ -77,7 +77,9 @@ enemy.primary_state = 0x0400;   // immobilization / smoke reaction, not ordinary
 ```
 
 Pepper still carries damage **2**; the extra effect is the forced reaction
-state, not a larger nibble.
+state, not a larger nibble. Shared ordinary-enemy handler `$A43E` (primary
+state index 4) loads `enemy[+$50] = $A0` (**160 frames**) then returns to
+state `$0100` when the timer expires (only when police special is not active).
 
 ### Duel modifier (P1 vs P2 only)
 
@@ -182,8 +184,9 @@ Three shards, tables at `$61B2` / `$61B8`:
 | 1 | −7 | +4 |
 | 2 | −7 | −4 |
 
-Gravity on shards: `+$8800` per frame (`$61E0`). Debris only; not collectible
-weapons.
+Gravity on shards: `+$8800` per frame (`$61E0`). **No damage:** type `$1E`
+never writes `+$34` and never registers via `$95CE`. Confirmed by ROM and play
+observation. Not collectible weapons.
 
 ---
 
