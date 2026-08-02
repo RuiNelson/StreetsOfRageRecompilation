@@ -16,6 +16,9 @@ anonymous long-weapon handlers: type `$0A` is the baseball bat and type `$0B` is
 the steel pipe. Their code is nearly identical; the distinction comes from the
 rendered art observed during play.
 
+For closed-form damage, throw velocities, pickup geometry, hits-to-kill tables,
+and range math, see **[weapons-range-and-damage.md](weapons-range-and-damage.md)**.
+
 ## Object-type map
 
 The global object dispatcher at `$B236 (object_type_update_jt)` indexes a word table by object type. The relevant entries are:
