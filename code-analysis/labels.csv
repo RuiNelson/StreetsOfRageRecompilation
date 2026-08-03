@@ -488,7 +488,7 @@
 000144E0, abadede_init, "100% - Initializes Abadede, creates linked type $31 and optional type $39, loads animations/stats, and selects a player"
 0001456A, abadede_init_combat_stats, "100% - Initializes Abadede health/damage from difficulty and ELC variant fields"
 000158C4, onihime_yasha_update, "100% - Onihime/Yasha type $58 shared update; targeting, interaction maintenance, and primary-state dispatch"
-00015946, onihime_yasha_select_target, "100% - Selects and caches a player for a twin using availability, pair role, and X distance"
+00015946, onihime_yasha_select_target, "100% - Selects and caches a player for a twin using availability, sticky lock +$74, and nearest-X; pair role seeds grab-vs-approach via +$7B outside this selector"
 00015E70, souther_update, "100% - Souther type $55 top-level update and primary-state dispatch"
 00016294, souther_select_target, "100% - Selects target using player action, distance, lane, facing, pair role, and hold counters"
 0000B3A8, antonio_update_trampoline, "100% - Object table trampoline for type $56; jumps to antonio_update"

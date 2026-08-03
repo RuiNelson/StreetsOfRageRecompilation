@@ -185,7 +185,7 @@ function ordinary_enemy_select_target(enemy):
     enemy.target_ptr = target
 ```
 
-There is no global threat table. Targeting is nearest-X and can be recalculated by behavior states. Boss selectors at `$129F8`, `$15946 (onihime_yasha_select_target)`, `$16294 (souther_select_target)`, `$16D40 (antonio_select_target)`, and `$1753A (bongo_select_target)` are separate and often add pair-role, facing or lane biases.
+There is no global threat table. Targeting is nearest-X and can be recalculated by behavior states. Boss selectors at `$129F8`, `$15946 (onihime_yasha_select_target)`, `$16294 (souther_select_target)`, `$16D40 (antonio_select_target)`, and `$1753A (bongo_select_target)` are separate. Souther/Antonio/Bongo often add pair-role, facing, or lane biases inside the selector itself; Onihime/Yasha's selector is availability + sticky nearest-X, while pair role instead seeds the grab-vs-approach path (see the twins section).
 
 ## Navigation and spacing
 
@@ -672,22 +672,496 @@ gauntlet; Round 8 repeats it as the fourth boss-rush family.
 
 ### Onihime and Yasha (`$58`, `$158C4 (onihime_yasha_update)`)
 
-The twins are two objects of the same type rather than a controller with two
-hard-coded child actors. ELC metadata causes `$17F2E (boss_link_same_type_pair)` to pair them and assign
-reciprocal roles. Their family-A selector at `$15946 (onihime_yasha_select_target)` normally chooses the
-nearest usable player but uses the pair role to bias the two bosses apart.
+#### Identity and architecture
 
-Their state table contains close-range approach, rapid jump/airborne attacks,
-and explicit player-position synchronization for grabs and throws around
-`$15B2A-$15BD8`. `$15ABA` starts a jumping reaction/attack with signed X
-velocity and upward vertical velocity; later states wait for the stored ground
-height before recovering.
+The twins are **two independent objects of the same type `$58`**, not a parent
+controller with two hard-coded child actors. Round 5 (and the Round 8 boss-rush
+slot) spawns two ELC records; `$17F2E (boss_link_same_type_pair)` scans the
+object table for another living type `$58`, writes reciprocal roles
+(`+$5D = 1` on the discovered partner, `+$5D = 2` on the caller) and partner
+pointers (`+$5E`), and registers both bosses in the late-phase HUD slots
+`$FFF502/$FFF508` when bit 6 of `$FFFA05 (level_spawn_flow_flags)` is set.
 
-The two-object design gives the desired phase change for free: after one twin
-dies, `$17F9C (boss_unlink_pair)` clears the survivor's pair role and pointer, so its selector no
-longer tries to maintain split targeting. There is no separate low-health
-enrage variable in the inspected code; the apparent second phase is the
-survivor operating without pair constraints.
+Both objects share one update entry, one target selector, one animation set at
+`$2DD70`, and the same primary-state table. Differentiation is data-driven:
+
+| Mechanism | Effect |
+|---|---|
+| Pair role `+$5D` ∈ {0,1,2} | 0 = unpaired/survivor; 1/2 = twin A/B |
+| Role seed into `+$7B` | Init copies `+$5D → +$7B`. Role 2 sets **bit 1 of `+$7B`**, so twin B starts on the **grab/throw AI path**; twin A starts on the **approach/jump path** |
+| Sticky target lock `+$74` | Once a player is chosen, reselection is suppressed until approach clears the lock |
+| Unpair on death | `$17F9C (boss_unlink_pair)` clears the survivor's `+$5D/$5E` so role-gated transitions relax |
+
+There is **no low-health enrage variable**. The visible “phase 2” is simply one
+survivor running without pair constraints (and without the role-2 grab bias if
+that twin was the one who died).
+
+Base combat stats from `$17EDC (boss_init_combat_stats)`: damage `$20`, health
+`$20`, then the shared Easy/Hard/Hardest and non-late-phase transforms.
+
+#### Per-frame top level
+
+```text
+onihime_yasha_update (every object tick):
+    +$34 = 0                              ; clear outgoing contact damage
+    later_boss_enter_police_special_reaction ($16AEC)
+    consume_forced_reaction_flags ($16A1A) ; pair-coordinated hitstun via $FFFA53
+    primary_state = +$30
+    jump primary_state_table[$158D8 + state*2]  via loc_$15848
+```
+
+Primary-state table at `$158D8` (absolute ROM addresses, high word forced to
+`$0001` by the common dispatcher):
+
+| `+$30` | Address | Role |
+|---:|---:|---|
+| `$00` | `$158EE` | One-shot init (link pair, stats, anim, first target) |
+| `$01` | `$159C2` | **Active combat** — approach / jump / grab setup |
+| `$02` | `$15D0C` | **Committed grab/throw** sequence |
+| `$03` | `$163D0` | Shared hit reaction / recovery entry |
+| `$04` | `$164CA` | Shared recovery continuation |
+| `$05` | `$164FC` | Shared lethal / death gate |
+| `$06`–`$09` | `$1659A`…`$16B88` | Shared grabbee / throw / airborne cleanup paths |
+| `$0A` | `$16A60` | Shared police-special reaction (fixed −10 HP) |
+
+Family-specific AI lives almost entirely in states `$00`–`$02`. States `$03+`
+are the later-boss framework shared with Antonio/Souther/Bongo.
+
+```mermaid
+flowchart TD
+    START(["onihime_yasha_update $158C4"]) --> CLR["Clear +$34 damage"]
+    CLR --> POL["later_boss_enter_police_special_reaction"]
+    POL --> FR["$16A1A consume $FFFA53 forced reaction"]
+    FR --> DISP{"+$30 primary state"}
+    DISP -->|0| S0["Init $158EE"]
+    DISP -->|1| S1["Active combat $159C2"]
+    DISP -->|2| S2["Grab/throw commit $15D0C"]
+    DISP -->|3..9| SH["Shared later-boss recovery / death / grabbee"]
+    DISP -->|A| PS["Police special $16A60 −10 HP"]
+    S0 --> S1
+    S1 -->|close-range commit| S2
+    S1 -->|damage / interaction| SH
+    S2 -->|timer complete| S1
+    S2 -->|damage| SH
+    SH -->|alive recover| S1
+    SH -->|dead| DEAD["Unlink pair, award score, free slot"]
+    PS --> SH
+```
+
+#### Initialization (`$158EE`)
+
+```text
+function onihime_yasha_init(boss):
+    boss.visibility_flags = 1
+    if $FFFA5A == 0:
+        clear high bit of ELC meta +$40
+        if +$40 == 0 and not already latched +$78.bit0:
+            $FFFA5A = 1          ; first twin claims special art-DMA gate
+            return               ; wait one or more frames
+    boss.ground_height (+$4C) = boss.Y (+$18)
+    boss_link_same_type_pair()   ; +$5D/+$5E, HUD register
+    a1 = onihime_yasha_select_target()
+    boss.cached_player (+$64) = a1
+    boss.mode_flags (+$7B) = pair_role (+$5D)   ; role 2 ⇒ grab path
+    boss.visibility_flags = $1C
+    boss_init_combat_stats()
+    load animation set $2DD70, tile base $2000
+```
+
+The `$FFFA5A` handshake serializes the twins’ first-frame art setup so only one
+object owns the special DMA stepper documented under graphics analysis.
+
+#### Target selection (`$15946 (onihime_yasha_select_target)`)
+
+**Correction to earlier summary:** this selector does **not** read pair role
+`+$5D`. Split attention comes from (1) sticky lock `+$74`, (2) nearest-X among
+*available* players, and (3) the role→`+$7B` path split (one twin grabs while
+the other approaches). Pair role still matters for *behavior*, not for the
+nearest-X choice itself.
+
+`$179F8` marks a player unavailable (`boss.+$77 = 1`) when the player has
+interaction/invuln bits or primary state in `$5A`–`$5F`.
+
+```text
+function onihime_yasha_select_target(boss) -> player:
+    boss.+$79 = 0
+    if boss.+$66 != 0:                 ; hard hold (interaction lock)
+        return boss.cached_player (+$64)
+
+    mode = player_mode                 ; 1 = 1P, 3 = 2P
+    if mode < 2:
+        pick = P1
+    else if mode == 2:                 ; non-retail edge; force P2
+        pick = P2
+    else:                              ; 2P
+        p1_bad = unavailable(P1)
+        p2_bad = unavailable(P2)
+        if only one player usable:
+            pick = that player
+        else if both usable:
+            if boss.+$74:              ; sticky lock
+                return boss.target (+$72)
+            pick = nearer_by_abs_X(boss, P1, P2)
+        else:
+            pick = P1                  ; fallback
+
+    boss.target (+$72) = pick
+    boss.+$74 = 1                      ; stick until approach clears it
+    return pick
+```
+
+```mermaid
+flowchart TD
+    ST(["onihime_yasha_select_target $15946"]) --> H{"+$66 hard hold?"}
+    H -->|yes| CACHED["Return +$64 cached player"]
+    H -->|no| MODE{"player_mode"}
+    MODE -->|"< 2 (1P)"| P1A["Pick P1"]
+    MODE -->|"== 2"| P2A["Pick P2"]
+    MODE -->|">= 3 (2P)"| AVAIL["Probe P1 and P2 via $179F8"]
+    AVAIL --> BOTH{"Usable players"}
+    BOTH -->|only P1| P1A
+    BOTH -->|only P2| P2A
+    BOTH -->|both| LOCK{"+$74 sticky?"}
+    LOCK -->|yes| KEEP["Return existing +$72"]
+    LOCK -->|no| NEAR["argmin abs X distance"]
+    NEAR --> SET
+    P1A --> SET["Write +$72, set +$74=1"]
+    P2A --> SET
+    SET --> RET(["return a1 = target"])
+    CACHED --> RET2(["return a1"])
+    KEEP --> RET2
+```
+
+Player X for the distance test is read from the live object bases
+`$FFB810` / `$FFB890` (P1/P2 object `+$10`).
+
+#### State 1 — active combat (`$159C2`)
+
+Every tick of state 1 rebuilds geometry, applies damage, then either runs the
+**grab-setup path** or the **approach/tactical path**.
+
+```text
+function state1_active(boss):
+    +$37 &= 1; +$34 = 0
+    target = onihime_yasha_select_target()
+    $179F8(target)                 ; refresh +$77 unavailable
+    $17B0C()                       ; face + lane measure → +$52, +$61
+    boss_apply_pending_damage()
+    $17CF2(); $17B52()             ; interaction / collision maintenance
+                                   ; leaves result code in d7
+
+    if +$7B bit 1:                 ; grab/throw AI (role 2, or promoted)
+        return grab_setup_path()   ; $15B2A
+    else:
+        return approach_path()     ; $159F8…
+```
+
+##### Approach path (role 1 / normal)
+
+```text
+function approach_path(boss):
+    if collision_result d7 == 1:
+        target.+$7C = 0            ; clear player-side latch
+
+    if +$4B bit 0 was set (consume) and pair_role == 0:
+        set +$7B bit 1             ; unpaired survivor can promote to grab AI
+        return
+
+    # Commit window: target usable, not already in jump substate 2,
+    # lane dist in [$10, $20), X dist < $70
+    if +$77 == 0 and +$67 != 2
+       and $10 <= +$52 < $20 and +$50 < $70:
+        +$67 = 0
+        +$30 += 1                  ; → state 2 grab/throw commit
+        if anim_index (+$08) >= 4:
+            +$78 = 9
+            return
+        else:
+            +$78 = 0
+            start_anim($28)        ; via $1588A facing-aware
+            return
+
+    # Otherwise run tactical substate table at $15A5E
+    dispatch +$67 via $17A5C
+```
+
+Tactical substate table `$15A5E` (relative offsets, dispatched by `+$67`):
+
+| `+$67` | Handler | Behaviour |
+|---:|---:|---|
+| `$00` | `$15A7E` | **Idle/pressure.** Clears sticky lock `+$74`. Tries close-range jump arm. Counts `+$78`; after 10 ticks → substate `$01` and walk anim `$04`. While counting, if anim index ≥ 4, re-init anim 0 via `$15888`. |
+| `$01` | `$15AAC` | **Chase.** Tries jump arm; sets stepped X/lane velocities (`$1792C/$17954`) and integrates (`$17AB8`). |
+| `$02` | `$15ABA` | **Jump attack.** Phased by `+$78` (see below). |
+
+Close-range jump arm `$15A64` (called from substates 0 and 1):
+
+```text
+if abs_X (+$50) < $60:
+    +$78 = 0
+    +$67 = 2                       ; enter jump substate
+    start_anim($40) via $15884     ; pops return, commits anim
+```
+
+Jump attack `$15ABA`:
+
+```text
++$78 += 1
+if +$78 < 4:  return                 ; wind-up
+if +$78 == 4:
+    lane_vel (+$20) = ±$00010000     ; sign from target lane side +$61
+    Y_vel   (+$24) = $FFF8C000       ; upward impulse
+    face target ($17942)
+    queue_sound(-$60)
+    integrate and return
+if still airborne (Y != ground +$4C):
+    +$24 += $0000C000                ; gravity
+    integrate
+else:                                ; landed
+    queue_sound(-$5F)
+    $17B42()                         ; post-land cleanup
+    +$78 = 0; +$67 = 0; +$30 = 1
+    start_anim(0)
+```
+
+```mermaid
+flowchart TD
+    A(["State 1 approach path"]) --> D7{"d7 == 1?"}
+    D7 -->|yes| CLR7C["Clear target +$7C"]
+    D7 -->|no| BIT4B
+    CLR7C --> BIT4B{"+$4B bit0 set and unpaired?"}
+    BIT4B -->|yes| PROMO["Set +$7B bit1 → grab AI next tick"]
+    BIT4B -->|no| WIN{"Commit window?\n+$77==0, +$67!=2,\nlane in [16,32), X<$70"}
+    WIN -->|yes| TO2["+$30 = 2 commit\nanim $28 or timer 9"]
+    WIN -->|no| TAC{"+$67 tactical"}
+    TAC -->|0| T0["$15A7E idle/pressure\nclear +$74, count to 10"]
+    TAC -->|1| T1["$15AAC chase velocities"]
+    TAC -->|2| T2["$15ABA jump attack"]
+    T0 --> ARM{"X dist < $60?"}
+    T1 --> ARM
+    ARM -->|yes| ARM2["+$67=2, anim $40"]
+    ARM -->|no| END(["rts / integrate"])
+    T2 --> JP{"+$78 phase"}
+    JP -->|"1..3"| WAIT["wind-up"]
+    JP -->|4| LAUNCH["lane ±$1.0, Y=$FFF8C000\nsound, integrate"]
+    JP -->|">4 airborne"| GRAV["gravity $C000/tick"]
+    JP -->|landed| LAND["sound, +$30=1, +$67=0"]
+```
+
+##### Grab-setup path (`$15B2A`, role 2 / promoted)
+
+Entered when `+$7B` bit 1 is set. Uses a **second** tactical table at `$15BE0`
+when the grab cannot be finalized this tick.
+
+```text
+function grab_setup_path(boss):
+    if d7 != 1: goto tactical_grab           # need successful interaction code
+    if target unavailable or +$67 == 3: abort_player_latch; goto tactical_grab
+    if boss not on ground and player not on ground: abort; goto tactical_grab
+
+    # Finalize grab → state 2
+    if player on ground but boss not:
+        +$78 = $F8
+        snap boss Y to ground
+    else:
+        +$78 = 0
+    +$67 = 0
+    +$30 += 1                                # → state 2
+    +$72 = target
+
+    # Side / facing → throw variant
+    dx = boss.X - target.X
+    if dx >= 0:
+        side = 1; face_bit = target.facing
+        if face_bit clear: use variant A (d1=3, anim=$34, offset=+$18)
+        else:              use variant B (d1=2, anim=$30, offset=+$2C)
+    else:
+        side = 0; symmetric facing tests → same A/B choice
+
+    target.interaction (+$7D) = variant
+    boss.+$79 = variant
+    snap target lane/Y to boss lane/ground
+    place target.X = boss.X ± offset
+    start_anim(anim | facing) via $1589C
+```
+
+Tactical grab table `$15BE0`:
+
+| `+$67` | Handler | Behaviour |
+|---:|---:|---|
+| `$00` | `$15C18` | If unpaired and `+$4B` bit 0: **clear** grab-mode bit (drop back to approach). Else try grab-commit helper `$15BE8`, then `$15C72`. If target free and `+$7A` toggle / unpaired: may clear grab mode. Else force substate `$01` and anim `$04`. |
+| `$01` | `$15C60` | Commit helper + chase velocities (`$17924/$1797E`) + integrate. |
+| `$02` | `$15CE0` | Animation-synced height bob (±`$1C` on specific frames) then fall into jump-land logic at `$15AF4`. |
+
+Grab-commit helper `$15BE8`:
+
+```text
+if target unavailable: return
+if X dist >= $90: return
+if screen-space X not in ($80, $1C0): return
++$78 = 0; +$67 = 3; start_anim($40)     # leap-to-grab arm
+```
+
+Facing-aware jump-in `$15C72` (when closing for a grab):
+
+```text
+# Prefer jump when X < $40, or when $40..$70 and coplanar on ground,
+# with velocity-sign / facing agreement tests against the player.
+if should_jump:
+    +$67 = 2; +$78 = 0
+    +$24 = $FFF60000                   # stronger upward impulse than approach jump
+    face ($17928); integrate; sound
+    start_anim($44)
+```
+
+```mermaid
+flowchart TD
+    G(["State 1 grab-setup $15B2A"]) --> OK{"d7==1 and target usable\nand +$67!=3 and someone grounded?"}
+    OK -->|no| TG{"+$67 grab tactical $15BE0"}
+    OK -->|yes| FIN["+$30=2, sync player pose\nchoose throw variant by side/facing"]
+    TG -->|0| G0["$15C18 hold / maybe drop grab mode"]
+    TG -->|1| G1["$15C60 chase"]
+    TG -->|2| G2["$15CE0 height bob → land"]
+    G0 --> HC{"$15BE8 commit window?\nX<$90, screen X mid"}
+    HC -->|yes| LEAP["+$67=3, anim $40"]
+    G0 --> JC{"$15C72 jump-in?"}
+    G1 --> JC
+    JC -->|yes| JIN["+$67=2, Yvel=$FFF60000, anim $44"]
+```
+
+#### State 2 — grab/throw commit (`$15D0C`)
+
+Once `+$30 == 2`, the twin no longer freelances: it drives a **frame timer**
+`+$78` and either a normal leap-throw or the held-player throw path when
+`+$7B` bit 1 is still set.
+
+```text
+function state2_throw(boss):
+    +$37 &= 1
+    +$34 = base_damage (+$4A)          # restore contact damage for the throw
+    a1 = +$72; re-check availability and X/lane
+    boss_apply_pending_damage(); interaction helpers
+
+    if +$7B bit 1:
+        return held_throw_choreography()   # $15E06
+    if d7 == 1:
+        target.+$7D = 1
+
+    +$78 += 1
+    t = +$78
+    if t == $2A: re-init current anim; return
+    if t == $2C:
+        if unpaired: set +$7B bit 1        # survivor may re-enter grab AI
+        +$78 = 0; +$30 = 1
+        re-init anim; return
+    if t < $0A: return                     # wind-up
+    if t == $0A:
+        sound; lane_vel = (target.lane - boss.lane) / 16
+        Y_vel_word = $FFF6
+        X_vel = ±$0002AAAA by side +$60
+        start_anim($24); integrate; return
+    if t == $18: sound
+    if t == $14: start_anim($2C)
+    if still airborne: gravity $C000; integrate
+    elif Y_vel != 0:
+        land sound; $17B42(); start_anim($28)
+    else: return
+```
+
+Held-player choreography `$15E06` (both twins can reach this after a successful
+setup; role 2 starts closer to it):
+
+```text
+function held_throw_choreography(boss):
+    variant = +$79; mirror to target.+$7D
+    +$78 += 1; t = +$78
+    if (t == $16 and variant == 9) or (t == $2E and variant == 4):
+        if unpaired: clear +$7B bit 1
+        goto land_and_return_state1 ($15B0A)
+    if t == 2:
+        if variant == 2:  new_variant=9; anim=$38
+        else:             new_variant=4; anim=$3C
+        write variants; start_anim; throw sound
+```
+
+```mermaid
+flowchart TD
+    S2(["State 2 $15D0C"]) --> H{"+$7B bit1 held-throw?"}
+    H -->|yes| HT["$15E06 held choreography"]
+    H -->|no| TIM["+$78 timer"]
+    TIM -->|"t < $0A"| WU["wind-up"]
+    TIM -->|t == $0A| LEAP["Leap: X ±$2AAAA, Y $FFF6\nlane toward player, anim $24"]
+    TIM -->|t == $14| A2C["anim $2C"]
+    TIM -->|t == $18| SND["sound"]
+    TIM -->|t == $2A| REANIM["refresh anim"]
+    TIM -->|t == $2C| DONE["+$30=1; maybe set grab bit if unpaired"]
+    TIM -->|airborne| GRAV["gravity + integrate"]
+    TIM -->|landed| LAND["anim $28"]
+    HT -->|"t==2"| SWAP["Swap to variant 9/4\nanim $38/$3C"]
+    HT -->|"end times"| BACK["land → state 1"]
+```
+
+#### Pairing, survivor phase, and police special
+
+```mermaid
+flowchart LR
+    subgraph spawn [Round 5 / Round 8 spawn]
+        E1["ELC type $58 #1"] --> I1["Init + link"]
+        E2["ELC type $58 #2"] --> I2["Init + link"]
+        I1 -->|"role 1"| A["Twin A: approach AI\n+$7B bit1 clear"]
+        I2 -->|"role 2"| B["Twin B: grab AI\n+$7B bit1 set"]
+    end
+    A --> COMBAT["Independent state machines\nshared helpers"]
+    B --> COMBAT
+    COMBAT --> DEATH{"One twin HP ≤ 0"}
+    DEATH --> UN["$17F9C unlink pair"]
+    UN --> SURV["Survivor +$5D=0\nmay promote/drop grab mode freely"]
+    COMBAT --> POL2["Police special → state $0A\n−10 HP once per event"]
+```
+
+Key interactions with the shared framework:
+
+- **Forced reactions** `$16A1A`: if `$FFFA53` is set, a living twin outside
+  states `$00` and `$03`–`$09` is forced into the reaction path. Pair role
+  selects which bit of the flag byte is consumed, so both twins are not always
+  yanked on the same frame.
+- **Police special** `$16AEC` → state `$0A`: same −10 damage path as Antonio,
+  Souther, and Bongo.
+- **Death** `$16512` path awards score, calls `$17F9C (boss_unlink_pair)`, and
+  frees the slot. The survivor’s next `select_target` no longer cares about a
+  partner; approach can set `+$7B` bit 1 on interaction when unpaired, so a
+  lone twin can still grab.
+
+#### Object-field cheat sheet (twins)
+
+| Offset | Twin-specific use |
+|---:|---|
+| `+$30` | Primary state (table `$158D8`) |
+| `+$4A` / `+$34` | Base / active outgoing damage |
+| `+$4C` | Ground / landing height snapshot |
+| `+$50` / `+$52` | Abs X / lane distance to target |
+| `+$5D` / `+$5E` | Pair role / partner pointer |
+| `+$60` / `+$61` | Sign of X / lane delta |
+| `+$64` | Cached player from init / hard-hold |
+| `+$66` | Hard target hold (skip reselection) |
+| `+$67` | Tactical substate (approach or grab table) |
+| `+$72` | Selected player pointer |
+| `+$74` | Sticky lock after successful select |
+| `+$77` | Target unavailable flag from `$179F8` |
+| `+$78` | Multi-purpose phase timer (jump, throw, init latch) |
+| `+$79` | Active throw variant mirrored to player `+$7D` |
+| `+$7A` | Toggle used when dropping grab mode |
+| `+$7B` | Mode flags; **bit 1 = grab/throw AI path** (seeded from role) |
+
+#### Summary of the algorithm
+
+1. Spawn two type-`$58` objects; link them; seed role into `+$7B`.
+2. Each frame: police-special gate, forced-reaction gate, primary-state jump.
+3. State 1 either **approaches/jumps** (bit1 clear) or **hunts for a grab**
+   (bit1 set).
+4. Distance windows — not RNG — decide walk vs jump vs commit.
+5. State 2 plays a fixed throw timeline or a held-player variant swap.
+6. Shared hit/death states handle damage; death unlinks the survivor.
+7. No enrage table: one body left is the entire second phase.
 
 ### Mr. X and the final encounter
 
@@ -876,7 +1350,7 @@ All entries below were new except `$117FC (stage_clear_monitor)`, whose existing
 000144E0, abadede_init, "100% - Initializes Abadede, creates linked type $31 and optional type $39, loads animations/stats, and selects a player"
 0001456A, abadede_init_combat_stats, "100% - Initializes Abadede health/damage from difficulty and ELC variant fields"
 000158C4, onihime_yasha_update, "100% - Onihime/Yasha type $58 shared update; targeting, interaction maintenance and primary-state dispatch"
-00015946, onihime_yasha_select_target, "100% - Selects/caches a player for a twin using availability, pair role and X distance"
+00015946, onihime_yasha_select_target, "100% - Selects/caches a player for a twin using availability, sticky lock +$74, and nearest-X; pair role is applied outside the selector via +$7B"
 00015E70, souther_update, "100% - Souther type $55 top-level update and primary-state dispatch"
 00016294, souther_select_target, "100% - Selects target using player action, distance, lane, facing, pair role and hold counters"
 00016CE4, antonio_update, "100% - Antonio type $56 top-level update and primary-state dispatch"
