@@ -330,7 +330,7 @@ Adam/Blaze long-weapon reach, per-cell hang-time, booth/crate loot producer.
 | Claim | Status | Evidence |
 | --- | --- | --- |
 | Damage 5/3/4/4/2 | Closed | ROM inits |
-| Knife melee `$46` / throw `$44` split | Closed | `$3084` scan `$90`; `$21E6` on `$44` |
+| Knife melee `$46` / throw `$44` (same B) | Closed | `$3084` front cone `$90`; `$21E6` only on `$44` |
 | Launch vs **hold** ±48 X, +16 Z | Closed | `$5D84`/`$62DA` + natural knife |
 | Knife flight ≥160 px sample, \(Z=115\) | Closed | natural throw |
 | Pipe/bat origin reach 36 (Axel) | Closed | natural pipe + bat |

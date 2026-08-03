@@ -30,7 +30,7 @@ The global object dispatcher at `$B236 (object_type_update_jt)` indexes a word t
 
 | Object type | Handler | Role |
 |---:|---:|---|
-| `$08` | `$5C1E (knife_weapon_dispatcher)` | Knife; `+$34 = 5`; attack-button throw at \(v_x=\pm 16\). |
+| `$08` | `$5C1E (knife_weapon_dispatcher)` | Knife; `+$34 = 5`; B → melee `$46` or throw `$44` (see B routing). |
 | `$09` | `$6114 (bottle_weapon_dispatcher)` | Bottle; `+$34 = 3`; breaks into three type-`$1E` shards. |
 | `$0A` | `$61F6 (baseball_bat_weapon_dispatcher)` | Baseball bat; `+$34 = 4`; held melee, three counted uses. |
 | `$0B` | `$6226 (steel_pipe_weapon_dispatcher)` | Steel pipe; `+$34 = 4`; same mechanics as bat, different art. |
@@ -57,16 +57,17 @@ are effect/prompt objects rather than consumables; `$3136
 The following player-visible behavior is confirmed and resolves several points
 that static code alone leaves visually anonymous:
 
-- pressing attack with the knife or pepper throws it; the bottle is **not**
-  attack-thrown (`$21E6` only types `$08`/`$0C`);
+- **B** is always the logical attack edge; for a held knife the ROM then picks
+  **melee (`$46`)** or **throw (`$44`)** from a front proximity scan (see
+  [Attack button routing](#attack-button-routing-same-b-two-outcomes));
+- pepper is attack-thrown (`$44`); bottle is **not** projectile-thrown by `$21E6`;
 - the baseball bat is type `$0A`; the steel pipe is type `$0B`; both use almost
   identical long-weapon handlers at `$61F6/$6226` (live Axel origin reach 36 px);
-- pepper spray is thrown, produces smoke/powder objects, and immobilizes for
-  **160 frames** (`$A43E`);
+- pepper spray produces smoke/powder and immobilizes for **160 frames** (`$A43E`);
 - enemies can carry weapon objects; knocking an armed enemy down detaches the
   weapon, which falls to the floor and can then be collected by the player;
-- bat/pipe have three counted uses; knife is effectively one throw arc; bottle
-  shatters once; ground settle can exhaust wear (`+$50 ≥ 3` unpickable);
+- bat/pipe have three counted uses; knife melee keeps the weapon, throw is
+  one arc; bottle shatters once; ground settle can exhaust wear (`+$50 ≥ 3`);
 - telephone booths, crates, and other breakable scenery can reveal items or
   weapons when destroyed (producer path still external to local prop handlers).
 
@@ -292,7 +293,7 @@ The byte at weapon `+$51` is a command/state handshake rather than a simple Bool
 | Family | Rule | Code |
 | --- | --- | --- |
 | Bat / pipe | `+$50` use counter. While `+$50 < 3` and `+$51 == 1`, each held-use entry does `+$50++`. When `+$50 >= 3`, retire (hide, `+$56 = $10` frames, then delete). | `$5C66` |
-| Knife | Shares `$5C66` in the state table, but player attack **throws** (`+$51 = 3` → `$5D84`). Solid hit deletes the object; ground settle at `$5DEA` forces `+$50 = 3` (no longer pickable). Effective lifetime is one throw arc, not three melee swings. | `$5D34`, `$5DEA`, `$21E6` |
+| Knife | Melee keeps the held object; **throw** (`+$51 = 3` → `$5D84`) is one projectile arc. Solid hit deletes the projectile; ground settle at `$5DEA` can force `+$50 = 3` (unpickable). | `$3084`, `$5D34`, `$5DEA`, `$21E6` |
 | Bottle | One-way shatter on first impact (`+$54` guard); three shards; never re-collectable as a bottle. | `$614E` |
 | Pepper | `+$50` is effect lifecycle, not a three-swing counter; canister becomes a timed smoke emitter. | `$6270+`, `$6328` |
 
@@ -304,7 +305,7 @@ Pickup eligibility always requires free (`+$51 == 0`) and **`+$50 < 3`**.
 
 | Type | Name | Style | Init `+$34` | ROM init |
 | ---: | --- | --- | ---: | --- |
-| `$08` | Knife | Straight throw | **5** | `$5C54` `move.b #5, $34(a0)` |
+| `$08` | Knife | Melee **or** throw (see B routing) | **5** | `$5C54` `move.b #5, $34(a0)` |
 | `$09` | Bottle | Throw / break | **3** | `$613C` `move.b #3, $34(a0)` |
 | `$0A` | Baseball bat | Held melee | **4** | `$6214` `move.b #4, $34(a0)` |
 | `$0B` | Steel pipe | Held melee | **4** | `$6244` `move.b #4, $34(a0)` |
@@ -480,32 +481,85 @@ Pepper object `+$08` animation selectors observed in spawn paths: **4** (first
 smoke object) and **6** (sequence emissions). Intact/held canister uses the
 default init anim from table `$6FD42`.
 
+## Attack button routing (same B, two outcomes)
+
+There is **no second button** for knife throw vs stab. Logical **attack** is
+always remapped press bit 4 on player `+$55` (B under the default layout).
+
+### Dispatch when armed
+
+| Player `+$60` | Input path on attack edge |
+| ---: | --- |
+| 0 (unarmed) | `$3028 (player_normal_attack_input)` → punch/combo |
+| nonzero (holding) | `$3084 (player_held_object_attack_input)` → weapon anim |
+
+Idle chain: unarmed uses `$2CD2` → normal attack; armed uses `$2D20` → held-object
+attack (after grab/chord/jump gates).
+
+### What `$3084` starts for each weapon
+
+| Held type | Action family | Role |
+| ---: | ---: | --- |
+| Bat `$0A` / pipe `$0B` | **`$48`** | Long melee swing |
+| Pepper `$0C` | **`$44`** | Throw anim |
+| Bottle `$09` intact | **`$44`** | Use anim (not `$21E6` projectile) |
+| Bottle broken (`+$54`) | **`$46`** | Alternate use |
+| **Knife `$08`** | **`$46` or `$44`** | See cone scan below |
+
+### Knife: proximity selects melee vs throw
+
+For knife, `$3084` scans the object table (skips empty / type `$16`):
+
+```text
+object in front of player (facing = bit0 of player +$30)
+|ΔX| < $90          (144 px)
+lane Y ∈ [player.y − 12, player.y + 12]
+```
+
+| Result | Action | Later projectile? |
+| --- | ---: | --- |
+| **Hit found** | **`$46`** | No — melee/stab; knife stays in hand |
+| **No hit** | **`$44`** | Yes — on anim frame `+$0A == 1` |
+
+### Throw release (projectile only on `$44`)
+
+`$21E6 (player_release_thrown_weapon)` runs during the attack anim. Launch
+requires:
+
+1. player action family **`$44`** (melee `$46` does **not** release);
+2. held type knife `$08` or pepper `$0C`;
+3. animation frame `+$0A == 1`;
+4. weapon `+$51` still linked.
+
+Then: weapon `+$51 = 3`, clear player `+$60`, `$5D84` / `$62DA` apply velocity.
+
+```text
+B (attack edge)
+  └─ holding knife?
+       └─ $3084
+            ├─ foe in front cone |ΔX|<144, lane OK → action $46  (melee)
+            └─ else                              → action $44  (throw)
+                                                      └─ frame 1 → $21E6
+                                                           └─ knife projectile
+```
+
 ## Individual weapon families
 
 ### Type `$08`: knife
 
 The handler at `$5C1E (knife_weapon_dispatcher)` initializes damage `+$34 = 5`
 (`$5C54`), the highest of the ordinary carried weapons. It supports ground
-settling, holder attachment, a directed throw, collision bounce, and deletion.
+settling, holder attachment, melee while held, directed throw, collision bounce,
+and deletion.
 
-The player action path at `$21E6-$222E` checks whether the carried object is type
-`$08` (or the pepper weapon `$0C`). On the attack animation's release frame it
-writes command 3 to weapon `+$51` and clears the player's carried-weapon type.
-`$3084 (player_held_object_attack_input)` chooses the player action on B:
+**Melee (`$46`):** knife remains held; damage is still weapon `+$34 = 5` through
+the shared collision/attacker-list path while the stab anim is active.
 
-- **`$46`** if any object is in front within **`$90` (144)** px and lane
-  `[Y−12, Y+12]` — **melee/stab** (weapon stays held; can deal damage without
-  releasing);
-- **`$44`** otherwise — **throw** anim.
-
-`$21E6 (player_release_thrown_weapon)` only launches on family **`$44`** for
-types `$08`/`$0C` (release frame). `$5D84` then adds \(\pm 48\) X and +16 Z to
-the held origin and sets \(v_x=\pm 16\). Live Axel throw: launch
-\(Z=Z_{\mathrm{hold}}+16\), level flight, ≥160 px travel observed.
-
-On a solid hit the projectile is deleted; ground settle `$5DEA` can force
-`+$50 = 3` (unpickable). Exhausted knives (`+$50 ≥ 3`) may remain held but do
-not usefully attack/throw.
+**Throw (`$44` → `$21E6` → `$5D84`):** adds \(\pm 48\) X and +16 Z to the **held
+weapon origin**, sets \(v_x=\pm 16\). Live Axel: launch \(Z=Z_{\mathrm{hold}}+16\),
+level flight, ≥160 px travel observed. Projectile is deleted on solid hit;
+ground settle can set `+$50 = 3` (unpickable). Exhausted knives may still look
+held but do not usefully attack/throw.
 
 ### Type `$09`: bottle
 
@@ -722,7 +776,7 @@ dispatcher and remains correctly listed below.
 | Topic | Status | Evidence |
 | --- | --- | --- |
 | Damage 5 / 3 / 4 / 4 / 2 | **Closed** | ROM inits `$5C54`…`$627A` |
-| Knife/pepper attack throw | **Closed** | `$21E6` → `$5D84` / `$62DA`; bottle **not** thrown |
+| Same B → knife melee `$46` / throw `$44` | **Closed** | `$3084` front cone `$90`; `$21E6` only on `$44` |
 | Launch \(\Delta x=\pm48\), \(\Delta z=+16\) vs **hold** | **Closed** | ROM + natural Axel knife |
 | Knife \(v_x=\pm16\), flight ≥160 px sample | **Closed** | Natural throw, level \(Z=115\) |
 | Pipe/bat origin reach 36 px (Axel) | **Closed** | Natural pipe equip + swings in `$FFFB22` |
