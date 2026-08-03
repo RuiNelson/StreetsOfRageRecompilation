@@ -371,34 +371,39 @@ pepper:        x(t) = x0 + 48 +  6·t
                vz(t) = -3 + a·t     (a = 0xA800/65536)
 ```
 
-### Live probe (Axel, Round 1 floor, 2026-08-03, port 6969)
+### Live probe (Axel, Round 1, port 6969)
 
-Standing player/object floor plane \(Z_{\mathrm{stand}} = 160\). Forced launch via
-the same command/state paths the ROM uses:
+Standing floor plane \(Z_{\mathrm{stand}} = 160\).
 
-| Event | Knife (`$5D84`) | Pepper (`$62DA`) |
-| --- | ---: | ---: |
-| \(\Delta x\) at launch | **−48** (weapon facing left) | **+48** (facing right) |
-| \(\Delta z\) at launch | **+16** | **+16** |
-| \(v_x\) | **−16** | **+6** |
-| \(v_z\) | **0** | **−3** |
-| Bounce sample | \(v_x: -16 \rightarrow +4\) (= \(-v_x/4\)) | (smoke path) |
+**Natural knife throw** (fresh ground pickup, wear 1, attack release → `$5D84`):
 
-So the closed-form spawn is not an unknown hand height: on flat ground the
-throw **always** starts at
+| Quantity | Value |
+| --- | ---: |
+| Hold pose (ready) | \(w_x-p_x=-5\), \(w_z-p_z \approx -59\ldots-62\) |
+| Launch \(\Delta x\) vs hold | **+48** (facing right) |
+| Launch \(\Delta z\) vs hold | **+16** |
+| Launch \(Z\) | **115** (\(Z_{\mathrm{hold}}+16\), not \(Z_{\mathrm{stand}}+16\)) |
+| \(v_x, v_z\) | **+16, 0** |
+| Flight sample | \(Z\) stays **115** while \(X\) advances; **≥160 px** horizontal from launch before sample end |
+
+So launch offsets apply to the **attached weapon origin**, not the feet:
 
 \[
-Z_{\mathrm{launch}} = Z_{\mathrm{stand}} + 16,\quad
-X_{\mathrm{launch}} = X_{\mathrm{pre}} \pm 48
+X_{\mathrm{launch}} = X_{\mathrm{hold}} \pm 48,\quad
+Z_{\mathrm{launch}} = Z_{\mathrm{hold}} + 16,\quad
+v_x = \pm 16,\ v_z = 0
 \]
 
-with the ROM velocities above. (Ballistic hang time still depends on the map
-floor sample in `$AD2A`; on this floor the knife entered impact/bounce within a
-few frames at \(Z=176\).)
+Forced launches from a ground-placed object (no attach) used \(Z_{\mathrm{stand}}+16\) and
+bounced early; the natural hold height is what matters in play.
 
-**Bottle is not attack-thrown.** `$21E6 (player_release_thrown_weapon)` only
-commands types `$08` and `$0C`. Bottle damage is on the held/impact object;
-shatter is `$614E`.
+Pepper (forced/held path earlier): \(\Delta x=\pm48\), \(\Delta z=+16\),
+\(v_x=\pm6\), \(v_z=-3\).
+
+Knife bounce on ground impact: \(v_x \leftarrow -v_x/4\) (ROM `$5D34`; live sample
+on forced path: \(-16\rightarrow+4\)).
+
+**Bottle is not attack-thrown.** `$21E6` only commands types `$08` and `$0C`.
 
 ### Melee reach (bat / pipe)
 
