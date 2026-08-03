@@ -10,3 +10,4 @@ code-analysis/speculative_addresses.txt
 .vscode/
 controls.yaml
 /call-map.sqlite
+/tools/__pycache__
