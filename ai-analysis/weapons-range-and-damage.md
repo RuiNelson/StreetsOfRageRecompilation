@@ -32,7 +32,7 @@ Primary evidence:
 | Type | Name | Attack style | Init `+$34` damage | ROM init |
 | ---: | --- | --- | ---: | --- |
 | `$08` | Knife | Straight throw on attack | **5** | `$5C54`: `move.b #5, $34(a0)` |
-| `$09` | Bottle | Throw / break on impact | **3** | `$613C`: `move.b #3, $34(a0)` |
+| `$09` | Bottle | Held / break on impact (not attack-thrown) | **3** | `$613C`: `move.b #3, $34(a0)` |
 | `$0A` | Baseball bat | Held melee swing | **4** | `$6214`: `move.b #4, $34(a0)` |
 | `$0B` | Steel pipe | Held melee swing | **4** | `$6244`: `move.b #4, $34(a0)` |
 | `$0C` | Pepper spray | Arc throw + smoke / immobilize | **2** | `$627A`: `move.b #2, $34(a0)` |
@@ -116,10 +116,10 @@ Accept first matching object slot whose **origin** lies in:
 
 No distance ranking: slot order wins.
 
-### 4.2 Throw spawn offsets
+### 4.2 Throw spawn offsets (relative to **held weapon** origin)
 
-Shared knife/bottle launcher `$5D84 (launch_released_weapon)` and pepper
-`$62DA (throw_pepper_spray)`:
+Knife launcher `$5D84 (launch_released_weapon)` and pepper `$62DA
+(throw_pepper_spray)`. Bottle is **not** attack-thrown (`$21E6` only `$08`/`$0C`).
 
 | Quantity | Facing right | Facing left |
 | --- | ---: | ---: |
@@ -132,36 +132,39 @@ Jump/upward motion uses **negative** Z velocity (e.g. pepper `vz = −3`).
 
 ### 4.3 Throw velocities (integer high word of 16.16 longs)
 
-| Weapon | `vx` (`+$1C`) | `vz` (`+$24`) | Gravity per frame on `vz` |
+| Weapon | `vx` (`+$1C`) | `vz` (`+$24`) | Gravity on `vz` |
 | --- | ---: | ---: | --- |
-| Knife / bottle (launch) | `±16` px/frame | `0` initially | flight/impact paths use `+$8800` (≈ **0.53125** px/fr²) |
-| Pepper | `±6` px/frame | `−3` (up) | flight uses `+$A800` (≈ **0.65625** px/fr²) |
+| Knife | `±16` px/frame | `0` | impact/fall `+$8800` ≈ 0.53125 px/fr² |
+| Pepper | `±6` px/frame | `−3` (up) | flight `+$A800` ≈ 0.65625 px/fr² |
 
-Position integration (`$B20E`):
+Position integration (`$B20E`): `X += vx; Y += vy; Z += vz` (16.16).
 
-```text
-X += vx;  Y += vy;  Z += vz;   // all 16.16
-```
+### 4.4 Launch geometry (ROM + live, final)
 
-### 4.4 Launch geometry (ROM + live)
+Offsets apply to the **attached weapon origin** at release, not the feet:
 
-Live probe (Axel, Round 1, `Z_stand = 160`, port 6969):
+\[
+X_{\mathrm{launch}} = X_{\mathrm{hold}} \pm 48,\quad
+Z_{\mathrm{launch}} = Z_{\mathrm{hold}} + 16
+\]
 
-| | Knife `$5D84` | Pepper `$62DA` |
-| --- | ---: | ---: |
-| Launch \(\Delta x\) | ±48 | ±48 |
-| Launch \(\Delta z\) | +16 | +16 |
-| \(v_x\) | ±16 | ±6 |
-| \(v_z\) | 0 | −3 |
-| Bounce | \(v_x \leftarrow -v_x/4\) (live: −16→+4) | smoke emitter path |
+**Natural Axel knife** (fresh ground pickup, wear 1, Round 1, port 6969):
 
-So \(Z_{\mathrm{launch}} = Z_{\mathrm{stand}} + 16\) always; there is no separate
-unknown hand-height parameter on flat ground. Hang time still depends on the
-`$AD2A` floor sample for the cell. Bottle is **not** attack-thrown (`$21E6`
-only `$08`/`$0C`).
+| Quantity | Value |
+| --- | ---: |
+| Feet \(Z_{\mathrm{stand}}\) | 160 |
+| Hold \(\Delta x, \Delta z\) vs player | −5, ≈ −60 |
+| Launch vs hold | \(\Delta x=+48\), \(\Delta z=+16\) → \(Z=115\) |
+| \(v_x, v_z\) | +16, 0 |
+| Flight | level at \(Z=115\); ≥160 px horizontal from launch |
 
-Policy heuristics in `autoplay` use throwable mid-range **20–100** px and ally
-exclusion **140** px for throws.
+**Pepper** (ROM + held launch): \(\Delta x=\pm48\), \(\Delta z=+16\), \(v_x=\pm6\),
+\(v_z=-3\).
+
+**Bounce** (knife `$5D34`): \(v_x \leftarrow -v_x/4\) (forced-path live: −16→+4).
+
+Policy heuristics in `autoplay`: throwable mid-range **20–100** px; ally throw
+exclusion **140** px.
 
 ### 4.5 Bottle shards (type `$1E`)
 
@@ -221,12 +224,17 @@ Empirical first-punch body boxes (unarmed) measured for autoplay:
 | Adam | ~54 px |
 | Blaze | ~68 px |
 
-Live Axel bat/pipe: max **|w_x − p_x| = 36** while in `$FFFB22` (action `$48`),
-with **w_z − p_z = −42**. Co-op ally melee exclusion **80 px**.
+**Live Axel** (natural steel-pipe equip + swings; bat matched in session):
 
-Lane filter used by the agent for weapon use: \(|\Delta Y| \le 12\) (policy),
-while pickup allows ±16. Exact combat lane thickness comes from shape lane
-extents (typically on the order of ±8..±16 around origins).
+| Quantity | Value |
+| --- | ---: |
+| Hold \(\Delta x, \Delta z\) | −3, −61 |
+| Hit frames | in `$FFFB22`, player action `$48` |
+| Max \(\lvert w_x-p_x\rvert\) | **36** |
+| Peak \(\Delta z\) | −42 |
+
+Co-op ally melee exclusion **80 px**. Policy commit ≤36 px matches origin lag.
+Adam/Blaze unmeasured (deferred).
 
 ---
 
@@ -289,52 +297,58 @@ Upgrade threshold: new value ≥ held + 0.08.
 ## 8. End-to-end formulas (summary)
 
 ```text
-// Damage dealt by a successful weapon collision
-D = weapon[+$34] ∈ {5,3,4,4,2} for types {knife,bottle,bat,pipe,pepper}
+// Damage on successful weapon collision
+D = weapon[+$34] ∈ {5, 3, 4, 4, 2}  // knife, bottle, bat, pipe, pepper
 
-// Enemy dies when
-H_enemy - Σ D_i ≤ 0
+// Enemy KO
+hits = ceil(H / D)   // H from $26FCE; hardest difficulty H += 4
 
-// Knife / bottle projectile X (facing right)
-x(t) = x0 + 48 + 16 * t
-// Pepper projectile X (facing right)
-x(t) = x0 + 48 + 6 * t
-// Z (down positive); pepper shown
-vz(t) = -3 + a_pep * t          // a_pep = 0xA800/65536
-z(t)  = z0 + 16 + ∫ vz
+// Attack-throw only: knife $08, pepper $0C  (not bottle)
+X_launch = X_hold ± 48
+Z_launch = Z_hold + 16
+// knife:  vx = ±16, vz = 0
+// pepper: vx = ±6,  vz = -3; then vz += 0xA800/65536 per frame
 
-// Pickup predicate
-|dx|≤20 ∧ |dy|≤16 ∧ |dz|≤8 ∧ type∈[8,12] ∧ interaction==0 ∧ wear<3
+// Knife bounce on ground impact
+vx := -vx / 4
 
-// Bat/pipe usable while
-wear < 3 ∧ held ∧ swing frame collision bit set ∧ box overlap
+// Pickup
+|dx|≤20 ∧ |dy|≤16 ∧ |dz|≤8 ∧ type∈[8..12] ∧ +$51==0 ∧ +$50<3
+
+// Bat/pipe hit (Axel live)
+in $FFFB22 ∧ |w_x - p_x| ≤ 36   // origin lag on connecting frames
 ```
 
 ---
 
-## 9. Closed claims and remaining live probes
+## 9. Status
+
+Combat model **complete** for ordinary weapons (ROM + Axel live). Deferred only:
+Adam/Blaze long-weapon reach, per-cell hang-time, booth/crate loot producer.
 
 | Claim | Status | Evidence |
 | --- | --- | --- |
-| Bottle shards deal no damage | **Closed** | `$61BE`–`$61E0`; play observation |
-| Pepper immobilize = 160 frames | **Closed** | `$A43E` timer `$A0` |
-| `+$51` ∈ {0,1,2,3} | **Closed** | static writers |
-| Throw spawn ±48 X, +16 Z; knife/pepper velocities | **Closed** | live Axel R1 + ROM |
-| Bat/pipe origin reach 36 px (Axel) | **Closed** | live, attacker list |
-| Adam/Blaze bat reach; full hang-time map | **Open** | repeat probe / floor samples |
-| Booth/crate reward producer | **Open** | level-script search |
+| Damage 5/3/4/4/2 | Closed | ROM inits |
+| Knife/pepper throw; bottle not attack-thrown | Closed | `$21E6`, live knife |
+| Launch vs **hold** ±48 X, +16 Z | Closed | `$5D84`/`$62DA` + natural knife |
+| Knife flight ≥160 px sample, \(Z=115\) | Closed | natural throw |
+| Pipe/bat origin reach 36 (Axel) | Closed | natural pipe + bat |
+| Pepper immobilize 160 fr | Closed | `$A43E` |
+| Shards no damage | Closed | `$61BE` |
+| `+$51` 0..3 | Closed | static |
 
 ## 10. Evidence checklist
 
 | Claim | Evidence |
 | --- | --- |
-| Damage 5/3/4/4/2 | ROM `move.b` at `$5C54`, `$613C`, `$6214`, `$6244`, `$627A` |
-| Throw vx ±16 / ±6 | `$5D84` `moveq #$10` / `$62DA` `moveq #$6` |
-| Pepper vz −3, g `$A800` | `$6302`, `$6318` |
-| Knife g `$8800` on fall paths | `$5CE8` |
-| Wear three uses | `$5C66` `cmpi.b #3,$50` |
-| Pickup box ±20/±16/±8 | `$3136` immediate arithmetic |
+| Damage 5/3/4/4/2 | `$5C54`, `$613C`, `$6214`, `$6244`, `$627A` |
+| Knife \(v_x=\pm16\); pepper \(v_x=\pm6,v_z=-3\) | `$5D84`, `$62DA`; live knife |
+| Launch vs hold origin | natural Axel knife: hold→launch +48 X, +16 Z |
+| Bounce \(-v_x/4\) | `$5D34`; forced live −16→+4 |
+| Bat/pipe 36 px (Axel) | natural pipe in `$FFFB22`, action `$48` |
+| Wear three uses (bat/pipe) | `$5C66` |
+| Pickup ±20/±16/±8 | `$3136` |
 | Enemy HP table | `$26FCE` + `$93CE` |
-| Pepper reaction `$0400` + 160 fr | `$9C1E` → `$A43E` timer `$A0` |
-| Shards not damaging | `$61BE` physics-only; no attacker registration |
-| Attacker list | `$95CE` writes `$FFFB24` slots, count `$FFFB22` |
+| Pepper `$0400` + 160 fr | `$9C1E` → `$A43E` `$A0` |
+| Shards inert | `$61BE` no `+$34` / `$95CE` |
+| Attacker list | `$95CE` / `$FFFB22` |

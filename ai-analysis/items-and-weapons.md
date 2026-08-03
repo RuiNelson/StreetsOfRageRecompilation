@@ -57,16 +57,18 @@ are effect/prompt objects rather than consumables; `$3136
 The following player-visible behavior is confirmed and resolves several points
 that static code alone leaves visually anonymous:
 
-- pressing attack with the knife throws it horizontally in a straight line;
+- pressing attack with the knife or pepper throws it; the bottle is **not**
+  attack-thrown (`$21E6` only types `$08`/`$0C`);
 - the baseball bat is type `$0A`; the steel pipe is type `$0B`; both use almost
-  identical long-weapon handlers at `$61F6/$6226`;
-- pepper spray is thrown, produces smoke/powder objects, and leaves the struck
-  enemy locked in a reaction state for a short period;
+  identical long-weapon handlers at `$61F6/$6226` (live Axel origin reach 36 px);
+- pepper spray is thrown, produces smoke/powder objects, and immobilizes for
+  **160 frames** (`$A43E`);
 - enemies can carry weapon objects; knocking an armed enemy down detaches the
   weapon, which falls to the floor and can then be collected by the player;
-- weapons have finite durability, with ground impacts contributing to wear;
+- bat/pipe have three counted uses; knife is effectively one throw arc; bottle
+  shatters once; ground settle can exhaust wear (`+$50 ≥ 3` unpickable);
 - telephone booths, crates, and other breakable scenery can reveal items or
-  weapons when destroyed.
+  weapons when destroyed (producer path still external to local prop handlers).
 
 The assembly explains these behaviors through object links and coordinated
 level records rather than through a player inventory or a generic container
@@ -355,55 +357,64 @@ floor. Ground test `$AD2A` is on-floor when `Z ≥ floor_height(map cell)`.
 Upward motion uses **negative** Z velocity. Integration is `$B20E`
 (`X += vx; Y += vy; Z += vz` as 16.16 longs).
 
-| Quantity | Knife / bottle (`$5D84`) | Pepper (`$62DA`) |
+Only **knife** and **pepper** are attack-thrown (`$21E6` → command 3). Bottle is
+held/break-on-impact and is **not** released by that path.
+
+| Quantity | Knife `$5D84` | Pepper `$62DA` |
 | --- | ---: | ---: |
-| X spawn delta | \(\pm\$30\) (±48) by facing | \(\pm\$30\) (±48) |
-| Z spawn delta | `+$10` (+16) | `+$10` (+16) |
+| X spawn delta vs **weapon** origin | \(\pm\$30\) (±48) by facing | \(\pm\$30\) (±48) |
+| Z spawn delta vs **weapon** origin | `+$10` (+16) | `+$10` (+16) |
 | \(v_x\) (`+$1C` high word) | \(\pm 16\) px/frame | \(\pm 6\) px/frame |
-| \(v_z\) (`+$24` high word) | 0 initially | `−3` (up) |
-| Gravity on \(v_z\) / frame | `+$8800` ≈ 0.53125 px/fr² | `+$A800` ≈ 0.65625 px/fr² |
+| \(v_z\) (`+$24` high word) | 0 | `−3` (up) |
+| Gravity on \(v_z\) / frame | impact/fall paths `+$8800` ≈ 0.53 px/fr² | flight `+$A800` ≈ 0.66 px/fr² |
 
-Facing-right projectiles (integer form):
+### Live measurements (Axel, Round 1, port 6969)
 
-```text
-knife/bottle:  x(t) = x0 + 48 + 16·t
-pepper:        x(t) = x0 + 48 +  6·t
-               vz(t) = -3 + a·t     (a = 0xA800/65536)
-```
+Standing feet \(Z_{\mathrm{stand}} = 160\).
 
-### Live probe (Axel, Round 1, port 6969)
-
-Standing floor plane \(Z_{\mathrm{stand}} = 160\).
-
-**Natural knife throw** (fresh ground pickup, wear 1, attack release → `$5D84`):
+#### Knife — natural ground pickup + attack throw
 
 | Quantity | Value |
 | --- | ---: |
+| Wear at throw | 1 (usable; `+$50 < 3`) |
+| Damage | 5 |
 | Hold pose (ready) | \(w_x-p_x=-5\), \(w_z-p_z \approx -59\ldots-62\) |
 | Launch \(\Delta x\) vs hold | **+48** (facing right) |
-| Launch \(\Delta z\) vs hold | **+16** |
-| Launch \(Z\) | **115** (\(Z_{\mathrm{hold}}+16\), not \(Z_{\mathrm{stand}}+16\)) |
+| Launch \(\Delta z\) vs hold | **+16** → launch \(Z=115\) |
 | \(v_x, v_z\) | **+16, 0** |
-| Flight sample | \(Z\) stays **115** while \(X\) advances; **≥160 px** horizontal from launch before sample end |
-
-So launch offsets apply to the **attached weapon origin**, not the feet:
+| Flight | \(Z\) holds **115** while \(X\) runs; **≥160 px** horizontal from launch in sample |
 
 \[
 X_{\mathrm{launch}} = X_{\mathrm{hold}} \pm 48,\quad
 Z_{\mathrm{launch}} = Z_{\mathrm{hold}} + 16,\quad
-v_x = \pm 16,\ v_z = 0
+v_x = \pm 16,\quad v_z = 0
 \]
 
-Forced launches from a ground-placed object (no attach) used \(Z_{\mathrm{stand}}+16\) and
-bounced early; the natural hold height is what matters in play.
+Offsets are relative to the **attached weapon origin**, not the feet. A
+forced launch of a ground-resting object uses that object's \(Z\) (often
+\(Z_{\mathrm{stand}}\)) and can bounce early; in play the hand attach height is
+what matters.
 
-Pepper (forced/held path earlier): \(\Delta x=\pm48\), \(\Delta z=+16\),
-\(v_x=\pm6\), \(v_z=-3\).
+#### Pipe / bat — natural equip (pipe) and swings
 
-Knife bounce on ground impact: \(v_x \leftarrow -v_x/4\) (ROM `$5D34`; live sample
-on forced path: \(-16\rightarrow+4\)).
+| Quantity | Value |
+| --- | ---: |
+| Hold pose (pipe) | \(w_x-p_x=-3\), \(w_z-p_z=-61\) |
+| Hit frames (in `$FFFB22`) | player action `$48` |
+| Max origin \(\lvert w_x-p_x\rvert\) | **36** |
+| At peak | \(w_z-p_z=-42\); damage 4 |
 
-**Bottle is not attack-thrown.** `$21E6` only commands types `$08` and `$0C`.
+Bat matched the same **36 px** origin reach in the same session. Policy commit
+band ≤36 px is therefore ROM-live for **Axel** long weapons.
+
+#### Pepper (ROM + held launch path)
+
+\(\Delta x=\pm48\), \(\Delta z=+16\), \(v_x=\pm6\), \(v_z=-3\). Immobilize: 160
+frames (`$A43E`).
+
+#### Knife bounce (ROM + forced path)
+
+On ground impact in `$5D34`: \(v_x \leftarrow -v_x/4\) (live: \(-16\rightarrow+4\)).
 
 ### Melee reach (bat / pipe)
 
@@ -422,18 +433,8 @@ X_right = X_left + u8(b1)     // width = b1
 Long melee examples: shape `$06` width 44 forward; `$07` width 44 mirrored;
 `$0C`/`$0D` width 40. Effective reach ≈ attach offset + shape extent (not a single constant).
 
-**Live (Axel, bat and pipe):** while the weapon was in the `$FFFB22` attacker
-list during action `$48`, max origin offset was
-
-\[
-|w_x - p_x| = 36 \quad (w_z - p_z = -42)
-\]
-
-so the policy ≤ 36 px band matches the **weapon origin** lag behind the player
-on connecting frames. Shape bytes observed as `(254,0)` during those frames are
-not ordinary low shape-table ids; treat origin Δx + list membership as the
-hard live signal until cel→shape mapping is fully decoded. Unarmed first-punch
-boxes (autoplay): Axel ~57, Adam ~54, Blaze ~68. Co-op ally melee exclusion 80.
+Live Axel numbers are in the probe table above. Unarmed first-punch boxes
+(autoplay): Axel ~57, Adam ~54, Blaze ~68. Co-op ally melee exclusion 80.
 
 ### Bottle shard velocities (type `$1E`)
 
@@ -490,15 +491,16 @@ settling, holder attachment, a directed throw, collision bounce, and deletion.
 The player action path at `$21E6-$222E` checks whether the carried object is type
 `$08` (or the pepper weapon `$0C`). On the attack animation's release frame it
 writes command 3 to weapon `+$51` and clears the player's carried-weapon type.
-`$5D84 (launch_released_weapon)` then detaches the knife, offsets spawn by
-\(\pm 48\) X and +16 Z, and sets \(v_x = \pm 16\). This is the straight-line
-knife throw produced by the attack button.
+`$5D84 (launch_released_weapon)` then detaches the knife, adds \(\pm 48\) X and
++16 Z to the **current held weapon origin**, and sets \(v_x = \pm 16\). Live
+Axel throw: hold \(\Delta z \approx -60\) vs feet, launch \(Z = Z_{\mathrm{hold}}+16\),
+level flight with \(v_z=0\), ≥160 px horizontal travel observed.
 
-Although `$5C66` is in the knife state table (shared three-use wear for
-bat/pipe), the player attack path throws rather than counting three held swings.
-On a solid hit the projectile is deleted; on ground settle `$5DEA` forces
-`+$50 = 3`, after which `$3136` will not re-pick it up. Effective lifetime is
-therefore **one throw arc**.
+Although `$5C66` is in the knife state table (shared with bat/pipe wear), the
+player attack path throws rather than counting three held swings. On a solid
+hit the projectile is deleted; on ground settle `$5DEA` forces `+$50 = 3`, after
+which `$3136` will not re-pick it up. Exhausted knives (`+$50 ≥ 3`) remain
+visually held but do not throw.
 
 ### Type `$09`: bottle
 
@@ -508,7 +510,7 @@ changes to broken art, plays the break sound, and spawns three objects of type
 `$1E` with the velocities in the shard table above. Object `+$54` prevents the
 shatter path from running twice.
 
-The type `$1E` children use the small debris handler at `$61BE (bottle_shard_dispatcher)`: they move under gravity and delete on ground contact. They never install damage or register as attackers (no damage). The original bottle continues through common holder/drop code until its broken state is retired. This is a one-way transition; there is no path from shards back to a collectable bottle. Launch uses the same `$5D84` path as the knife when thrown (\(v_x=\pm 16\)).
+The type `$1E` children use the small debris handler at `$61BE (bottle_shard_dispatcher)`: they move under gravity and delete on ground contact. They never install damage or register as attackers (no damage). The original bottle continues through common holder/drop code until its broken state is retired. This is a one-way transition; there is no path from shards back to a collectable bottle. `$21E6` does **not** attack-throw the bottle (only knife `$08` and pepper `$0C`).
 
 ### Types `$0A` and `$0B`: long melee weapons
 
@@ -710,19 +712,21 @@ This does not resolve the separate visual question of which ELC container owns
 every hidden reward; that relationship is external to the local type-`$19`
 dispatcher and remains correctly listed below.
 
-## Closed vs still open
+## Resolution status (combat math)
 
-| Item | Status | Evidence |
+| Topic | Status | Evidence |
 | --- | --- | --- |
-| Bottle shard damage | **Closed** | ROM: no `+$34`, no `$95CE`; play observation. |
-| Weapon `+$51` = 0..3 | **Closed** | Static writers/consumers (pickup, drop, throw, hold). |
-| Pepper immobilize length | **Closed** | `$A43E`: `+$50 = $A0` (160 frames) → `$0100`. |
-| Throw spawn \(\Delta x,\Delta z\), \(v\) | **Closed** | Live Axel R1: ±48 X, +16 Z; knife \(v_x=\pm16\); pepper \(v_x=\pm6,v_z=-3\); bounce \(-v_x/4\). |
-| Bat/pipe origin reach | **Closed (Axel)** | Live: max \(\lvert w_x-p_x\rvert=36\) while in `$FFFB22`; \(w_z-p_z=-42\). |
-| Bottle attack-throw | **Closed (no)** | `$21E6` only types `$08`/`$0C`. |
-| Adam/Blaze bat reach | **Open** | Same probe on other character IDs. |
-| Full hang-time vs map floor | **Open** | Needs floor samples from `$AD2A` across lanes/heights. |
-| Booth/crate hidden rewards | **Open** | Spawn-producer search outside `$11`/`$19` handlers. |
+| Damage 5 / 3 / 4 / 4 / 2 | **Closed** | ROM inits `$5C54`…`$627A` |
+| Knife/pepper attack throw | **Closed** | `$21E6` → `$5D84` / `$62DA`; bottle **not** thrown |
+| Launch \(\Delta x=\pm48\), \(\Delta z=+16\) vs **hold** | **Closed** | ROM + natural Axel knife |
+| Knife \(v_x=\pm16\), flight ≥160 px sample | **Closed** | Natural throw, level \(Z=115\) |
+| Pipe/bat origin reach 36 px (Axel) | **Closed** | Natural pipe equip + swings in `$FFFB22` |
+| Pepper immobilize 160 frames | **Closed** | `$A43E` timer `$A0` |
+| Shards non-damaging | **Closed** | `$61BE` no `+$34` / no `$95CE` |
+| `+$51` ∈ {0,1,2,3} | **Closed** | Static writers |
+| Adam/Blaze long-weapon reach | Deferred | Unmeasured; not required for base model |
+| Hang-time per map cell | Deferred | Launch law fixed; `$AD2A` floor varies |
+| Booth/crate reward producer | Open | Outside `$11`/`$19` handlers |
 
-See also [weapons-range-and-damage.md](weapons-range-and-damage.md) for full
-hits-to-kill tables, shape-id catalogue, and formula summary.
+Companion matrices and formulas:
+[weapons-range-and-damage.md](weapons-range-and-damage.md).
