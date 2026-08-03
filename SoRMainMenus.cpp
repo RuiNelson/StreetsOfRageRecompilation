@@ -571,6 +571,30 @@ void StreetsOfRage::initialize_player_continues(m_long /*entry_*/) {
 }
 
 // ---------------------------------------------------------------------------
+// $01199E — restore_player_continues
+//
+// ROM mid-entry of initialize_power_on_defaults and the post-wipe boot call:
+// write continues=3 for both players. The cold-boot path seeds the top-10
+// table via $12832, then clears $FFFF00-$FFFFFF (which includes that table).
+// Re-seed here so a scored death does not always qualify for the empty-table
+// name-entry path before CONTINUE? Yes/No.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::restore_player_continues(m_long /*entry_*/) {
+    traceEnter(0x0001199Eu);
+
+    memory().writeWord(kP1Continues, 3);
+    memory().writeWord(kP2Continues, 3);
+    cpu().setNZClearVC(3u, 0x8000u);
+
+    // Soft jsr enigmadec via its $12832 tail-entry (default top-10 stream).
+    // enigmadec always RTS-pops one soft frame; we then RTS to the boot caller.
+    cpu().ssp -= 4;
+    memory().writeLong(cpu().ssp, 0x000119AAu);
+    enigmadec(0x00012832u);
+    cpu().ssp += 4;
+}
+
+// ---------------------------------------------------------------------------
 // Mode wrappers ($9170-$92A8) and shared select-screen object pass ($AD8E)
 // ---------------------------------------------------------------------------
 

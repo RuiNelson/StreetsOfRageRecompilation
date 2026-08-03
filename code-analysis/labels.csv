@@ -178,6 +178,7 @@
 # Hardware / Utility Routines (addresses derived from call sites in ROM)
 00007F50, init_joypad, "100% - Initialises joypad detection; called from Init_RedScreen at game startup"
 00011992, initialize_power_on_defaults, "100% - After the cold-boot high-RAM clear, sets lives_setting=1, difficulty=Normal, and both continue counters=3; control_scheme remains zero"
+0001199E, restore_player_continues, "100% - Writes continues=3 for both players; boot also calls this after the work-RAM wipe that erases the cold-boot top-10 seed at $FF4A"
 00007F6C, init_vdp, "100% - Initialises VDP registers; first call from the hardware-init routine"
 00007FA4, runtime_vdp_register_values, "100% - B[19] - Runtime VDP register values R0-R18: planes at $C000/$E000, Window $D000, SAT $F000, h-scroll table $F400, H40 mode"
 00007FB8, reset_vdp_and_graphics_state, "100% - Reinitialises VDP registers, DMA-clears VRAM regions, clears the RAM SAT, camera structures, and both palette buffers while arbitrating the Z80 bus"
@@ -365,6 +366,7 @@
 00005334, confirm_player_continue, "100% - Applies Yes/No continue choice for the owning player; consumes a continue and rebuilds the active player on Yes"
 0000565C, reset_player_after_continue, "100% - Clears the selected player's score; normally restores configured lives, but a nonzero $FFFF35 selects the alternate threshold-index path at $5952"
 0000568A, remap_player_gameplay_input, "100% - Copies the owning joypad into object +$54 and permutes face-button bits according to control_scheme"
+000056E6, high_score_name_entry_dispatcher, "100% - Type-$0F path when object+$4B bit7 is set after resolve_player_death: dispatches object+$30 through the absolute word table at $56EE (name-entry UI). Completing name entry clears bit7 and state so the normal continue table at $5236 can run"
 00005952, apply_continue_override_threshold, "100% - Writes continue_override_threshold_table[$FFFF35] to the selected player's bonus-life threshold index and returns without resetting lives"
 0000597C, police_vehicle_dispatcher, "100% - Type-$05 police vehicle/launcher state dispatcher used by the shared camera excursion"
 0000599E, police_vehicle_initialize, "100% - Initializes type-$05 police art/animation; queues common cue 0 plus caller-specific cue $09/$0A"

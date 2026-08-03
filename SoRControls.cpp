@@ -397,6 +397,26 @@ void StreetsOfRage::remap_player_gameplay_input(m_long /*entry_*/) {
     return68k(cpu());
 }
 
+// ---------------------------------------------------------------------------
+// $0056E6 — high_score_name_entry_dispatcher
+//
+// When resolve_player_death marks object+$4B bit7 (score qualifies vs the
+// current top-10 table), the type-$0F object takes this path instead of the
+// continue table at $5236. It is a two-instruction tail into the shared state
+// dispatcher with the absolute word table at $56EE (name-entry UI). Completing
+// name entry clears bit7 and state so the next frame can run continue Yes/No.
+//
+// Must not share a body with remap_player_gameplay_input ($568A): the generator
+// previously collapsed this nearby root into that manual and broke both the
+// name-entry UI and the subsequent continue dialog.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::high_score_name_entry_dispatcher(m_long /*entry_*/) {
+    traceEnter(0x56E6u);
+    cpu().a[1] = 0x56EEu;
+    // jmp $B186 — state handler returns through the caller's soft stack frame.
+    dispatch_object_primary_state_table(0xB186u);
+}
+
 void StreetsOfRage::sample_all_joypads(m_long entry_) {
     traceEnter(entry_);
 

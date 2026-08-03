@@ -290,7 +290,7 @@ The player-mode byte is a live mask, not merely the original menu choice:
 
 When a player reaches the continue/game-over object type, the corresponding mode bit is cleared. The other player can continue alone, so one player's death does not end a two-player game.
 
-The continue UI is implemented by the dead player's object (`type $0F`) in the `$52xx-$58xx` region. Direction presses toggle the yes/no selection in object `+$63`; a face-button press confirms. `$5334 (confirm_player_continue)` selects the correct player's continue, character, and status fields:
+The continue UI is implemented by the dead player's object (`type $0F`) in the `$52xx-$58xx` region. `$5218` is the type-`$0F` object update entry: when object `+$4B` bit 7 is clear it dispatches `object+$30` through the absolute word table at `$5236` (init → continue Yes/No → confirm). When bit 7 is set (set by `$12730` from `$2B48 (resolve_player_death)` when the player's score beats the current 10th-place entry at `$FFB6`), `$5218` instead enters `$56E6 (high_score_name_entry_dispatcher)` and the `$56EE` name-entry state table. Completing name entry clears bit 7 and state so a later frame can run the normal continue table. Direction presses toggle the yes/no selection in object `+$63`; a face-button press confirms. `$5334 (confirm_player_continue)` selects the correct player's continue, character, and status fields:
 
 - choosing **No** clears the remaining continue word and marks that player as out;
 - choosing **Yes** subtracts one continue, recreates an active player object with the selected character, restores the corresponding player-mode bit, and clears the player's extra-life threshold index;

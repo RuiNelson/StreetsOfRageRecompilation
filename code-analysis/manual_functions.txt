@@ -51,6 +51,8 @@
 0092A8 # game_mode_characterselectscreen
 00AD8E # update_objects_and_build_sprites
 00568A # remap_player_gameplay_input
+0056E6 # high_score_name_entry_dispatcher
+01199E # restore_player_continues (post-boot continues + re-seed top-10)
 
 # Sound — only small, side-effect-light helpers for now.
 # The full engine/channel ticks stay generated until the native port is solid.
