@@ -31,7 +31,7 @@ Primary evidence:
 
 | Type | Name | Attack style | Init `+$34` damage | ROM init |
 | ---: | --- | --- | ---: | --- |
-| `$08` | Knife | Straight throw on attack | **5** | `$5C54`: `move.b #5, $34(a0)` |
+| `$08` | Knife | Melee **or** throw (ROM `$3084` picks `$46`/`$44`) | **5** | `$5C54`: `move.b #5, $34(a0)` |
 | `$09` | Bottle | Held / break on impact (not attack-thrown) | **3** | `$613C`: `move.b #3, $34(a0)` |
 | `$0A` | Baseball bat | Held melee swing | **4** | `$6214`: `move.b #4, $34(a0)` |
 | `$0B` | Steel pipe | Held melee swing | **4** | `$6244`: `move.b #4, $34(a0)` |
@@ -303,11 +303,12 @@ D = weapon[+$34] ∈ {5, 3, 4, 4, 2}  // knife, bottle, bat, pipe, pepper
 // Enemy KO
 hits = ceil(H / D)   // H from $26FCE; hardest difficulty H += 4
 
-// Attack-throw only: knife $08, pepper $0C  (not bottle)
+// Knife $08: $3084 picks action $46 if front object |ΔX|<$90 (144), else $44
+// Throw release ($21E6) only on family $44 for knife/pepper (not bottle)
 X_launch = X_hold ± 48
 Z_launch = Z_hold + 16
-// knife:  vx = ±16, vz = 0
-// pepper: vx = ±6,  vz = -3; then vz += 0xA800/65536 per frame
+// knife throw:  vx = ±16, vz = 0
+// pepper throw: vx = ±6,  vz = -3; then vz += 0xA800/65536 per frame
 
 // Knife bounce on ground impact
 vx := -vx / 4
@@ -329,7 +330,7 @@ Adam/Blaze long-weapon reach, per-cell hang-time, booth/crate loot producer.
 | Claim | Status | Evidence |
 | --- | --- | --- |
 | Damage 5/3/4/4/2 | Closed | ROM inits |
-| Knife/pepper throw; bottle not attack-thrown | Closed | `$21E6`, live knife |
+| Knife melee `$46` / throw `$44` split | Closed | `$3084` scan `$90`; `$21E6` on `$44` |
 | Launch vs **hold** ±48 X, +16 Z | Closed | `$5D84`/`$62DA` + natural knife |
 | Knife flight ≥160 px sample, \(Z=115\) | Closed | natural throw |
 | Pipe/bat origin reach 36 (Axel) | Closed | natural pipe + bat |

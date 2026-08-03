@@ -491,16 +491,21 @@ settling, holder attachment, a directed throw, collision bounce, and deletion.
 The player action path at `$21E6-$222E` checks whether the carried object is type
 `$08` (or the pepper weapon `$0C`). On the attack animation's release frame it
 writes command 3 to weapon `+$51` and clears the player's carried-weapon type.
-`$5D84 (launch_released_weapon)` then detaches the knife, adds \(\pm 48\) X and
-+16 Z to the **current held weapon origin**, and sets \(v_x = \pm 16\). Live
-Axel throw: hold \(\Delta z \approx -60\) vs feet, launch \(Z = Z_{\mathrm{hold}}+16\),
-level flight with \(v_z=0\), ≥160 px horizontal travel observed.
+`$3084 (player_held_object_attack_input)` chooses the player action on B:
 
-Although `$5C66` is in the knife state table (shared with bat/pipe wear), the
-player attack path throws rather than counting three held swings. On a solid
-hit the projectile is deleted; on ground settle `$5DEA` forces `+$50 = 3`, after
-which `$3136` will not re-pick it up. Exhausted knives (`+$50 ≥ 3`) remain
-visually held but do not throw.
+- **`$46`** if any object is in front within **`$90` (144)** px and lane
+  `[Y−12, Y+12]` — **melee/stab** (weapon stays held; can deal damage without
+  releasing);
+- **`$44`** otherwise — **throw** anim.
+
+`$21E6 (player_release_thrown_weapon)` only launches on family **`$44`** for
+types `$08`/`$0C` (release frame). `$5D84` then adds \(\pm 48\) X and +16 Z to
+the held origin and sets \(v_x=\pm 16\). Live Axel throw: launch
+\(Z=Z_{\mathrm{hold}}+16\), level flight, ≥160 px travel observed.
+
+On a solid hit the projectile is deleted; ground settle `$5DEA` can force
+`+$50 = 3` (unpickable). Exhausted knives (`+$50 ≥ 3`) may remain held but do
+not usefully attack/throw.
 
 ### Type `$09`: bottle
 
