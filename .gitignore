@@ -11,3 +11,4 @@ code-analysis/speculative_addresses.txt
 controls.yaml
 /call-map.sqlite
 /tools/__pycache__
+/tests/__pycache__
