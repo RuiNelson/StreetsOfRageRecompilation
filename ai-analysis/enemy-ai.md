@@ -1231,7 +1231,7 @@ back.
 | --- | ---: | --- |
 | Normal punch damage | 1 | player `+$34` while `$18` runs (~10 damaging frames) |
 | Back attack damage | 3 | player `+$34` while `$20` runs (Axel: 10 damaging frames from frame 3; per-character chord timing in `controls-and-input.md`) |
-| Back attack box `+$70` | player X −7..+3, Y ±8 | direct read; a contact move, not a reaching one |
+| Back attack box `+$64` | Axel X −40..−8, Y ±8 | direct read of the attack box (`+$70` is the body box) |
 | Punch reach vs a twin | **28–52 px** | teleport sweep: miss 8/12/16/20/24, hit 28…52, miss 56+ |
 | Twin health at the encounter | 22 | `+$32` |
 | Twin contact damage | 32 of an 80 HP bar | player health delta on a landed throw |

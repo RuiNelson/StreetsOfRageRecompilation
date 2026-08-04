@@ -57,8 +57,8 @@ P1 is always the object at `$FFB800 (p1_object)`; P2 is always at `$FFB880 (p2_o
 | `+$5E` | word | Pointer to the object currently grabbed/held. | High. |
 | `+$60` | byte | Grabbed-object type / nonzero "holding target" indicator. | High. |
 | `+$61`-`+$63` | bytes | Combo/grab continuation state and timers. | Medium. |
-| `+$64..+$7B` | 24 bytes | Current body collision box. | High. |
-| `+$70..+$7B` | 12 bytes | Overlapping attack/contact box used by player-vs-player collision. | High. |
+| `+$64..+$6F` | 12 bytes | Current **attack** box (X, lane Y, Z pairs) from box id `+$02`. Zero when the frame has no attack. | High. |
+| `+$70..+$7B` | 12 bytes | Current **body** box from box id `+$03`; this is what an attacker's box is tested against. | High. |
 | `+$7C`, `+$7D` | bytes | Collision result and reaction selector. | High. |
 | `+$7E` | word | Object responsible for the current hit/contact. | High. |
 
@@ -158,7 +158,7 @@ per frame even in a one-player game. The routine immediately returns unless:
 - no police special is active;
 - both players have valid collision-state entries.
 
-It alternates which player is tested first, compares one player's body box (`+$64`) with the other's attack box (`+$70`), and writes reciprocal pointers to `+$7E`. If the attacker has a nonzero `+$34`, the high nibble of the attack descriptor becomes the other player's reaction (`+$7D`). With no damaging attack active, the same collision machinery negotiates push/grab reactions instead.
+It alternates which player is tested first, compares the attacker's attack box (`+$64`) with the other player's body box (`+$70`), and writes reciprocal pointers to `+$7E`. If the attacker has a nonzero `+$34`, the high nibble of the attack descriptor becomes the other player's reaction (`+$7D`). With no damaging attack active, the same collision machinery negotiates push/grab reactions instead.
 
 ## Receiving damage and health
 

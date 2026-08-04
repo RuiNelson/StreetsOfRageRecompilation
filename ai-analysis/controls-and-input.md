@@ -201,6 +201,28 @@ converted into pickup, while Y alone requests
 `$3136 (find_close_interaction_target)`. Start is no longer overloaded for
 pickup and always reaches the normal Start path.
 
+### Measured normal punch
+
+Same method as the chord below: one B edge from grounded idle `$02`, attack
+box `+$64` and `+$34` sampled every frame, facing right.
+
+| Character | Startup | Damaging frames | Damage | Attack box `+$64` |
+|---|---:|---|---:|---|
+| Axel | 3 | 3 – 12 (10 frames) | 1 | X +16..+57, Y ±8 |
+| Adam | 3 | 3 – 12 (10 frames) | 1 | X +8..+54, Y ±8 |
+| Blaze | 5 | 5 – 14 (10 frames) | 1 | X +18..+68, Y ±8 |
+
+Two things this settles. The punch has an **inner** edge as well as an outer
+one: a body that has closed inside +16 (Axel) / +8 (Adam) / +18 (Blaze) is
+never touched by it, which is why a foe standing on the player can be punched
+at repeatedly for nothing. And Blaze trades two extra frames of wind-up for
+the longest reach, while Adam has both the shortest reach and the widest
+usable band.
+
+Reach is measured to the box edge; a hit needs the victim's body box (`+$70`,
+about 13 px wide) to overlap, so the usable centre-to-centre distance runs a
+few pixels past the numbers above.
+
 ### Attack+jump chord versus jump-kick
 
 Two different moves share the same face buttons. The order of presses decides
@@ -219,17 +241,21 @@ strictly sequential: jump edge first, attack edge only after free flight.
 
 The chord is not instant, and its timeline is not shared between characters.
 Measured live: lockstep host at one frame per step, the B+C edge issued on
-frame 0, then object `+$30` (action), `+$0A` (animation frame), and `+$34`
-(outgoing damage) sampled every frame until the player returns to idle.
+frame 0 from grounded idle `$02`, then object `+$30` (action), `+$0A`
+(animation frame), `+$34` (outgoing damage) and the attack box `+$64` sampled
+every frame until the player returns to idle. Boxes are relative to the player
+origin while facing right, so the rear box is negative X.
 
-| Character | Action | Startup | Damaging frames | Damage | Recovers |
-|---|---|---:|---|---:|---:|
-| Axel | `$20` | 3 | 3 – 12 (10 frames) | 3 | idle `$02` at 17 |
-| Blaze | `$20` | 7 | 7 – 23 (17 frames) | 2 | idle `$02` at 30 |
-| Adam | `$22` → `$24` | 23 | 23 – 43 (21 frames) | 3 | lands `$14` at 44 |
+| Character | Action | Startup | Damaging frames | Damage | Attack box `+$64` | Recovers |
+|---|---|---:|---|---:|---|---:|
+| Axel | `$20` | 3 | 3 – 12 (10 frames) | 3 | X −40..−8, Y ±8 | idle `$02` at 15 |
+| Blaze | `$20` | 7 | 7 – 22 (16 frames) | 2 | X −53..−5, Y ±8 | idle `$02` at ~29 |
+| Adam | `$22` → `$24` | 21 | 21 – 38 (18 frames) | 3 | X −42..+14, Y ±8 | lands `$14` at 39 |
 
 Startup is the frame the first nonzero `+$34` appears; the move connects only
-with a body inside the attack box during the damaging span.
+with a body inside the attack box during the damaging span. An earlier pass
+recorded Adam 23/21 and Blaze 7/17 — the same move sampled with a different
+press width; treat the frame counts as ±2.
 
 Three consequences for anything that issues this chord:
 
@@ -244,9 +270,12 @@ Three consequences for anything that issues this chord:
 - **Damage is per character** — 3 / 2 / 3. The commonly quoted "back attack
   does 3" is Axel's number.
 
-The attack box `+$70` is player X −7..+3 by Y ±8: a contact move centred on
-the player's own body, not a reaching one. Compare the jump-kick boxes below,
-which are offset well in front of the player.
+The chord genuinely reaches behind the player: Axel covers 8–40 px of his own
+back, Blaze 5–53 px, and Adam's hop box spans 42 px behind through 14 px in
+front. `$450C` compares the attacker's `+$64` against the victim's `+$70`, so
+`+$64` is the **attack** box and `+$70` is the **body** box — an idle player's
+`+$70` is X +0..+13, Y ±8, which is what a body-sized reading of this move was
+actually observing.
 
 ## Jump and jump-kick (ROM physics)
 
@@ -355,15 +384,19 @@ Free flight (anim `$10`) has **0** damage on frame 0. A duel flag at
 
 ### Kick hitboxes
 
-`$4140` builds body (`+$64`) and attack (`+$70`) AABBs from anim frame box IDs
-into tables `$1ABA8` / `$1AB8E`. Jump-kick attack boxes (relative to the
-player origin; bit0 of action selects facing):
+`$4140` builds the attack AABB (`+$64`, from box id `+$02`) and the body AABB
+(`+$70`, from box id `+$03`) out of anim frame box IDs and tables `$1ABA8` /
+`$1AB8E`. The direction is fixed by `$450C`, which tests the attacker's `+$64`
+against the victim's `+$70` and only then reads the attacker's `+$34`.
+
+Jump-kick attack boxes measured live from `+$64` during action `$16`
+(relative to the player origin; bit0 of action mirrors X):
 
 | Char | Facing right (bit0=0) | Facing left (bit0=1) |
 |---|---|---|
-| Axel | x[+6..+16] y[−8..+8] z[−52..−38] | x[−16..−6] y[−8..+8] z[−52..−38] |
-| Adam | x[+10..+21] y[−8..+8] z[−49..−33] | x[−21..−10] y[−8..+8] z[−49..−33] |
-| Blaze | x[−8..+3] y[−8..+8] z[−48..−28] | x[−3..+8] y[−8..+8] z[−48..−28] |
+| Axel | x[+14..+42] y[−8..+8] z[−46..−19] | x[−42..−14] y[−8..+8] z[−46..−19] |
+| Adam | x[+17..+72] y[−8..+8] z[−43..−14] | x[−72..−17] y[−8..+8] z[−43..−14] |
+| Blaze | x[+3..+49] y[−8..+8] z[−38..−6] | x[−49..−3] y[−8..+8] z[−38..−6] |
 
 Lane half-width is about **8** pixels. The Z band sits high on the body, so a
 kick connects best while the player is not at maximum apex against a grounded
