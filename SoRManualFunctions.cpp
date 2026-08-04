@@ -90,6 +90,9 @@ void StreetsOfRage::game_infinite_loop(m_long entry_) {
     traceEnter(0x03A2u);
 
     while (!shouldQuit()) {
+        // Alt/Option+T: Round 5 → Onihime/Yasha (CPU thread; idle if unarmed).
+        SoRCheats::tickTwinsBossWarp(memory());
+
         // moveq #0,d0 / move.w (game_state).w,d0 / add.w d0,d0
         const m_word state       = memory().readWord(kGameState);
         const m_word tableOffset = static_cast<m_word>(state + state);

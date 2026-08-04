@@ -16,13 +16,33 @@ constexpr m_long kP2Object         = 0xFFFFB880u;
 constexpr m_long kP1Lives          = 0xFFFFFF20u;
 constexpr m_long kP1SpecialAttacks = 0xFFFFFF21u;
 constexpr m_long kObjectTable      = 0xFFFFB900u;
+constexpr m_long kLevelIntroActive = 0xFFFFFA1Fu;
+constexpr m_long kWaveAdvancePending = 0xFFFFFA0Du;
+constexpr m_long kLevelSpawnFlowFlags = 0xFFFFFA05u;
+constexpr m_long kActiveProgressionEntityCount = 0xFFFFFB1Eu;
+constexpr m_long kLevelPipelineState = 0xFFFFFB15u;
+constexpr m_long kLevelPipelineTimer = 0xFFFFFB16u;
+constexpr m_long kElcSpawnStreamCursor = 0xFFFFFC14u;
+constexpr m_long kElcBuffer          = 0x00FF6800u;
+constexpr m_long kPrimaryCameraX     = 0xFFFFE002u; // 16.16
+constexpr m_long kCameraXMax         = 0xFFFFE01Au; // 16.16
+constexpr m_long kCameraXMin         = 0xFFFFE01Eu; // 16.16
 constexpr m_word kLevelIntroState  = 0x0028u;
 // Even values are init states; the loop then advances to the update mode (+2).
 constexpr m_word kEndingBadInit    = 0x001Cu; // init_ending_bad
 constexpr m_word kEndingGoodInit   = 0x0024u; // init_ending_good
+constexpr m_word kInGameInitState  = 0x0014u;
+constexpr m_word kInGameUpdateState = 0x0016u;
 constexpr int    kLevelCount       = 8;
 constexpr int    kObjectSlotCount  = 32;
 constexpr m_long kObjectSlotSize   = 0x80u;
+// Round 5 (level index 4): late/boss path when wave >= 5. Twin timed ELC
+// records sit at buffer offset $2F2 after the six regular wave blocks.
+constexpr int    kTwinsLevelIndex  = 4;
+constexpr m_word kTwinsBossWave    = 5u;
+constexpr m_long kTwinsElcOffset   = 0x2F2u;
+// Final forward camera bound for rounds 1–7 ($195D8 table last real entry).
+constexpr m_long kRoundEndCameraX  = 0x13C0u;
 
 constexpr m_long kObjectPrimaryStateOffset = 0x30u;
 constexpr m_long kObjectHealthOffset       = 0x32u;
@@ -126,7 +146,170 @@ int killInstantiatedEnemies(SystemMemory &memory) {
     return killed;
 }
 
+int killOrdinaryEnemiesOnly(SystemMemory &memory) {
+    const m_long activePlayer = activePlayerObject(memory);
+    const m_word attacker = static_cast<m_word>(activePlayer != 0u ? activePlayer : kP1Object);
+    int killed = 0;
+
+    for (int slot = 0; slot < kObjectSlotCount; ++slot) {
+        const m_long object = kObjectTable + static_cast<m_long>(slot) * kObjectSlotSize;
+        const m_byte type = memory.readByte(object);
+        if (!isOrdinaryEnemy(type))
+            continue;
+        memory.writeByte(object + 0x37u, memory.readByte(object + 0x37u) | 0x02u);
+        memory.writeWord(object + kObjectHealthOffset, 0xFFFFu);
+        memory.writeWord(object + kObjectPrimaryStateOffset, 0x0300u);
+        memory.writeWord(object + 0x3Eu, attacker);
+        ++killed;
+    }
+    return killed;
+}
+
+int countLiveTwins(SystemMemory &memory) {
+    int count = 0;
+    for (int slot = 0; slot < kObjectSlotCount; ++slot) {
+        const m_long object = kObjectTable + static_cast<m_long>(slot) * kObjectSlotSize;
+        if (memory.readByte(object) != 0x58u)
+            continue;
+        const m_word health = memory.readWord(object + kObjectHealthOffset);
+        if (health >= 0x8000u)
+            continue;
+        ++count;
+    }
+    return count;
+}
+
+void snapCameraAndPlayerToX(SystemMemory &memory, m_long worldX) {
+    const m_long x16 = worldX << 16;
+    memory.writeLong(kPrimaryCameraX, x16);
+    memory.writeLong(kCameraXMax, x16);
+    // Keep a short locked arena behind the camera so the player can still walk.
+    const m_long minX = worldX > 0x80u ? (worldX - 0x80u) : 0u;
+    memory.writeLong(kCameraXMin, minX << 16);
+
+    if (memory.readByte(kP1Object) == 1u) {
+        memory.writeLong(kP1Object + 0x10u, (worldX + 0x40u) << 16);
+    }
+    if (memory.readByte(kP2Object) == 1u) {
+        memory.writeLong(kP2Object + 0x10u, (worldX + 0x30u) << 16);
+    }
+}
+
 } // namespace
+
+namespace SoRCheats {
+
+// Multi-frame Alt+T follow-up: Round 5 intro clears wave, so the twins fight is
+// reached by fast-forwarding corridors until the late phase (wave >= 5) and the
+// type-$58 pair materializes. Runs on the CPU thread from game_infinite_loop.
+void tickTwinsBossWarp(SystemMemory &memory) {
+    enum class Phase : std::uint8_t {
+        Idle = 0,
+        WaitPlayable,
+        SkipCorridors,
+        WaitTwins,
+    };
+    static Phase phase = Phase::Idle;
+    static int waitFrames = 0;
+
+    if (twinsBossWarpRequested()) {
+        clearTwinsBossWarpRequest();
+        phase = Phase::WaitPlayable;
+        waitFrames = 0;
+        Logger::log("[cheat] twins warp armed — waiting for Round 5 gameplay");
+    }
+    if (phase == Phase::Idle)
+        return;
+
+    const m_word state = memory.readWord(kGameState);
+    const m_word level = memory.readWord(kLevel);
+    const bool inGame =
+        state == kInGameInitState || state == kInGameUpdateState;
+    const bool introBusy = memory.readByte(kLevelIntroActive) != 0u;
+
+    if (phase == Phase::WaitPlayable) {
+        if (level != static_cast<m_word>(kTwinsLevelIndex) || !inGame || introBusy)
+            return;
+        phase = Phase::SkipCorridors;
+        waitFrames = 0;
+        Logger::log("[cheat] twins warp: skipping Round 5 corridors");
+    }
+
+    if (phase == Phase::SkipCorridors) {
+        if (level != static_cast<m_word>(kTwinsLevelIndex) || !inGame) {
+            phase = Phase::Idle;
+            return;
+        }
+
+        killOrdinaryEnemiesOnly(memory);
+        // Unblock spawn/wave gates that wait for scripted entity drain.
+        memory.writeWord(kActiveProgressionEntityCount, 0u);
+
+        const m_word wave = memory.readWord(kWave);
+        if (wave < kTwinsBossWave) {
+            // Open the next corridor and pin the camera at the current max so
+            // advance_wave_camera_boundary / scroll-lock can complete.
+            m_long targetX = memory.readLong(kCameraXMax) >> 16;
+            if (targetX == 0u || targetX >= 0x8000u)
+                targetX = 0x4C0u;
+            snapCameraAndPlayerToX(memory, targetX);
+            memory.writeByte(kWaveAdvancePending,
+                             static_cast<m_byte>(memory.readByte(kWaveAdvancePending) | 0x01u));
+            ++waitFrames;
+            if (waitFrames > 60 * 45) {
+                // Safety: force late-phase threshold if the pipeline stalls.
+                memory.writeWord(kWave, kTwinsBossWave);
+                Logger::log("[cheat] twins warp: forced wave=%u after stall",
+                            static_cast<unsigned>(kTwinsBossWave));
+            }
+            return;
+        }
+
+        // Late phase: ensure boss-phase flag and seed the twins timed ELC tail.
+        memory.writeByte(
+            kLevelSpawnFlowFlags,
+            static_cast<m_byte>(memory.readByte(kLevelSpawnFlowFlags) | 0x40u));
+        snapCameraAndPlayerToX(memory, kRoundEndCameraX);
+        memory.writeLong(kElcSpawnStreamCursor, kElcBuffer + kTwinsElcOffset);
+        // $04 = process_timed_spawn_records in level_pipeline_jt.
+        memory.writeByte(kLevelPipelineState, 0x04u);
+        memory.writeWord(kLevelPipelineTimer, 0u);
+        phase = Phase::WaitTwins;
+        waitFrames = 0;
+        Logger::log("[cheat] twins warp: late phase — waiting for type $58 pair");
+        return;
+    }
+
+    if (phase == Phase::WaitTwins) {
+        if (level != static_cast<m_word>(kTwinsLevelIndex) || !inGame) {
+            phase = Phase::Idle;
+            return;
+        }
+        killOrdinaryEnemiesOnly(memory);
+        memory.writeWord(kActiveProgressionEntityCount, 0u);
+        snapCameraAndPlayerToX(memory, kRoundEndCameraX);
+
+        const int twins = countLiveTwins(memory);
+        if (twins >= 2) {
+            Logger::log("[cheat] twins warp complete (%d live type $58)", twins);
+            phase = Phase::Idle;
+            return;
+        }
+
+        // Keep re-arming the timed-spawn pipeline until both bodies appear.
+        memory.writeLong(kElcSpawnStreamCursor, kElcBuffer + kTwinsElcOffset);
+        memory.writeByte(kLevelPipelineState, 0x04u);
+        if ((waitFrames & 0x0F) == 0)
+            memory.writeWord(kLevelPipelineTimer, 0u);
+        ++waitFrames;
+        if (waitFrames > 60 * 20) {
+            Logger::log("[cheat] twins warp timed out with %d type $58", twins);
+            phase = Phase::Idle;
+        }
+    }
+}
+
+} // namespace SoRCheats
 
 StreetsOfRage::~StreetsOfRage() {
     if (callLog_ != nullptr)
@@ -226,15 +409,14 @@ void StreetsOfRage::handleOptionHotkey(OptionHotkeyCode keyCode) {
                         static_cast<unsigned>(kEndingBadInit));
             return;
         case SDLK_T: {
-            // Alt+T — jump to Round 5 (Onihime/Yasha twins). Level index is
-            // 0-based; key 5 / index 4 is the twins stage.
-            constexpr int kTwinsLevelIndex = 4;
+            // Alt+T — Round 5 intro, then CPU-thread warp skips to the twins
+            // boss (late phase / type $58 pair). Level intro clears wave, so
+            // the skip runs from game_infinite_loop after gameplay starts.
             memory().writeWord(kLevel, static_cast<m_word>(kTwinsLevelIndex));
             memory().writeWord(kWave, 0);
             memory().writeWord(kGameState, kLevelIntroState);
-            Logger::log("[cheat] loading twins stage (level %d of %d)",
-                        kTwinsLevelIndex + 1,
-                        kLevelCount);
+            SoRCheats::requestTwinsBossWarp();
+            Logger::log("[cheat] loading Round 5 and warping to twins boss");
             return;
         }
         default:

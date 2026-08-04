@@ -2,6 +2,8 @@
 
 #include "data_types.hpp"
 
+class SystemMemory;
+
 namespace SoRCheats {
 
 constexpr m_long kP1Object             = 0x00FFB800u;
@@ -19,6 +21,13 @@ bool altPickupButtonPressedForObject(m_long objectAddress);
 void clearAltPickupButtons();
 void requestFreePoliceCall(m_long objectAddress);
 bool consumeFreePoliceCall(m_long objectAddress);
+
+/// Alt/Option+T: after Round 5 is playable, skip corridors until Onihime/Yasha.
+void requestTwinsBossWarp();
+bool twinsBossWarpRequested();
+void clearTwinsBossWarpRequest();
+/// CPU-thread tick (game_infinite_loop). Idle when no warp is armed.
+void tickTwinsBossWarp(SystemMemory &memory);
 
 constexpr m_byte adjustP1PunchDamage(m_long objectAddress, m_byte damage, bool enabled) {
     if (!enabled || (objectAddress & 0x00FFFFFFu) != kP1Object)
