@@ -12,7 +12,6 @@ std::atomic_bool    altAttackPressed_[2] = {false, false};
 std::atomic_bool    altPickupHeld_[2]    = {false, false};
 std::atomic_bool    altPickupPressed_[2] = {false, false};
 std::atomic<m_long> freePoliceCaller_{0};
-std::atomic_bool    twinsBossWarpRequested_{false};
 
 static_assert(adjustP1PunchDamage(kP1Object, 1u, true) == 12u);
 static_assert(adjustP1PunchDamage(kP1Object, 2u, true) == kMaximumAttackDamage);
@@ -86,18 +85,6 @@ void requestFreePoliceCall(m_long objectAddress) {
 
 bool consumeFreePoliceCall(m_long objectAddress) {
     return freePoliceCaller_.compare_exchange_strong(objectAddress, 0u, std::memory_order_acq_rel);
-}
-
-void requestTwinsBossWarp() {
-    twinsBossWarpRequested_.store(true, std::memory_order_release);
-}
-
-bool twinsBossWarpRequested() {
-    return twinsBossWarpRequested_.load(std::memory_order_acquire);
-}
-
-void clearTwinsBossWarpRequest() {
-    twinsBossWarpRequested_.store(false, std::memory_order_release);
 }
 
 } // namespace SoRCheats
