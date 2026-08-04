@@ -1220,6 +1220,40 @@ Difficulty scales punishment rather than durability: Hard and Hardest double
 contact damage to `$40`, while health only reaches `$25` on Hardest. Denial
 beats trading damage.
 
+##### Measured strike geometry (live, Round 5, Axel)
+
+The gates above say where the twins may commit; these are the matching numbers
+for what the *player* can land on them. Method: lockstep host, P1 written to a
+fixed offset from a live twin, one button edge, boss health word `+$32` read
+back.
+
+| Quantity | Value | How measured |
+| --- | ---: | --- |
+| Normal punch damage | 1 | player `+$34` while `$18` runs (~10 damaging frames) |
+| Back attack damage | 3 | player `+$34` while `$20` runs (10 damaging frames) |
+| Back attack box `+$70` | player X −7..+3, Y ±8 | direct read; a contact move, not a reaching one |
+| Punch reach vs a twin | **28–52 px** | teleport sweep: miss 8/12/16/20/24, hit 28…52, miss 56+ |
+| Twin health at the encounter | 22 | `+$32` |
+| Twin contact damage | 32 of an 80 HP bar | player health delta on a landed throw |
+
+Two consequences that are not obvious from the gate table:
+
+- **The punch has a near dead zone.** A body that has closed inside ~28 px is
+  not hit by it. Because `$15A64` makes the twins cover the last ~94 px
+  airborne and land *on* the player, the naive "walk in and press B" loop
+  spends the whole fight swinging inside that dead zone. Landing on top of the
+  player is their standard outcome, so the punish is: step back into 28–52
+  first, then swing.
+- **A grounded twin inside punch range does not happen by waiting.** Observed
+  approach loop: land, idle ~20 frames, walk in to ~94 px, jump. They never
+  walk closer than the jump-attack trigger, so the only grounded window is the
+  post-landing idle after `$15ABA`, and it must be closed into deliberately.
+
+At 1 damage per punch and 3 per back attack against 22 HP × 2 bodies, with 32
+damage per mistake, the police special's flat 10 per boss is not a bonus but
+the bulk of a realistic kill: one call while both live removes 20 of the 44
+total.
+
 #### Summary of the algorithm
 
 1. Spawn two type-`$58` objects; link them; seed role into `+$7B`.
