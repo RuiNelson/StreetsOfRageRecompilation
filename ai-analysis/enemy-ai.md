@@ -722,7 +722,7 @@ Primary-state table at `$158D8` (absolute ROM addresses, high word forced to
 | `$04` | `$164CA` | Shared recovery continuation |
 | `$05` | `$164FC` | Shared lethal / death gate |
 | `$06`–`$09` | `$1659A`…`$16B88` | Shared grabbee / throw / airborne cleanup paths |
-| `$0A` | `$16A60` | Shared police-special reaction (fixed −10 HP) |
+| `$0A` | `$16A60 (later_boss_police_special_reaction)` | Shared police-special reaction (fixed −10 HP) |
 
 Family-specific AI lives almost entirely in states `$00`–`$02`. States `$03+`
 are the later-boss framework shared with Antonio/Souther/Bongo.
@@ -995,17 +995,27 @@ Tactical grab table `$15BE0`:
 Grab-commit helper `$15BE8`:
 
 ```text
-if target unavailable: return
+if +$77 == 0: return                    # target AVAILABLE ⇒ no leap
 if X dist >= $90: return
 if screen-space X not in ($80, $1C0): return
 +$78 = 0; +$67 = 3; start_anim($40)     # leap-to-grab arm
 ```
 
+The `+$77` test is `tst.b $77(a0) / bne` — the helper proceeds **only when the
+target is unavailable**, the opposite polarity of the finalize path `$15B2A`
+and of the approach commit window in `$159F8`, which both require `+$77 == 0`.
+`$179F8` sets `+$77 = 1` for a player in hurt/knockdown/death states
+`$5A`–`$5F` or carrying the `+$59`/`+$4B` bit-1 interaction flags, so this
+leap is a **pounce on an already staggered player**, not a general approach.
+
 Facing-aware jump-in `$15C72` (when closing for a grab):
 
 ```text
-# Prefer jump when X < $40, or when $40..$70 and coplanar on ground,
-# with velocity-sign / facing agreement tests against the player.
+# Prefer jump when X < $40, or when $40..$70 and the player is on the ground.
+# Both paths then require the player's X velocity to point toward the boss and
+# the player facing bit (+$09 bit 1) to agree with the side sign +$60; the two
+# side branches are exact mirrors, so the net condition is "the player is
+# closing on, and facing, the boss".
 if should_jump:
     +$67 = 2; +$78 = 0
     +$24 = $FFF60000                   # stronger upward impulse than approach jump
@@ -1021,7 +1031,7 @@ flowchart TD
     TG -->|0| G0["$15C18 hold / maybe drop grab mode"]
     TG -->|1| G1["$15C60 chase"]
     TG -->|2| G2["$15CE0 height bob → land"]
-    G0 --> HC{"$15BE8 commit window?\nX<$90, screen X mid"}
+    G0 --> HC{"$15BE8 commit window?\ntarget staggered +$77!=0,\nX<$90, screen X mid"}
     HC -->|yes| LEAP["+$67=3, anim $40"]
     G0 --> JC{"$15C72 jump-in?"}
     G1 --> JC
@@ -1120,11 +1130,11 @@ flowchart LR
 
 Key interactions with the shared framework:
 
-- **Forced reactions** `$16A1A`: if `$FFFA53` is set, a living twin outside
+- **Forced reactions** `$16A1A`: if `$FFFA53 (boss_forced_reaction_flags)` is set, a living twin outside
   states `$00` and `$03`–`$09` is forced into the reaction path. Pair role
   selects which bit of the flag byte is consumed, so both twins are not always
   yanked on the same frame.
-- **Police special** `$16AEC` → state `$0A`: same −10 damage path as Antonio,
+- **Police special** `$16AEC (later_boss_enter_police_special_reaction)` → state `$0A`: same −10 damage path as Antonio,
   Souther, and Bongo.
 - **Death** `$16512` path awards score, calls `$17F9C (boss_unlink_pair)`, and
   frees the slot. The survivor’s next `select_target` no longer cares about a
@@ -1151,6 +1161,64 @@ Key interactions with the shared framework:
 | `+$79` | Active throw variant mirrored to player `+$7D` |
 | `+$7A` | Toggle used when dropping grab mode |
 | `+$7B` | Mode flags; **bit 1 = grab/throw AI path** (seeded from role) |
+
+#### Derived player strategy
+
+This subsection is guidance derived from the gates documented above, not new
+ROM evidence. Every twin transition is decided by distance windows, target
+state, and fixed frame timers; the family draws no RNG. The gates therefore
+compose into a deterministic denial map.
+
+**Focus one twin.** The pair is two independent objects with separate health
+(`$20` each on Normal), separate state machines, no shared pool, and **no
+low-health enrage**. `$17F9C (boss_unlink_pair)` only relaxes role gating on
+the survivor. Killing one removes half the incoming pressure at no cost.
+
+**Kill the grab twin first.** Role 2 starts with `+$7B` bit 1 set and is the
+only grab source while the pair is linked: the approach twin can promote to
+the grab path only when `+$5D == 0`, which requires its partner to be dead
+already. Identify it in the opening seconds — the grabber closes and leaps
+with the grab arm (`anim $40`), while the approach twin does the lane-crossing
+hop.
+
+| Threat | Gate | Denial |
+|---|---|---|
+| Approach twin throw commit (`+$30` → 2, `$159F8`) | `+$77 == 0`, lane `+$52` ∈ [`$10`,`$20`), X `+$50` < `$70` | Stay coplanar (lane < `$10`) or more than `$20` off-lane; the half-step diagonal is the trigger band. X ≥ `$70` also denies it. |
+| Approach twin jump attack (`$15A64`) | X `+$50` < `$60`, unconditional otherwise | Distance only. At X ≥ `$60` the approach twin has no attack: substate `$00` idles ten ticks, then substate `$01` walks. |
+| Grabber leap-to-grab (`$15BE8`) | `+$77 != 0` (player staggered), X < `$90`, screen X in (`$80`,`$1C0`) | Do not take hits near the grabber; it only arms while the player is in `$5A`–`$5F` or flagged interaction/invulnerable. |
+| Grabber jump-in (`$15C72`) | X < `$40`, or `$40`–`$70` with the player grounded, closing, and facing the boss | Never walk into the grabber. Retreating or facing away fails the velocity/facing agreement. |
+| Grab finalize (`$15B2A`) | contact result `d7 == 1`, `+$77 == 0`, at least one body grounded | Jumping does not help unless the boss is airborne too; only the both-airborne case aborts. |
+
+The practical standoff is X in `$60`–`$90`: the approach twin cannot attack at
+all, and the grabber must walk in under its own power. Punish it as it closes,
+then step back out rather than pressing forward.
+
+Fixed timelines give three reliable punish windows:
+
+- **Jump attack** `$15ABA`: `+$78` ticks 1–3 are pure wind-up; the launch at
+  tick 4 commits a ballistic arc from the lane sign `+$61` and cannot steer.
+  Change lane, then punish the landing, which resets `+$67 = 0, +$30 = 1`.
+- **Whiffed throw** `$15D0C`: the timer runs to `$2C` before returning to
+  state 1, with no cancel path.
+- **Held-throw** `$15E06`: fixed at `$16` or `$2E` ticks by variant.
+
+Two force multipliers:
+
+- **Police special** (`$16AEC (later_boss_enter_police_special_reaction)` → `$16A60 (later_boss_police_special_reaction)`) deals a flat 10 damage to every
+  living boss once per event, after 300 updates for P1 or 390 for P2. Spend it
+  while both twins live: 20 total damage, and the focus target drops from `$20`
+  to `$16`, roughly a third off the first kill. Holding it for the survivor
+  halves its value. The Round 8 boss rush cannot use it because player
+  initialization forces both special counters to zero.
+- **Two players**: `$15946 (onihime_yasha_select_target)` is nearest-X with the
+  sticky lock `+$74`, cleared only in approach substate `$00`, so aggro is
+  decided when a twin idles and then holds for the whole approach. `$179F8`
+  skips hurt or downed players. The stable split is one player holding the
+  nearer standoff to own both locks while the other flanks the focus target.
+
+Difficulty scales punishment rather than durability: Hard and Hardest double
+contact damage to `$40`, while health only reaches `$25` on Hardest. Denial
+beats trading damage.
 
 #### Summary of the algorithm
 
