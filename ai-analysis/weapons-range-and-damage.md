@@ -15,10 +15,10 @@ Primary evidence:
 
 | Topic | Location |
 | --- | --- |
-| Knife / shared wear & throw | `$5C1E`, `$5C66`, `$5D34`, `$5D84`, `$5DEA` |
-| Bottle / shards | `$6114`, `$614E`, `$61BE` |
-| Bat / pipe | `$61F6`, `$6226` (`move.b #4, +$34`) |
-| Pepper throw / smoke | `$6256`, `$62DA`, `$6312`, `$6372` |
+| Knife / shared wear & throw | `$5C1E (knife_weapon_dispatcher)`, `$5C66`, `$5D34`, `$5D84 (launch_released_weapon)`, `$5DEA` |
+| Bottle / shards | `$6114 (bottle_weapon_dispatcher)`, `$614E (break_bottle_into_shards)`, `$61BE (bottle_shard_dispatcher)` |
+| Bat / pipe | `$61F6 (baseball_bat_weapon_dispatcher)`, `$6226 (steel_pipe_weapon_dispatcher)` (`move.b #4, +$34`) |
+| Pepper throw / smoke | `$6256 (pepper_spray_weapon_dispatcher)`, `$62DA (throw_pepper_spray)`, `$6312`, `$6372 (emit_pepper_smoke_sequence)` |
 | Pickup search box | `$3136 (find_close_interaction_target)` |
 | Attacker registration | `$95CE` / `$95E8` (`$FFFB22` list) |
 | Box test | `$ABA4` / `$ABF8` / `$AC78`, shapes `$1A68E` |
@@ -31,7 +31,7 @@ Primary evidence:
 
 | Type | Name | Attack style | Init `+$34` damage | ROM init |
 | ---: | --- | --- | ---: | --- |
-| `$08` | Knife | Melee **or** throw (ROM `$3084` picks `$46`/`$44`) | **5** | `$5C54`: `move.b #5, $34(a0)` |
+| `$08` | Knife | Melee **or** throw (ROM `$3084 (player_held_object_attack_input)` picks `$46`/`$44`) | **5** | `$5C54`: `move.b #5, $34(a0)` |
 | `$09` | Bottle | Held / break on impact (not attack-thrown) | **3** | `$613C`: `move.b #3, $34(a0)` |
 | `$0A` | Baseball bat | Held melee swing | **4** | `$6214`: `move.b #4, $34(a0)` |
 | `$0B` | Steel pipe | Held melee swing | **4** | `$6244`: `move.b #4, $34(a0)` |
@@ -40,7 +40,7 @@ Primary evidence:
 Damage ranking (raw): **knife 5 > bat/pipe 4 > bottle 3 > pepper 2**.
 
 Player max health is **80** (`$50`). Ordinary-enemy health is a small byte
-loaded from `$26FCE` (see §6). Police special deals a fixed **10** to supported
+loaded from `$26FCE (ordinary_enemy_combat_value_table)` (see §6). Police special deals a fixed **10** to supported
 bosses (separate system).
 
 ---
@@ -64,7 +64,7 @@ attacker = ptr(enemy[+0x3E]);
 enemy.health -= attacker[+0x34];   // word health at +$32, subtract byte damage
 ```
 
-Same field is used against players via `apply_player_damage` (prefer attacker
+Same field is used against players via `$351E (apply_player_damage)` (prefer attacker
 `+$34`, else deferred `+$56`).
 
 ### Pepper special case
@@ -94,17 +94,17 @@ path; they remain the constants in §1.
 | Weapon | Rule | Code |
 | --- | --- | --- |
 | Bat, pipe (and shared path) | `+$50` is a use counter. While `+$50 < 3` and command `+$51 == 1`, each held-use entry does `+$50++` and continues. When `+$50 >= 3`, weapon retires (hide, timer `+$56 = $10` frames, then delete). | `$5C66` |
-| Knife | Same wear routine is in the state table, but player attack **throws** (command `+$51 = 3` → `$5D84`). On solid hit the object is deleted; on ground settle `$5DEA` forces `+$50 = 3` (no longer pickable). Effective lifetime is one throw arc, not three swings. | `$5D34`, `$5DEA`, `$21E6` |
-| Bottle | One-way shatter: first impact sets `+$54`, swaps art, spawns **3** type-`$1E` shards, no re-collect as bottle. | `$614E` |
-| Pepper | `+$50` used for effect lifecycle (thrown instance can force `+$50 = 3` on special anims). Canister becomes timed smoke emitter. | `$6270+`, `$6328` |
+| Knife | Same wear routine is in the state table, but player attack **throws** (command `+$51 = 3` → `$5D84 (launch_released_weapon)`). On solid hit the object is deleted; on ground settle `$5DEA` forces `+$50 = 3` (no longer pickable). Effective lifetime is one throw arc, not three swings. | `$5D34`, `$5DEA`, `$21E6 (player_release_thrown_weapon)` |
+| Bottle | One-way shatter: first impact sets `+$54`, swaps art, spawns **3** type-`$1E` shards, no re-collect as bottle. | `$614E (break_bottle_into_shards)` |
+| Pepper | `+$50` used for effect lifecycle (thrown instance can force `+$50 = 3` on special anims). Canister becomes timed smoke emitter. | `$6270+`, `$6328 (begin_pepper_smoke_emission)` |
 
-Pickup eligibility (`$3136`): weapon free (`+$51 == 0`) and **`+$50 < 3`**.
+Pickup eligibility (`$3136 (find_close_interaction_target)`): weapon free (`+$51 == 0`) and **`+$50 < 3`**.
 
 ---
 
 ## 4. Geometry: pickup, throw spawn, speeds
 
-### 4.1 Pickup / grab search box (`$3136`)
+### 4.1 Pickup / grab search box (`$3136 (find_close_interaction_target)`)
 
 Accept first matching object slot whose **origin** lies in:
 
@@ -240,7 +240,7 @@ Adam/Blaze unmeasured (deferred).
 
 ## 6. Hits-to-kill (ordinary enemies)
 
-Enemy init (`$93CE`): health low byte from `$26FCE`, index
+Enemy init (`$93CE (ordinary_enemy_init_combat_values)`): health low byte from `$26FCE (ordinary_enemy_combat_value_table)`, index
 `6*(type−$20) + variant`. Highest difficulty adds **+4** to health and to the
 enemy’s own contact damage.
 
@@ -274,7 +274,7 @@ Add 4 to every \(H\) above, then re-ceil. Examples (variant 0):
 | Jack `$27` | 13 | 3 | 5 | 4 | 7 |
 
 Boss HP and weapon interaction are separate (boss damage paths at
-`$17C36` etc.); not expanded here.
+`$17C36 (boss_apply_pending_damage)` etc.); not expanded here.
 
 ---
 
@@ -330,12 +330,12 @@ Adam/Blaze long-weapon reach, per-cell hang-time, booth/crate loot producer.
 | Claim | Status | Evidence |
 | --- | --- | --- |
 | Damage 5/3/4/4/2 | Closed | ROM inits |
-| Knife melee `$46` / throw `$44` (same B) | Closed | `$3084` front cone `$90`; `$21E6` only on `$44` |
-| Launch vs **hold** ±48 X, +16 Z | Closed | `$5D84`/`$62DA` + natural knife |
+| Knife melee `$46` / throw `$44` (same B) | Closed | `$3084 (player_held_object_attack_input)` front cone `$90`; `$21E6 (player_release_thrown_weapon)` only on `$44` |
+| Launch vs **hold** ±48 X, +16 Z | Closed | `$5D84 (launch_released_weapon)`/`$62DA (throw_pepper_spray)` + natural knife |
 | Knife flight ≥160 px sample, \(Z=115\) | Closed | natural throw |
 | Pipe/bat origin reach 36 (Axel) | Closed | natural pipe + bat |
 | Pepper immobilize 160 fr | Closed | `$A43E` |
-| Shards no damage | Closed | `$61BE` |
+| Shards no damage | Closed | `$61BE (bottle_shard_dispatcher)` |
 | `+$51` 0..3 | Closed | static |
 
 ## 10. Evidence checklist
@@ -343,13 +343,13 @@ Adam/Blaze long-weapon reach, per-cell hang-time, booth/crate loot producer.
 | Claim | Evidence |
 | --- | --- |
 | Damage 5/3/4/4/2 | `$5C54`, `$613C`, `$6214`, `$6244`, `$627A` |
-| Knife \(v_x=\pm16\); pepper \(v_x=\pm6,v_z=-3\) | `$5D84`, `$62DA`; live knife |
+| Knife \(v_x=\pm16\); pepper \(v_x=\pm6,v_z=-3\) | `$5D84 (launch_released_weapon)`, `$62DA (throw_pepper_spray)`; live knife |
 | Launch vs hold origin | natural Axel knife: hold→launch +48 X, +16 Z |
 | Bounce \(-v_x/4\) | `$5D34`; forced live −16→+4 |
 | Bat/pipe 36 px (Axel) | natural pipe in `$FFFB22`, action `$48` |
 | Wear three uses (bat/pipe) | `$5C66` |
-| Pickup ±20/±16/±8 | `$3136` |
-| Enemy HP table | `$26FCE` + `$93CE` |
+| Pickup ±20/±16/±8 | `$3136 (find_close_interaction_target)` |
+| Enemy HP table | `$26FCE (ordinary_enemy_combat_value_table)` + `$93CE (ordinary_enemy_init_combat_values)` |
 | Pepper `$0400` + 160 fr | `$9C1E` → `$A43E` `$A0` |
-| Shards inert | `$61BE` no `+$34` / `$95CE` |
+| Shards inert | `$61BE (bottle_shard_dispatcher)` no `+$34` / `$95CE` |
 | Attacker list | `$95CE` / `$FFFB22` |
