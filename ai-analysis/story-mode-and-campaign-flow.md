@@ -334,7 +334,7 @@ The offer state is used in two ways:
 The control-table interpretation is now 100% confirmed by its two independent
 consumers. `$11B54` distinguishes values `0`, `1`, and `2` to release control,
 set the player-lock bits, or zero player input respectively. `$120F6` tests bit
-7 of the same indexed byte before accepting the left/right/face-button choice.
+7 of the same indexed byte before accepting the up/down/face-button choice.
 The ROM bytes contain ordinary `$01/$02/$00` phases plus `$81` choice-enabled
 phases, so `$120AA (mr_x_offer_control_table)` is a per-state control/choice
 policy table rather than code or dialogue data.
@@ -345,7 +345,7 @@ The observable phases include:
 - loading art and text;
 - opening and closing the visible scene area through VDP register `$92xx`;
 - drawing dialogue one character at a time;
-- allowing left/right selection and confirmation;
+- allowing up/down selection and face-button confirmation;
 - comparing both players' choices in 2P mode;
 - enabling `$FFFA43 (duel_damage_modifier)` during a P1-versus-P2 duel;
 - returning to normal combat or marking the narrative outcome.
@@ -377,7 +377,13 @@ The ROM jump and control tables establish the raw route matrix completely.
 `$120EC (poll_mr_x_offer_player_choice_input)` is called from every player
 update but returns immediately unless object `+$59` bit 4 marks that player's
 Mr. X offer-choice UI as active. Only then does it own per-player selection and
-confirm handling.
+confirm handling. It reads **held** `object+$54` (then clears that word):
+
+- held **UP** (bit 0) clears `+$59` bit 3 → YES;
+- held **DOWN** (bit 1) sets `+$59` bit 3 → NO;
+- any held face bits in `$70` (attack/jump/special after remap = B/C/A)
+  register the choice and set `+$59` bit 5.
+
 `object+$59` bit 3 is the selected side in each choice UI:
 
 | Phase | P1 bit 3 | P2 bit 3 | Static route |
