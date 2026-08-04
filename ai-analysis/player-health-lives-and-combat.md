@@ -134,6 +134,33 @@ player.hit_property = (descriptor >> 4);          // merged into object +$42
 
 The exact table layout is compact and partly self-indexing, but the behavioral result is unambiguous: `+$34 == 0` means the current pose does not inflict damage; a nonzero low nibble is the amount applied on a valid collision. The high nibble is later used to select the victim's reaction/knockdown response.
 
+### Measured back-attack timing (attack+jump chord)
+
+Frame-exact timeline of the `$322A` chord, read live: lockstep host at one
+frame per step, the B+C edge issued on frame 0, then `+$30` (action), `+$a`
+(animation frame), and `+$34` (outgoing damage) sampled every frame.
+
+| Character | Action | Startup | Damaging frames | Damage | Recovers |
+| --- | --- | ---: | --- | ---: | ---: |
+| Axel | `$20` | 3 | 3 – 12 (10 frames) | 3 | idle `$02` at 17 |
+| Blaze | `$20` | 7 | 7 – 23 (17 frames) | 2 | idle `$02` at 30 |
+| Adam | `$22` → `$24` | 23 | 23 – 43 (21 frames) | 3 | lands `$14` at 44 |
+
+Three things this settles:
+
+- **The move is not instant, and the startup is not shared.** Adam's is nearly
+  eight times Axel's, so any code that issues the chord when a target is
+  already in range is early for Axel and hopelessly early for Adam — the
+  target walks through the hitbox during the wind-up.
+- **Adam's chord is a different move.** It runs `$22` into `$24` and ends in a
+  landing state (`$14`), i.e. a hop, not the standing backfist the other two
+  get. Callers that assume the `$20` family miss it entirely.
+- **Damage is per character**, 3/2/3 — the commonly quoted "back attack does
+  3" is Axel's number.
+
+The box itself is `+$70` = player X −7..+3 by Y ±8: a contact move centred on
+the player's own body, not a reaching one.
+
 The forced P1-versus-P2 fight enables
 `$FFFA43 (duel_damage_modifier)`. `$41EA (compute_player_attack_descriptor)`
 then transforms the descriptor exactly as follows:
