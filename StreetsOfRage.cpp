@@ -225,6 +225,18 @@ void StreetsOfRage::handleOptionHotkey(OptionHotkeyCode keyCode) {
             Logger::log("[cheat] starting bad ending (game_state=$%04X)",
                         static_cast<unsigned>(kEndingBadInit));
             return;
+        case SDLK_T: {
+            // Alt+T — jump to Round 5 (Onihime/Yasha twins). Level index is
+            // 0-based; key 5 / index 4 is the twins stage.
+            constexpr int kTwinsLevelIndex = 4;
+            memory().writeWord(kLevel, static_cast<m_word>(kTwinsLevelIndex));
+            memory().writeWord(kWave, 0);
+            memory().writeWord(kGameState, kLevelIntroState);
+            Logger::log("[cheat] loading twins stage (level %d of %d)",
+                        kTwinsLevelIndex + 1,
+                        kLevelCount);
+            return;
+        }
         default:
             break;
     }
