@@ -215,6 +215,39 @@ which one the ROM selects:
 priority chain, so a simultaneous B+C chord never becomes a jump. Jump-kick is
 strictly sequential: jump edge first, attack edge only after free flight.
 
+#### Measured chord timing
+
+The chord is not instant, and its timeline is not shared between characters.
+Measured live: lockstep host at one frame per step, the B+C edge issued on
+frame 0, then object `+$30` (action), `+$0A` (animation frame), and `+$34`
+(outgoing damage) sampled every frame until the player returns to idle.
+
+| Character | Action | Startup | Damaging frames | Damage | Recovers |
+|---|---|---:|---|---:|---:|
+| Axel | `$20` | 3 | 3 – 12 (10 frames) | 3 | idle `$02` at 17 |
+| Blaze | `$20` | 7 | 7 – 23 (17 frames) | 2 | idle `$02` at 30 |
+| Adam | `$22` → `$24` | 23 | 23 – 43 (21 frames) | 3 | lands `$14` at 44 |
+
+Startup is the frame the first nonzero `+$34` appears; the move connects only
+with a body inside the attack box during the damaging span.
+
+Three consequences for anything that issues this chord:
+
+- **The wind-up is long and uneven.** Adam's is nearly eight times Axel's. A
+  caller that presses B+C once the target is already in range arms the hit
+  after the target has walked through the box — early for Axel, hopelessly
+  early for Adam.
+- **Adam's chord is a different move.** `$322A (player_attack_jump_chord)` selects `$20 + facing`, but
+  Adam's action table routes it through `$22` into `$24` and ends in the
+  landing state `$14`: a hop, not the standing backfist Axel and Blaze get.
+  Code that pattern-matches the `$20` family alone misses it entirely.
+- **Damage is per character** — 3 / 2 / 3. The commonly quoted "back attack
+  does 3" is Axel's number.
+
+The attack box `+$70` is player X −7..+3 by Y ±8: a contact move centred on
+the player's own body, not a reaching one. Compare the jump-kick boxes below,
+which are offset well in front of the player.
+
 ## Jump and jump-kick (ROM physics)
 
 This section is the mathematical model of the unarmed jump-kick. Addresses are
