@@ -593,11 +593,14 @@ Antonio uses the family-C table rooted near `$16CF4`. Initialization at
 from `$2E8B4`, and discovers a same-type partner if the ELC supplied one.
 
 The tactical code keeps wider spacing than the close-range bosses and selects
-an attack when X is roughly `$28-$78` and lane separation is small. `$17206`
-creates/maintains linked object `$96`; `$16C6E` positions that object from the
-parent's animation phase and facing. The link is the code-side implementation
-of the visible boomerang choreography: the attack object follows Antonio during
-wind-up/catch phases and becomes independently active during the throw.
+an attack when X is roughly `$28-$78` and lane separation is small.
+
+**Correction:** an earlier version of this section attributed the boomerang's
+positioning to `$16C6E`. That address is actually Souther's own claw-object
+positioning routine (his creation path at `$16C42` writes type `$98`, not
+`$96`) — a plausible mix-up given the two are structurally similar and sit
+back-to-back in ROM. Antonio's own boomerang link/positioning is traced below
+instead.
 
 The target selector at `$16D40 (antonio_select_target)` has explicit pair-role thresholds in 2P. This
 is used by the optional extra/variant record as well as by repeated Round 8
@@ -645,6 +648,63 @@ it actually a kick?) and the exact semantics of `+$31(target)` bit 1; both
 need a live trace or framebuffer capture. autoplay's `phases.py` has been
 updated to decode primary state 2 as `CombatPhase.ATTACKING` unconditionally
 for type `$56` on this evidence.
+
+#### Boomerang linked object (`$96`)
+
+`$17206 (antonio_boomerang_link_or_spawn)` scans forward through the object
+table for a free slot and initializes a new type-`$96` object there: palette
+byte from `+$4A`, a shared parent-link value at `+$4C`, and a hitbox/damage
+descriptor `$225C` at `+$E`. It then falls into two helpers shared with
+Souther's own claw-object creation path (confirmed because Souther's
+`$16C42` calls the first one too):
+
+- `$17238 (boss_link_child_object)` — writes reciprocal `+$6E` pointers
+  between parent and child, copies the parent's target pointer `+$64`, and
+  sets child flags `+$1=$0C`.
+- `$1724C (boss_init_child_animation)` — loads the animation-set pointer
+  (passed in `d2`; Antonio's boomerang and Souther's claw each pass their own
+  table) into the child's `+$4` and initializes its animation frame.
+
+State 1 calls `$17206 (antonio_boomerang_link_or_spawn)` again on later ticks (not just on first creation)
+whenever tactical `<6`, a linked object already exists and is active, and
+tactical is not `6` or `7`. The exact intent of that repeat call — most
+plausibly re-arming a fresh boomerang once a full throw/return cycle
+completes — is not confirmed (70%).
+
+The child object runs its own top-level update,
+`$17262 (antonio_linked_attack_dispatcher)`, dispatched through a table at
+`$17272` keyed by the child's own primary state. Confirmed and
+lower-confidence pieces of that state machine:
+
+- `$1727A (antonio_boomerang_attached_timer)`: decrements a timer at the child's `+$7B`; reaching 0 despawns the
+  object via the shared 32-byte clear at `$171F8`. Confidence 65% — this
+  reads as an attached/wind-up timeout, but the exact state it belongs to in
+  the child's own primary-state numbering is not confirmed.
+- `$17286 (antonio_boomerang_reverse_and_return)`: reverses and scales down
+  the child's X-velocity (`asr.l #3` then negate — the return arc), sets the
+  return countdown `+$7B=$0B`, advances the child to primary state 3, and
+  plays a sound. Confidence 80%.
+- `$172B2 (antonio_boomerang_catch_check_a)` / `$17320 (antonio_boomerang_catch_check_b)` — near-duplicate collision/catch checks via the shared
+  `sub_0000AA22` contact routine (outcome `d7`: 3 clears a hit latch at
+  `+$7C`, 1 sets `+$7D`, 2 re-enters the reverse state above). On sustained
+  contact each advances the child's state via a `+$6B` countdown and copies
+  the parent's lane into the child's `+$52`. `$17320 (antonio_boomerang_catch_check_b)` additionally applies a
+  small lane-distance-gated velocity nudge before checking facing-angle exit
+  bounds at `+$28`. Why Antonio's boomerang has two similar catch-check
+  routines instead of one shared path is not confirmed. Confidence 65%.
+- `$173D8 (antonio_boomerang_follow_parent_animation)`: positions the child
+  from the parent's current animation-frame index (`+$A` on the parent,
+  looked up in a per-frame dx/dy/dz offset table at `$17494`) while attached
+  or in flight, plays a catch sound, and advances the child's own primary
+  state when that frame index changes. This is Antonio's actual equivalent
+  of Souther's `$16C6E` corrected above. Confidence 75%.
+
+Net effect matches the visible choreography this section already described:
+the boomerang follows Antonio out, reverses into a return arc, and is
+collision-checked back into his hand. The exact primary-state numbering for
+the child object, and which sub-states are actually a visible thrown
+projectile versus a still-attached prop, remain the open item already
+tracked below (needs framebuffer/VRAM tracing, not just static disassembly).
 
 ### Souther (`$55`, `$15E70 (souther_update)`)
 
