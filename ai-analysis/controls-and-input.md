@@ -454,6 +454,129 @@ From a partner hold, `$2FE4` can enter higher jump actions (`$76` / `$80`
 family). That path is a co-op boost, not the ordinary ground C→B kick, but the
 airborne attack edge rule is the same once free flight is reached.
 
+## Grab, hold, throw, and post-throw landing
+
+Hold and throw inputs are resolved from the same logical object bits as free
+play (`+$54` held, `+$55` edge). The stable front/back hold actions that accept
+new B/C edges are `$60`/`$61` (front) and `$66`/`$67` (back). Grab animation
+locks such as `$62`/`$64`/`$68`/`$6A`/`$6C`/`$6E` ignore fresh attack edges.
+
+### Player holding an enemy: knee vs throw (`$2BA8`)
+
+While the player is in a confirmed hold, `$2BA8` resolves a new logical attack
+edge (bit 4 of `+$55`):
+
+| Logical input | Result | Player action |
+|---|---|---|
+| **B alone**, or **B+Up**, or **B+Down** | Knee | `$6A` |
+| **B + forward** (same side as facing bit 0 of `+$30`) | Knee | `$6A` |
+| **B + back** (Left/Right opposite facing) | Throw | Axel/Adam `$62`; Blaze `$64` |
+
+Only the **Left/Right** mask `$0C` of held input participates in the throw
+test. **Up and Down are ignored.** Therefore **B+Up is not a special throw**:
+without a back L/R chord it is identical to B alone (knee).
+
+Other hold inputs (not confused with B+Up):
+
+| Input | Result |
+|---|---|
+| **C** on front hold `$60` | Crossover / reverse hold (`$76` / `$80` family → back hold `$66`) |
+| **B** on confirmed back hold `$66` | Suplex `$68` |
+| **B+C** chord while holding | Held-target rear/escape family `$4A` via `$322A` |
+
+Live autoplay contract matches this: knees from B alone; throws from **B+back**.
+
+### Player held by an enemy: counter is C then B
+
+Enemy-held player actions are `$78` (acquire) → `$7A` (held) → optional
+crossover `$7C` → counter throw `$7E`. Handlers `$2606` and `$26B0` implement
+the protocol:
+
+1. **C edge** in `$7A` starts crossover `$7C` (unless the holder is in excluded
+   states such as twin type `$58` mid-crossover).
+2. Completing `$7C` sets `+$58` bit 7 and loads an eight-tick window in `+$62`,
+   then returns to `$7A`.
+3. **B edge** while that window is open enters counter throw `$7E`.
+
+This is a **two-edge sequence**, not a B+C chord and not B+Up. Up does not
+appear in the counter path.
+
+### Ordinary enemy throw of the player (no air control)
+
+Typical street-enemy throw choreography:
+
+```text
+player held $78 → $7A
+  reaction +$7D = 4  (from holder)
+    → $25DE: action $84 (scripted carry phases via $291E / +$40)
+      final phase $29D0:
+        small ±vx, vz = $FFFC0000 (−4.0), action $72|$facing
+        apply deferred damage from +$56
+          → free flight $72: handler $2A10 = gravity only ($E800/frame)
+          → floor land $3E78 / $3F24: bounce then recovery $54 → $5E → idle
+```
+
+During `$72` (and ordinary launch `$5C` without the tech flag) the state
+handlers **do not read** `+$54`/`+$55`. There is no mid-air D-pad steer, no
+jump-kick (`$3914` is free-flight `$12` only), and **B+Up does nothing**.
+
+`$3F24` bounce/recovery for action families `$5C`, `$72`, and `$88`:
+
+1. first floor contact → bounce (invert and halve `vz`, `+$40` bounce counter);
+2. after enough bounces (`+$40` reaches 2) → grounded recovery **`$54`** with
+   `+$41 = 10`, then **`$5E`**, then return toward idle.
+
+### C+Up landing tech (bounce cancel)
+
+A separate, narrow tech can skip the knockdown bounce and land like a jump:
+
+| Piece | Contract |
+|---|---|
+| Input | **Up held** (`+$54` bit 0) **and** **C edge** (`+$55` bit 5) |
+| Arm flag | player `+$45 = 1` |
+| Latch | `+$46 = 1` (clears `+$45`) |
+| Land effect | if `+$46` set at `$3F24`, branch to `$3EDC` → action **`$14`** (~5-frame jump land → idle `$02`) instead of bounce → `$54` |
+
+Sampling windows (player collision path `$3B00` → `$3CE2`):
+
+- rising (`vz < 0`): `$3D12`;
+- floor-test path: `$3D64` (same C-edge + Up test when `+$45` is set).
+
+C must be a **fresh edge** while Up is held; holding C from before the window
+without a new press does not satisfy `$55` bit 5.
+
+#### Who arms `+$45`
+
+Only selected throw-release handlers set `+$45` when they launch into **`$5C`**:
+
+| Choreography action | Handler | Launch |
+|---|---|---|
+| `$82` / `$8E` | `$284A` | `$34CA` → `$5C` + horizontal velocity + **`+$45 = 1`** |
+| `$88` | `$28A2` | same pattern + **`+$45 = 1`** |
+| `$8C` | `$2AA4` | `$5C` + **`+$45 = 1`** only if `+$44` bit 0 is set |
+
+Those choreography states are entered from the **held** reaction table at
+`$24CC` (action `$78` dispatcher), for example reaction **6** → `$82`,
+**9** → `$88`, **11** → `$8C` (boss / special hold reactions).
+
+The ordinary enemy path `$7A` reaction **4** → `$84` → `$72` (**`$29D0`**)
+**does not** write `+$45`. C+Up is therefore inert on a normal street throw.
+
+`$34CA` alone (shared launch into `$5C` with `vz = $FFFB0000`) also does **not**
+set `+$45`; only the callers above arm the tech flag after that launch.
+
+#### Practical summary
+
+| Situation | B+Up in air | C+Up in air |
+|---|---|---|
+| Player holding foe | Knee if no back L/R; not a throw | N/A (ground hold) |
+| Player held by foe | No counter (use C then B) | No counter |
+| Ordinary enemy throw (`$72`, no `+$45`) | No effect | No effect |
+| Special throw into `$5C` with `+$45` | No effect | Bounce cancel → land `$14` |
+
+B+Up is never the landing tech. After OPTIONS remap or `--altControls`, the
+logical jump bit remains bit 5, so the tech is still **logical C + Up**.
+
 ## Start, pause, and joining
 
 Start is intentionally not part of the configurable face-button remap. In
@@ -497,6 +620,16 @@ while the main pause path only considers players whose bits are already set in
 | `$3914` | Free-flight attack edge → jump-kick action `$16`. |
 | `$41EA (compute_player_attack_descriptor)` | Per-frame kick damage / reaction nibbles. |
 | `$4140` / `$1ABA8` | Body and attack AABB construction. |
-| `$442C` / `$3E78` | Position integrate and ground landing → `$14`. |
+| `$442C` | Position integrate (`+$1C`/`+$20`/`+$24` → `+$10`/`+$14`/`+$18`). |
+| `$3B00` / `$3CE2` | Per-frame vertical collision: rising `$3D12`, floor dispatch `$3D5C`. |
+| `$3D12` / `$3D64` | C-edge + Up held while `+$45` set → latch `+$46` (landing tech). |
+| `$3E78` / `$3F24` | Floor land for throw-air families; bounce or tech branch. |
+| `$3EDC` | Tech land: clear `vz`, action `$14` (jump-land recovery). |
+| `$2BA8` | Hold B edge: knee `$6A` vs back throw `$62`/`$64` (L/R only; Up ignored). |
+| `$2606` / `$26B0` | Enemy-held counter: C → `$7C` window, then B → `$7E`. |
+| `$25DE` / `$291E` / `$29D0` | Ordinary throw choreography `$84` → launch `$72`. |
+| `$284A` / `$28A2` / `$2AA4` | Special throw releases that arm `+$45` into `$5C`. |
+| `$34CA` | Shared launch into action `$5C` with `vz = $FFFB0000`. |
+| `$2FE4` | Partner-hold C → vault jump `$76`/`$80`. |
 | `$10D2E (handle_pause_start_input)` | Start buffering, pause toggle, and demo abort. |
 | `$115CC (update_join_and_continue_hud)` | Inactive-player Start join and continue HUD path. |
