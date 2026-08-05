@@ -603,6 +603,15 @@ The target selector at `$16D40 (antonio_select_target)` has explicit pair-role t
 is used by the optional extra/variant record as well as by repeated Round 8
 encounters; it is not evidence for a story-level second Antonio in every mode.
 
+**User-reported, not yet ROM-address-confirmed:** Antonio has a strong kick
+power attack that can break a player who is mid-combo or mid-grab. This is
+plausibly the dash-like commit already noted in `phases.py` (tactical `$08`,
+`$16E88`) rather than a third distinct move, but that has not been verified
+against a live trace or the `$16DA0`/`$171CC` disassembly (see the "confirmed
+entry points" ledger below). Record the exact primary/tactical state and
+whether it is the same commit as the charge, or separate, next time this
+fight is traced live.
+
 ### Souther (`$55`, `$15E70 (souther_update)`)
 
 Souther's selector at `$16294 (souther_select_target)` is the most elaborate of the four shared
@@ -1432,6 +1441,10 @@ registers combat objects; the engine advances the campaign.
 4. Match each raw `object+$59` selection bit to the exact displayed answer text
    in both Mr. X prompts; the static route matrix itself is now decoded in the
    story-flow manuscript.
+5. Confirm Antonio's user-reported combo/grab-breaking kick against the
+   `$16DA0` (state 1, active combat/dash commit) and `$171CC` (state 2)
+   disassembly: is it the tactical `$08` charge already noted, or a distinct
+   move that needs its own primary/tactical values recorded?
 
 ### Boss analysis-data update ledger
 
