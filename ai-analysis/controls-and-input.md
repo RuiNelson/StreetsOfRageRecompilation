@@ -482,7 +482,7 @@ Other hold inputs (not confused with B+Up):
 |---|---|
 | **C** on front hold `$60` | Crossover / reverse hold (`$76` / `$80` family → back hold `$66`) |
 | **B** on confirmed back hold `$66` | Suplex `$68` |
-| **B+C** chord while holding | Held-target rear/escape family `$4A` via `$322A` |
+| **B+C** chord while holding | Held-target rear/escape family `$4A` via `$322A (player_attack_jump_chord)` |
 
 Live autoplay contract matches this: knees from B alone; throws from **B+back**.
 

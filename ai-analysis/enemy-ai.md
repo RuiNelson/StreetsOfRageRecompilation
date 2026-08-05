@@ -589,7 +589,7 @@ sets both player special counters to zero.
 ### Antonio (`$56`, `$16CE4 (antonio_update)`)
 
 Antonio uses the family-C table rooted near `$16CF4`. Initialization at
-`$16D0A` selects a player, initializes stats through `$17EDC (boss_init_combat_stats)`, loads animations
+`$16D0A (antonio_state0_init)` selects a player, initializes stats through `$17EDC (boss_init_combat_stats)`, loads animations
 from `$2E8B4`, and discovers a same-type partner if the ELC supplied one.
 
 The tactical code keeps wider spacing than the close-range bosses and selects
@@ -603,14 +603,48 @@ The target selector at `$16D40 (antonio_select_target)` has explicit pair-role t
 is used by the optional extra/variant record as well as by repeated Round 8
 encounters; it is not evidence for a story-level second Antonio in every mode.
 
-**User-reported, not yet ROM-address-confirmed:** Antonio has a strong kick
-power attack that can break a player who is mid-combo or mid-grab. This is
-plausibly the dash-like commit already noted in `phases.py` (tactical `$08`,
-`$16E88`) rather than a third distinct move, but that has not been verified
-against a live trace or the `$16DA0`/`$171CC` disassembly (see the "confirmed
-entry points" ledger below). Record the exact primary/tactical state and
-whether it is the same commit as the charge, or separate, next time this
-fight is traced live.
+#### Body state machine (states 0-2) and the user-reported power kick
+
+Antonio's own body cycles three primary states, distinct from the linked
+boomerang's own sub-state machine below:
+
+- **State 0** — `$16D0A (antonio_state0_init)`: selects a target, initializes
+  combat stats/animation, advances to state 1.
+- **State 1** — `$16DA0 (antonio_state1_active_combat)`: turns to face the
+  target (tactical `$09` while the target is outside the facing cone at
+  `+$28`); once facing, maintains the linked boomerang object every tick
+  while tactical `>=6`; arms tactical `$08` (the boomerang wind-up/throw
+  commit, `$16E88`) when target X-distance `+$50` is in `[$28,$78)` and
+  `+$52<$14` — this is the existing "dash-like commit" already decoded as
+  `CombatPhase.CHARGE` in `phases.py`, and matches the `$28-$78` attack
+  window this section already described for the boomerang.
+- **State transition 1→2** (`$16F0E`, inside state 1): independently of the
+  boomerang arm, advances `+$30` from 1 to 2 when the target is within a
+  distance/velocity/facing-gated window: target X-velocity `+$1C(target)`
+  (its sign relative to Antonio's own facing `+$60`), target flag
+  `+$31(target)` bit 1 (facing or action flag, not yet named), and distance
+  thresholds `$50`/`$68`/`$78` selected by that branch — reached whether the
+  target is closing, standing still, or retreating within range. A **target
+  velocity of exactly zero is one of the trigger paths**, which is the
+  player's own signature while throwing a stationary ground combo. Antonio
+  plays a distinct animation (index 4, vs. the dash's index 0) via
+  `sub_0001588A` on this transition.
+- **State 2** — `$171CC (antonio_state2_close_strike)`: a short committed
+  action — tactical is cleared to 0 on entry, so the pre-existing
+  tactical-based `CHARGE`/`ATTACKING` heuristic **cannot see this state at
+  all**; it applies pending damage and runs until object `+$0A` reaches 8,
+  then returns to state 1.
+
+This state-1→2 transition is a strong, ROM-grounded match for the
+user-reported "power kick that can break a player's combo or grab": it is a
+short, separately-animated commit, gated on the target's own
+velocity/facing rather than pure distance the way the boomerang arm is, and
+specifically fires while the target is stationary — as a player is while
+mid-combo. What is **not** yet confirmed is the move's visual identity (is
+it actually a kick?) and the exact semantics of `+$31(target)` bit 1; both
+need a live trace or framebuffer capture. autoplay's `phases.py` has been
+updated to decode primary state 2 as `CombatPhase.ATTACKING` unconditionally
+for type `$56` on this evidence.
 
 ### Souther (`$55`, `$15E70 (souther_update)`)
 
@@ -1441,10 +1475,12 @@ registers combat objects; the engine advances the campaign.
 4. Match each raw `object+$59` selection bit to the exact displayed answer text
    in both Mr. X prompts; the static route matrix itself is now decoded in the
    story-flow manuscript.
-5. Confirm Antonio's user-reported combo/grab-breaking kick against the
-   `$16DA0` (state 1, active combat/dash commit) and `$171CC` (state 2)
-   disassembly: is it the tactical `$08` charge already noted, or a distinct
-   move that needs its own primary/tactical values recorded?
+5. Antonio's primary state 2 (`$171CC antonio_state2_close_strike`, entered
+   from state 1 at `$16F0E`) is now a strong candidate for the user-reported
+   combo/grab-breaking power kick — see the "Body state machine" subsection
+   under Antonio above. Still needs a live trace or framebuffer capture to
+   confirm the move's visual identity and to name target-object flag `+$31`
+   bit 1, which gates part of the state-1→2 transition.
 
 ### Boss analysis-data update ledger
 
