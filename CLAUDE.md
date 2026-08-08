@@ -119,7 +119,18 @@ include temporary candidates that do not belong in a normal build.
 Review regenerated output carefully. A large unexpected change is evidence to
 investigate, not a result to accept mechanically.
 
-## Runtime call log
+## Runtime call log and call map (game analysis)
+
+Use runtime call recording plus `tools/call_map.py` to **analyse game control
+flow**: observed caller→callee edges, per-callsite targets, which labelled
+routines entered during a session, and how often each flow fired. Prefer this
+over guessing from generated C++ alone. Pair results with `output/sor.asm`,
+`code-analysis/labels.csv`, and `ai-analysis/*.md`. Agents that need to
+explore an existing map should follow the workspace `explore-call-map` skill
+and query SQLite directly (do not start the web viewer only for agent-side
+analysis).
+
+### Recording with `sor`
 
 `--callLog PATH` optionally records emulated 68000 subroutine entries and
 `bsr`/`jsr` calls as typed CSV with the columns
@@ -131,8 +142,18 @@ without a prefix. The file is truncated at startup; without this option,
 logging is disabled and the entry/call hooks only perform a null check.
 Generated and hand-written subroutines must trace their true dynamic entry.
 
-`tools/call_map.py` consumes one or more call-log CSV files and writes a
-deduplicated SQLite call graph. It inserts every `code-analysis/labels.csv`
+```bash
+./build/sor --rom rom/SOR.bin --callLog ../calls.csv
+```
+
+Do not launch or leave the game unbounded for analysis unless asked; follow
+**Run and observe safely** below.
+
+### Collapsing logs with `tools/call_map.py`
+
+`tools/call_map.py` consumes one or more call-log CSV files (typed
+`event,source,callsite,target` or legacy `source,callsite,target`) and writes
+a deduplicated SQLite call graph. It inserts every `code-analysis/labels.csv`
 routine, even when it has zero observed activity, and preserves source
 addresses that are already labelled. Unless
 `--trust-recorded-source` is supplied, it approximates anonymous sources in
@@ -143,9 +164,29 @@ interactive web viewer after database generation. The viewer binds to
 `127.0.0.1` unless `--host` is explicitly provided and exposes all labelled
 routines, dynamic entry counts, flow counts, and per-flow callsites.
 
+```bash
+python3 tools/call_map.py ../calls.csv \
+  --database call-map.sqlite \
+  --labels code-analysis/labels.csv
+```
+
+Useful analysis views (addresses formatted as `$XXXXXX`):
+
+| View | Use |
+| --- | --- |
+| `subroutine_activity` | Entry counts plus incoming/outgoing flow totals per routine |
+| `subroutine_flow` | Deduplicated source→target edges with `observed_count` |
+| `callsite_flow` | Exact source/callsite/target rows with labels |
+
+`observed_count` is how many runtime events collapsed into that row, not a
+static reachability weight. A routine present only via `labels.csv` is known
+but was not entered in the captured run.
+
 The generated `call-map.sqlite` artifact may be kept locally in this repository
 alongside the tool, but must remain ignored and unversioned. Regenerate it from
 the workspace-root `calls.csv` with the command documented in the root README.
+Do not stage call logs or the database unless the user explicitly requests
+versioning that exact artefact.
 
 ## Manual subroutines
 
