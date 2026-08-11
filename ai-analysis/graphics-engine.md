@@ -694,6 +694,61 @@ A flag in the frame offset selects mirrored decoding. The mirrored path toggles
 the tile horizontal-flip bit and adjusts X by the piece width so the same source
 pieces can face both directions.
 
+#### Animation-set layout
+
+`$AF46 (emit_object_sprite_mapping)` and `$B1A2
+(init_object_animation_frame)` walk the same three levels, which fixes the
+layout of every animation set (`$1FC70 (garcia_animation_set)` and its
+siblings) exactly:
+
+```text
+animation set    word[i]        -> animation record, relative to the set base
+animation record byte  frames   -> number of frames
+                 byte  duration -> per-frame delay, seeded into +$0C/+$0D
+                 word[f]        -> frame record, relative to the animation base
+                                   bit 15 = frame record carries 2 extra bytes
+frame record     byte  pieces   -> sprite-piece count; negative ends decoding
+                 [2 bytes when the frame offset had bit 15 set]
+                 byte  attack box id -> object +$02
+                 byte  body box id   -> object +$03
+                 ...             -> the five-byte pieces of §8.3
+```
+
+Neither table stores its own length:
+
+- the **animation count** follows from the first entry, since animation 0
+  begins immediately after the set's offset table: `word[set] / 2`;
+- the **frame count** is the animation record's own first byte. `$B0C8`,
+  the renderer's tail, is the proof: it advances `+$0A`, compares it against
+  the byte `$AF5A` stashed in `$FFFA40` from that same position, and clears
+  `+$0A` back to zero once the frame index reaches it.
+
+Frame records are pooled across the set rather than following their own
+offset table, so a frame offset routinely points far past the next
+animation, and two animations can share one record list outright.
+
+Animations come in adjacent **mirrored pairs**, the even member facing
+right. The pairing is visible in the shape ids the two members select: in
+`$1FC70 (garcia_animation_set)`, animation 10 uses attack shape `$12`
+(X offset 0, width 40) where animation 11 uses `$13` (X offset −40, width
+40), and the same holds for `$14`/`$15` and `$18`/`$19`. That is the
+separate forward/backward shape record pair described for `$AB24`, selected
+here by the animation data rather than by a mirroring step at collision
+time.
+
+An attack box id on a frame is **not** by itself evidence of a damaging
+attack: `$1FC70 (garcia_animation_set)`'s idle animations select box `$3D`, a body-sized box
+centred on the origin, and `$22948 (signal_animation_set)` does the same on
+its idle frames. Outgoing damage comes from `+$34`, which the enemy's own
+state code sets, so a frame can present a contact box purely so `$AA22`
+reports interaction (the grab/push path) without dealing damage.
+
+Reach follows from the shape record alone once the animation identifies the
+box. `$242F8 (nora_animation_set)`'s only attacking animation, 10, selects
+attack shape `$22`, whose record is X offset **+32**, width 48 — the whip
+covers 32 to 80 pixels ahead of Nora and nothing closer, which is why
+closing inside that offset is safe from it.
+
 ### 8.4 World-to-screen conversion
 
 For ordinary world objects:
