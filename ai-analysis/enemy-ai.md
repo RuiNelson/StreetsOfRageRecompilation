@@ -286,6 +286,41 @@ sets, tested every object, every frame, by `$AAA0`). In particular:
   shared set's shapes belong to which sharing type — the confirmed rows
   above are the only type-specific attribution with hard evidence so far.
 
+## Signal's slide is velocity, not a hitbox
+
+Signal (`$24`) is documented above as "Sliding attacks; gets behind and
+throws the player" (visual-family table). Its own animation set (`$22948
+(signal_animation_set)`) has only 7 mirrored animation pairs, and an
+exhaustive walk of every shape any of them select finds nothing resembling
+a long reach: the largest is `$1D`, forward `-24..+24`. Every shape in the
+set is close-range.
+
+The slide is real, but it is not expressed as an attack box at all. Signal's
+own state table (`$E4DA`, reached from `$E4D2
+(signal_type24_dispatcher)`) puts state `$0A` at handler `$E54E`, which
+writes the ordinary-enemy velocity fields directly:
+
+```text
+$00E568  +$1C(a0) = ±$00028000   ; 16.16 fixed point = ±2.5 px/frame (X)
+$00E57E  +$20(a0) = ±$00020000   ; ±2.0 px/frame (lane)
+```
+
+sign chosen by comparing the enemy's own position against the target's
+(`cmp.w +$10(a0),d0` / `cmp.w +$14(a0),d1` against values staged earlier in
+the same state) — i.e. "move toward the target," not a fixed vector. This
+state never calls `$AD04` and its own animation carries no long-reach
+shape; the hit, when it lands, is decided by the generic per-frame
+`$AAA0`/`$AB24` pipeline testing Signal's *ordinary* body box once the
+slide's own velocity has carried it into the player, not by an extended
+attack box being tested from a stationary origin.
+
+This means Signal's slide is architecturally a **closing** attack, the same
+class `ClosingEnemy` (`inference.check_for_closing_enemies`) already exists
+to flag from `grunt_vel_x`/`grunt_vel_y`, not a **reach** attack the way
+`AttackRange` models every other confirmed strike in this document. No
+static per-shape geometry extraction can represent it: the danger is the
+approach itself, not a box drawn around Signal's current position.
+
 ## Collision, reactions, grabs, and death
 
 `$991A (ordinary_enemy_begin_knockdown)` starts the knockdown/airborne fall after the enemy has taken sufficient damage; it is not the generic reaction to every hit. It clears attack damage, selects facing from the attacker, and dispatches by fall subtype `$4A`. `$99A2 (ordinary_enemy_update_airborne_reaction)` advances airborne physics and landing, using `$973E` for vertical motion and `$9F22` for obstacle response.
