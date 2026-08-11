@@ -226,6 +226,66 @@ Proven difficulty effects are:
 - `$982C (ordinary_enemy_vector_to_velocity)` reduces large movement speed on Easy;
 - type/variant tables may already encode different baseline health/damage.
 
+## Garcia-family state tables and confirmed strike boxes
+
+Types `$20`-`$23` each own a distinct byte-state dispatch table, reached from
+their trampoline (`$D606 (garcia_type20_dispatcher)`/`$D99A (garcia_type21_dispatcher)`/`$DD78 (garcia_type22_32_dispatcher)`/`$E326 (garcia_type23_dispatcher)`) via the shared indexer
+`$B186 (dispatch_object_primary_state_table)` (`d0 = byte at +$30`; jumps through `table[d0*2]`). Reading the four
+tables from ROM gives, notably, that **types `$21` and `$22` reuse identical
+handler addresses for states `$02`-`$07`** (`$9B36`/`$991A (ordinary_enemy_begin_knockdown)`/`$A43E`/`$A04A`/
+`$9D16`/`$DBCC`) and **share the same attacking-state handler at `$E190`**
+for their own state `$0A` — confirming enemy-ai.md's existing claim that the
+four types are "separate state tables" built from a common toolkit, not
+independent implementations.
+
+A small number of state handlers across the whole ROM (six, found by
+searching every `jsr $00AD04` call site) perform a **direct, explicit**
+collision test against the current target's cached body box, independent of
+the generic per-frame `$AAA0`/`$AB24` pipeline every object goes through
+regardless of state:
+
+```text
+$00AD04: a1 = object+$42 (target pointer)
+         if target's cached body box (+$70) is non-degenerate:
+             jmp $00AB24 with d1 = box id  ; same shape-table rebuild as $AB24
+```
+
+`d1` is loaded immediately before each call, selecting the box id by facing
+(`btst #$01,+$9(a0)`, even = right-facing id, odd = left-facing mirror). This
+gives **positive, address-level confirmation** — not the geometric
+"out-reaches its own body box" heuristic `attack_ranges.py` otherwise relies
+on — that a specific shape id is a genuine strike, for:
+
+| Type(s) | State | Handler | Box id (R/L) | Shape (facing right) |
+| --- | --- | --- | --- | --- |
+| `$20` | `$09` | `$D856` | `$14`/`$15` | forward `+32..+56` |
+| `$21`, `$22` (shared) | `$0A` | `$E190` (+ `$E0EC` sub-check) | `$12`/`$13` then `$3E`/`$3F` | forward `0..+40`, then `+16..+51` |
+| `$26` (Nora) | — | (whip windup) | `$22`/`$23` | forward `+32..+80` |
+
+The Nora row independently confirms the dead-zone reach `attack_ranges.py`
+already extracted purely geometrically (see graphics-engine.md §8.3): this
+is the same shape id reached by two unrelated methods.
+
+**This table is not exhaustive.** Absence from it does not mean a shape is
+not a real strike — most ordinary-enemy attacks are never gated by this
+manual `$AD04` shortcut at all and rely solely on the generic per-frame
+pipeline (whatever `+$02`/`+$03` the currently displayed animation frame
+sets, tested every object, every frame, by `$AAA0`). In particular:
+
+- type `$20`'s **other** state, `$0A` (`$D8EC`, also documented as
+  `ATTACKING` from live testing), does not call `$AD04` at all — it toggles
+  a linked-object pointer at `+$6A` and plays a sound, with no direct
+  collision test in its own body; whatever it does hit is decided entirely
+  by the generic pipeline against its animation's own `+$02`;
+- type `$23`'s attacking state `$09` (`$E47E`) likewise never calls `$AD04`;
+- `$1FC70 (garcia_animation_set)` is **shared by all four types**, so it
+  contains attack-capable shapes (at minimum `$14`, `$12`, `$3E`, plus an
+  unconfirmed `$18` at animation index 24) that do not all belong to every
+  type using the set. `attack_ranges.py`'s per-shape extraction walks the
+  whole shared set and cannot yet tell, from geometry alone, which of a
+  shared set's shapes belong to which sharing type — the confirmed rows
+  above are the only type-specific attribution with hard evidence so far.
+
 ## Collision, reactions, grabs, and death
 
 `$991A (ordinary_enemy_begin_knockdown)` starts the knockdown/airborne fall after the enemy has taken sufficient damage; it is not the generic reaction to every hit. It clears attack damage, selects facing from the attacker, and dispatches by fall subtype `$4A`. `$99A2 (ordinary_enemy_update_airborne_reaction)` advances airborne physics and landing, using `$973E` for vertical motion and `$9F22` for obstacle response.
