@@ -18,8 +18,6 @@ constexpr m_long kP1SpecialAttacks = 0xFFFFFF21u;
 constexpr m_long kObjectTable      = 0xFFFFB900u;
 constexpr m_word kLevelIntroState  = 0x0028u;
 // Even values are init states; the loop then advances to the update mode (+2).
-constexpr m_word kEndingBadInit    = 0x001Cu; // init_ending_bad
-constexpr m_word kEndingGoodInit   = 0x0024u; // init_ending_good
 constexpr int    kLevelCount       = 8;
 constexpr int    kObjectSlotCount  = 32;
 constexpr m_long kObjectSlotSize   = 0x80u;
@@ -30,6 +28,35 @@ constexpr m_long kObjectHealthOffset       = 0x32u;
 constexpr bool isOrdinaryEnemy(m_byte type) {
     return type >= 0x20u && type <= 0x2Au;
 }
+
+// Ordinary-enemy families, by the object type at +$00. The same split the
+// analysis manuscripts and the autoplay observer use, so a cheat named after
+// an enemy kills exactly what the rest of the workspace calls by that name.
+constexpr bool isGarcia(m_byte type) {
+    return type >= 0x20u && type <= 0x23u; // includes the $23 "strong" palette
+}
+
+constexpr bool isSignal(m_byte type) {
+    return type == 0x24u;
+}
+
+constexpr bool isHakuRo(m_byte type) {
+    return type == 0x25u || type == 0x2Au; // the ninja, in both its variants
+}
+
+constexpr bool isNora(m_byte type) {
+    return type == 0x26u;
+}
+
+constexpr bool isJack(m_byte type) {
+    return type == 0x27u; // $28 is his thrown axe, an object of its own
+}
+
+static_assert(isGarcia(0x20u) && isGarcia(0x23u) && !isGarcia(0x24u));
+static_assert(isSignal(0x24u) && !isSignal(0x25u));
+static_assert(isHakuRo(0x25u) && isHakuRo(0x2Au) && !isHakuRo(0x26u));
+static_assert(isNora(0x26u) && !isNora(0x27u));
+static_assert(isJack(0x27u) && !isJack(0x28u));
 
 constexpr bool isBespokeBoss(m_byte type) {
     return type == 0x30u || type == 0x35u; // Abadede or Mr. X
@@ -82,6 +109,44 @@ m_long activePlayerObject(SystemMemory &memory) {
     return 0u;
 }
 
+// Put one ordinary enemy through the cartridge's own forced-death sweep.
+// Split out of killInstantiatedEnemies so the per-family cheats below kill
+// exactly the way the kill-everything cheat already does.
+void killOrdinaryEnemy(SystemMemory &memory, m_long object, m_word attacker) {
+    // Match the cartridge's forced-death sweep: enter the airborne/death
+    // reaction with negative health and retain a player for score credit.
+    memory.writeByte(object + 0x37u, memory.readByte(object + 0x37u) | 0x02u);
+    memory.writeWord(object + kObjectHealthOffset, 0xFFFFu);
+    memory.writeWord(object + kObjectPrimaryStateOffset, 0x0300u);
+    memory.writeWord(object + 0x3Eu, attacker);
+}
+
+// Kill every instantiated ordinary enemy whose type ``matches``. Bosses are
+// deliberately out of scope: they have their own lethal paths (see
+// killInstantiatedEnemies) and no family cheat names one.
+int killOrdinaryEnemiesMatching(SystemMemory &memory, bool (*matches)(m_byte)) {
+    const m_long activePlayer = activePlayerObject(memory);
+    const m_word attacker = static_cast<m_word>(activePlayer != 0u ? activePlayer : kP1Object);
+    int killed = 0;
+
+    for (int slot = 0; slot < kObjectSlotCount; ++slot) {
+        const m_long object = kObjectTable + static_cast<m_long>(slot) * kObjectSlotSize;
+        const m_byte type = memory.readByte(object);
+
+        if (!isOrdinaryEnemy(type) || !matches(type))
+            continue;
+
+        killOrdinaryEnemy(memory, object, attacker);
+        ++killed;
+    }
+
+    return killed;
+}
+
+void logFamilyKill(const char *family, int killed) {
+    Logger::log("[cheat] killed %d %s%s", killed, family, killed == 1 ? "" : "s");
+}
+
 int killInstantiatedEnemies(SystemMemory &memory) {
     const m_long activePlayer = activePlayerObject(memory);
     const m_word attacker = static_cast<m_word>(activePlayer != 0u ? activePlayer : kP1Object);
@@ -92,12 +157,7 @@ int killInstantiatedEnemies(SystemMemory &memory) {
         const m_byte type = memory.readByte(object);
 
         if (isOrdinaryEnemy(type)) {
-            // Match the cartridge's forced-death sweep: enter the airborne/death
-            // reaction with negative health and retain a player for score credit.
-            memory.writeByte(object + 0x37u, memory.readByte(object + 0x37u) | 0x02u);
-            memory.writeWord(object + kObjectHealthOffset, 0xFFFFu);
-            memory.writeWord(object + kObjectPrimaryStateOffset, 0x0300u);
-            memory.writeWord(object + 0x3Eu, attacker);
+            killOrdinaryEnemy(memory, object, attacker);
             ++killed;
             continue;
         }
@@ -213,17 +273,25 @@ void StreetsOfRage::handleOptionHotkey(OptionHotkeyCode keyCode) {
             Logger::log("[cheat] free police call requested for P%d", player == kP1Object ? 1 : 2);
             return;
         }
+        // Per-family kill cheats. Each letter is the enemy's own initial
+        // where that was free: G(arcia), N(inja, the Haku-Ro), J(ack). Signal
+        // takes B and Nora takes U, since S already adds a special attack and
+        // N is the ninja. G and B were the good/bad ending jumps until those
+        // were dropped as no longer needed.
         case SDLK_G:
-            // Alt+G — jump to good ending init (game_state $24).
-            memory().writeWord(kGameState, kEndingGoodInit);
-            Logger::log("[cheat] starting good ending (game_state=$%04X)",
-                        static_cast<unsigned>(kEndingGoodInit));
+            logFamilyKill("Garcia", killOrdinaryEnemiesMatching(memory(), isGarcia));
+            return;
+        case SDLK_N:
+            logFamilyKill("Haku-Ro", killOrdinaryEnemiesMatching(memory(), isHakuRo));
             return;
         case SDLK_B:
-            // Alt+B — jump to bad ending init (game_state $1C).
-            memory().writeWord(kGameState, kEndingBadInit);
-            Logger::log("[cheat] starting bad ending (game_state=$%04X)",
-                        static_cast<unsigned>(kEndingBadInit));
+            logFamilyKill("Signal", killOrdinaryEnemiesMatching(memory(), isSignal));
+            return;
+        case SDLK_J:
+            logFamilyKill("Jack", killOrdinaryEnemiesMatching(memory(), isJack));
+            return;
+        case SDLK_U:
+            logFamilyKill("Nora", killOrdinaryEnemiesMatching(memory(), isNora));
             return;
         default:
             break;
