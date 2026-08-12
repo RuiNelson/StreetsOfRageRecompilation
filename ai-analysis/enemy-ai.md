@@ -232,7 +232,7 @@ Types `$20`-`$23` each own a distinct byte-state dispatch table, reached from
 their trampoline (`$D606 (garcia_type20_dispatcher)`/`$D99A (garcia_type21_dispatcher)`/`$DD78 (garcia_type22_32_dispatcher)`/`$E326 (garcia_type23_dispatcher)`) via the shared indexer
 `$B186 (dispatch_object_primary_state_table)` (`d0 = byte at +$30`; jumps through `table[d0*2]`). Reading the four
 tables from ROM gives, notably, that **types `$21` and `$22` reuse identical
-handler addresses for states `$02`-`$07`** (`$9B36`/`$991A (ordinary_enemy_begin_knockdown)`/`$A43E`/`$A04A`/
+handler addresses for states `$02`-`$07`** (`$9B36 (ordinary_enemy_hit_reaction_dispatch)`/`$991A (ordinary_enemy_begin_knockdown)`/`$A43E`/`$A04A`/
 `$9D16`/`$DBCC`) and **share the same attacking-state handler at `$E190`**
 for their own state `$0A` — confirming enemy-ai.md's existing claim that the
 four types are "separate state tables" built from a common toolkit, not
@@ -260,7 +260,7 @@ on — that a specific shape id is a genuine strike, for:
 | --- | --- | --- | --- | --- |
 | `$20` | `$09` | `$D856` | `$14`/`$15` | forward `+32..+56` |
 | `$21`, `$22` (shared) | `$0A` | `$E190` (+ `$E0EC` sub-check) | `$12`/`$13` then `$3E`/`$3F` | forward `0..+40`, then `+16..+51` |
-| `$26` (Nora) | — | (whip windup) | `$22`/`$23` | forward `+32..+80` |
+| `$26` (Nora) | `$08` | `$F1B0 (nora_type26_whip_engage_state)` | `$22`/`$23` | forward `+32..+80` |
 
 The Nora row independently confirms the dead-zone reach `attack_ranges.py`
 already extracted purely geometrically (see graphics-engine.md §8.3): this
@@ -320,6 +320,94 @@ to flag from `grunt_vel_x`/`grunt_vel_y`, not a **reach** attack the way
 `AttackRange` models every other confirmed strike in this document. No
 static per-shape geometry extraction can represent it: the danger is the
 approach itself, not a box drawn around Signal's current position.
+
+## Nora's own primary-state table, and a second scripted lunge
+
+Nora's whip (`$26`, confirmed-strike table above) is not the whole picture
+of how she closes distance. Her primary-state dispatch table — a plain word
+array at `$10362`, referenced by `$F038 (nora_type26_dispatcher)` — was
+dumped directly from ROM (entry *N* is state byte *N*, the alignment
+`$991A (ordinary_enemy_begin_knockdown)` at entry 3 already confirms for
+every ordinary type) and traced instruction-by-instruction, since none of
+her own states beyond the generic `$00`-`$07` block had previously been
+documented at all:
+
+State `$00` (a short-lived activation gate) is omitted from the table
+below: it is not a state worth its own row.
+
+| State | Handler | Role |
+| --- | --- | --- |
+| `$01` | `$F0E6 (nora_type26_state1_target_select)` | Re-select target, branch to next state |
+| `$02` | `$F062 (nora_type26_hit_reaction_state)` | Her own override of the shared hit-reaction entry — see below |
+| `$03`-`$07` | generic (`$991A (ordinary_enemy_begin_knockdown)`/`$A43E`/`$A04A`/`$9D16`/`$DBCC`) | Knockdown/scripted/grabbed/death/blocked, identical to every checked ordinary type |
+| `$08` | `$F1B0 (nora_type26_whip_engage_state)` | Whip engage-and-swing (below) |
+| `$09` | `$F0FC (nora_type26_chase_approach_state)` | Ordinary chase toward an approach point |
+| `$0A` | `$DDE6` | The same "damaging special" entry already documented above for Garcia `$22` state `$13` |
+| `$0B`, `$0F` | `$9B36 (ordinary_enemy_hit_reaction_dispatch)` | Reached a second way — see below |
+| `$0C` | `$F078 (nora_type26_feign_injury_recovery)` | "Feign injury" recovery (below) |
+| `$10` | `$F2AC (ordinary_enemy_knockdown_trigger_state)` | Shared with Jack `$27` state `$03` |
+| `$12` | `$F2BC (ordinary_enemy_blocked_delegate_state)` | Shared with Jack `$27` state `$07` |
+| `$13`-`$15` | `$F5F2 (ordinary_enemy_special_lunge_lane_setup)`/`$F64A (ordinary_enemy_special_lunge_distance_gate)`/`$F6BC (ordinary_enemy_special_lunge)` (`ordinary_enemy_special_lunge_*`) | A second, ROM-shared scripted lunge — see below |
+
+### The whip is a live position test, not just a static box
+
+`$F1B0 (nora_type26_whip_engage_state)` does not wait for a fixed windup
+before deciding whether the whip lands. Every tick it has not yet committed
+(object `+$31` bit 1 clear), it runs the manual `$AD04` shortcut — the same
+direct-collision test already confirmed above for Garcia `$20`/`$21`/`$22`
+— with shape `$22`/`$23` against the target's **current** position. A miss
+walks the target toward a `$38` (56px) approach offset — comfortably inside
+the whip's own `+32..+80` reach — and retries next tick; a hit commits
+(`+$31` bit 1 set), plays attack animation index `$14`, and on completion
+may loop up to three consecutive swings (a counter at `+$50`, seeded 3)
+before giving up and returning to state `$01`. Because the position test
+re-runs every tick during the approach, a target that closes distance
+quickly enough can be tested as "in range" and committed against
+immediately once it crosses `+32`, with none of the extra windup a fixed
+attack-animation timeline might suggest — this, not a wider extracted box,
+is the ROM mechanism behind Nora appearing to react unusually fast once a
+target is near her whip's own dead-zone edge.
+
+### Hit reaction: ordinary stun, or "feign injury"
+
+Every other checked ordinary type (`$21`, `$22`, `$24`, `$25`) enters
+`$9B36 (ordinary_enemy_hit_reaction_dispatch)` directly from its own
+generic state `$02`. Nora instead routes state `$02` through her own
+`$F062 (nora_type26_hit_reaction_state)`, which always advances to state
+`$0B` — reaching `$9B36 (ordinary_enemy_hit_reaction_dispatch)` a tick later, the same ordinary hitstun path every
+other type uses — **unless** object `+$40` bit 4 is set, the "feign
+injury" variant this document's visual-family table already named, in
+which case it advances straight to state `$0C`
+(`$F078 (nora_type26_feign_injury_recovery)`) instead: a second health
+subtraction, a bespoke `+$50` timer seeded at `$80` (128 frames, well past
+the ordinary 24-frame hitstun `$9B88 (ordinary_enemy_apply_contact_damage)`'s own sub-path uses), and a return to
+the whip engage state `$08` once that timer expires or the target has
+moved 80px of lane distance away.
+
+### A second scripted lunge, shared with Jack
+
+`$F6BC (ordinary_enemy_special_lunge)` — reached through
+`$F5F2 (ordinary_enemy_special_lunge_lane_setup)` and
+`$F64A (ordinary_enemy_special_lunge_distance_gate)`, states `$13`-`$15` on
+Nora's own table — writes object `+$1C`/`+$20`
+(`OBJ_VEL_X_ORDINARY`/`OBJ_VEL_LANE_ORDINARY`) directly on entry:
+
+```text
++$1C(a0) = ±$0002C000   ; 16.16 fixed point ≈ ±2.75 px/frame (X)
++$20(a0) = ±$00022000   ; ≈ ±2.125 px/frame (lane)
+```
+
+sign chosen toward the target, exactly Signal's slide pattern above but
+faster on both axes and carrying no attack shape of its own — the hit, when
+it lands, is decided by the generic per-frame pipeline against Nora's
+ordinary body box once the lunge has carried her into the player. Dumping
+Jack's (`$27`) own primary-state table at `$1037C` found the *identical*
+three addresses at his states `$08`-`$0A`, alongside `$F2AC (ordinary_enemy_knockdown_trigger_state)`/`$F2BC (ordinary_enemy_blocked_delegate_state)`/`$F2CE (ordinary_enemy_reselect_target_state)`
+at his states `$03`/`$07`/`$01` — proof this lunge, the knockdown-trigger
+and blocked-delegate states, and the "reselect target" state `$F2CE (ordinary_enemy_reselect_target_state)` are
+shared ordinary-enemy toolkit routines usable from more than one type's own
+table, not code unique to either type despite living inside the address
+range starting at Jack's own `$F27E (jack_type27_dispatcher)`.
 
 ## Collision, reactions, grabs, and death
 
