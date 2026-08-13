@@ -109,6 +109,16 @@ m_long activePlayerObject(SystemMemory &memory) {
     return 0u;
 }
 
+// True once this enemy's health word has crossed the cartridge's own lethal
+// boundary. The ROM's ordinary-enemy checks are signed, so $8000-$FFFF is
+// already dead while the object still occupies its slot playing out the death
+// reaction. Killing such an object again restarts that reaction from the top:
+// held down (or swept repeatedly by an automated harness), the same corpses
+// are re-killed every time and never finish dying.
+bool isAlreadyDying(SystemMemory &memory, m_long object) {
+    return memory.readWord(object + kObjectHealthOffset) >= 0x8000u;
+}
+
 // Put one ordinary enemy through the cartridge's own forced-death sweep.
 // Split out of killInstantiatedEnemies so the per-family cheats below kill
 // exactly the way the kill-everything cheat already does.
@@ -134,6 +144,8 @@ int killOrdinaryEnemiesMatching(SystemMemory &memory, bool (*matches)(m_byte)) {
         const m_byte type = memory.readByte(object);
 
         if (!isOrdinaryEnemy(type) || !matches(type))
+            continue;
+        if (isAlreadyDying(memory, object))
             continue;
 
         killOrdinaryEnemy(memory, object, attacker);
