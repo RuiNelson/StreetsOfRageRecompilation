@@ -502,7 +502,7 @@ These duplicate-checked entries were integrated into the shared CSV files.
 No new absolute RAM symbol is necessary. The important fields are offsets in each `$80`-byte object, and adding first-slot aliases would misleadingly imply that only `$FFB900 (object_table)` carries them. The existing `$FFB900 (object_table)` entry should instead be corrected to:
 
 ```csv
-FFB900, object_table, "100% - Start of 32-slot, $80-byte gameplay object table; ordinary enemies use types $20-$2A, with type at +$00, primary state W at +$30, health W at +$32 and target pointer W at +$42"
+FFB900, object_table, "100% - Start of 66-slot, $80-byte gameplay object table; ordinary enemies use types $20-$2A, with type at +$00, primary state W at +$30, health W at +$32 and target pointer W at +$42"
 ```
 
 ---
@@ -779,7 +779,7 @@ The tactical code keeps wider spacing than the close-range bosses and selects
 an attack when X is roughly `$28-$78` and lane separation is small.
 
 **Correction:** an earlier version of this section attributed the boomerang's
-positioning to `$16C6E`. That address is actually Souther's own claw-object
+positioning to `$16C6E (souther_position_claw)`. That address is actually Souther's own claw-object
 positioning routine (his creation path at `$16C42` writes type `$98`, not
 `$96`) — a plausible mix-up given the two are structurally similar and sit
 back-to-back in ROM. Antonio's own boomerang link/positioning is traced below
@@ -880,7 +880,7 @@ lower-confidence pieces of that state machine:
   looked up in a per-frame dx/dy/dz offset table at `$17494`) while attached
   or in flight, plays a catch sound, and advances the child's own primary
   state when that frame index changes. This is Antonio's actual equivalent
-  of Souther's `$16C6E` corrected above. Confidence 75%.
+  of Souther's `$16C6E (souther_position_claw)` corrected above. Confidence 75%.
 
 Net effect matches the visible choreography this section already described:
 the boomerang follows Antonio out, reverses into a return arc, and is
@@ -905,6 +905,170 @@ back to recovery depending on collision result.
 Round 6 deliberately supplies two Souther records. Pair roles split targeting
 and reduce both bosses choosing the same player in 2P. The same logic makes a
 single surviving Souther behave normally after its partner dies.
+
+#### Primary-state and tactical tables
+
+`$15E70 (souther_update)` runs the shared police-special entry (`$16AEC (later_boss_enter_police_special_reaction)`), the forced
+reaction consumer `$16A1A`, `$163B0`, and then dispatches through the word
+table at `$15E84` via the shared `$15848`:
+
+| `+$30` | Handler | Role |
+| --- | --- | --- |
+| `$00` | `$15E9A (souther_state0_init)` | one-shot init |
+| `$01` | `$15EDA (souther_state1_active_combat)` | active combat, family-specific |
+| `$02` | `$16118 (souther_state2_claw_commit)` | committed claw, family-specific |
+| `$03` | `$163D0` | shared hit reaction |
+| `$04` | `$164CA` | shared recovery |
+| `$05` | `$164FC` | shared lethal gate |
+| `$06`-`$09` | `$1659A`, `$16702`, `$168CC`, `$16B88` | shared grabbee/throw/airborne |
+| `$0A` | `$16A60 (later_boss_police_special_reaction)` | shared police-special reaction |
+
+Entries `$03`-`$0A` are byte-identical to Antonio's table at `$16CF4` and the
+twins' at `$158D8`, which independently confirms the observation above that
+family-specific AI lives almost entirely in states `$00`-`$02`.
+
+Each of those two family states then dispatches on tactical `+$67` through the
+shared `$17A5C`:
+
+| Primary | Table | `+$67` handlers |
+| --- | --- | --- |
+| `$01` | `$15F92` | `$00`→`$15F98 (souther_state1_standoff)`, `$01`→`$160D0 (souther_state1_close_lane)`, `$02`→`$16106 (souther_state1_dash_timer)` |
+| `$02` | `$16152` | `$00`→`$16158 (souther_state2_claw_windup)`, `$01`→`$1619E (souther_state2_claw_launch)`, `$02`→`$161C6 (souther_state2_claw_dash)` |
+
+#### The state 1 → state 2 slash gate (`$15EDA (souther_state1_active_combat)`)
+
+`$15EDA (souther_state1_active_combat)` reselects the target, runs the availability probe
+`$179F8`, the facing/lane measure `$17B0C`, `$17C36 (boss_apply_pending_damage)`, and
+increments both `+$78` and `+$7B`. It then tests, in this order, whether to
+commit to the claw:
+
+1. `+$77` (target unavailable) must be zero, or the whole gate is skipped.
+2. `d2 = +$50` (abs X distance). `d1 = +$1C` of the *target*, negated when
+   `+$60` is nonzero — i.e. signed into Souther's own frame, so a negative `d1`
+   means the target is walking **into** him. The commit distance is picked from
+   that sign:
+
+   | Target motion | `d1` test | Commit while `+$50 <` |
+   | --- | --- | --- |
+   | closing | `bmi` | `$68` (104px) |
+   | stationary | `beq` on `+$1C` | `$58` (88px) |
+   | retreating | `bpl` | `$50` (80px) |
+
+   Walking toward Souther therefore lets him start the slash from 24px further
+   out than standing still, and 24px further than backing off — the same shape
+   as Antonio's `$16EAE` kick gate.
+3. An **inner abort**: `+$50 < $18` (24px) cancels the commit. Souther cannot
+   begin the slash from inside 24px; he has to walk back out first.
+4. A lane gate on `+$52`: `< $0A` (10px) when `+$61` is set, otherwise `< $1C`
+   (28px).
+5. `+$66` (hard target hold) must be zero.
+
+On success he clears `+$67`/`+$7B`, increments `+$30` to 2, adds 4 to the
+animation index `+$8`, and calls `$16C2E (souther_create_claw)` to create the type-`$98` claw.
+
+#### `$16234 (souther_counter_jump_attack)`: the jump counter
+
+This is the code behind "the characteristic response to a player who commits to
+a jump", and it is a hard counter rather than a preference.
+
+`$162A4 (souther_flag_target_jump_attack)` sets `+$79 = 1` when the action state `+$30` of the player it is
+handed is `$16`, `$17`, `$42` or `$43` — the unarmed jump-attack pair and the
+armed jump-attack pair. `$16294 (souther_select_target)` clears `+$79` on entry and runs
+`$162A4 (souther_flag_target_jump_attack)` for each live player, so in 2P either player jumping arms the flag.
+
+`$16234 (souther_counter_jump_attack)` then reads it:
+
+```text
+if +$79 == 0:            return
+if +$52 >= $12 (18px):   return      ; off his lane
+if +$50 >= $78 (120px):  return      ; too far
+; counter:
++$20 = ±$00040000        ; 4px/frame lane closing toward the target
++$67 = 1, +$68 = $0A, +$6D = 1
+clear the solid flag (+$1 bit 2)
+create the type-$99 afterimage ($16BC6)
++$30 = 2                              ; straight into the claw commit
+create the type-$98 claw ($16C2E)
+clear +$78, +$7B
+```
+
+Note what it bypasses: none of the distance bands, the inner abort, or the
+`+$66`/`+$77` gates above apply. A jump attack inside 120px × 18px promotes him
+to the committed claw immediately, from any distance in that box including the
+24px pocket the ordinary gate refuses.
+
+Where it is called from matters as much as what it does:
+
+- `$15EDA (souther_state1_active_combat)` calls it on **every** state-1 tick, before the tactical dispatch, so
+  the counter is armed for all of primary `$01`.
+- `$16158 (souther_state2_claw_windup)` (state 2, tactical `$00`) calls it, so the counter is still armed
+  during the claw's wind-up.
+- `$160D0 (souther_state1_close_lane)` (state 1, tactical `$01`) calls it as well.
+- `$1619E (souther_state2_claw_launch)` and `$161C6 (souther_state2_claw_dash)` (state 2, tactical `$01`/`$02` — the dash itself) do
+  **not**. Once he is dashing, a jump is no longer counter-armed. `$1619E (souther_state2_claw_launch)` only
+  consults `+$79` to *hold* at tactical `$01` while the target is jumping and
+  `+$52 >= $1A`.
+
+#### State 1 tactical handlers
+
+`$15F98 (souther_state1_standoff)` (`+$67 = $00`) is the standoff. After `+$7B` reaches `$78` (120
+updates) with `+$77` clear and the target's lane `+$14 >= $10`, it arms
+tactical `$01`. Otherwise it keeps him inside screen X `$80..$1C0`, dashing at
+`+$1C = ±$00040000` (4px/frame, faster than any ordinary enemy) with a `+$5C`
+countdown of `$28` (`$22` for pair role 2), and closing lane at 4px/frame.
+Inside `+$50 < $48` and `+$52 < $20` it zeroes the X velocity and holds. The
+standoff bands are `d3/d4 = $78/$90`, replaced by `$88/$98` when `+$5D == 2` —
+this is the code-level form of "pair roles split targeting" for the Round 6
+double Souther.
+
+`$160D0 (souther_state1_close_lane)` (`+$67 = $01`) closes lane at 4px/frame and drops back to tactical
+`$00` once the target's lane `+$14 < $14` or `+$50 < $19`.
+
+`$16106 (souther_state1_dash_timer)` (`+$67 = $02`) simply counts `+$5C` down and, at zero, clears `+$67`
+and zeroes `+$1C`.
+
+#### State 2: the claw dash (`$16118 (souther_state2_claw_commit)`)
+
+`$16118 (souther_state2_claw_commit)` takes the cached target from `+$72` (it does not
+reselect), applies pending damage, mirrors `$01` into the target's `+$7D` on
+collision result 1, clears `+$79`, and dispatches on `+$67`.
+
+`$16158 (souther_state2_claw_windup)` (`+$67 = $00`) re-arms the jump counter per player, runs `$16234 (souther_counter_jump_attack)`, and
+on animation frame `+$0A == $13` steps `+$10` by ±8 — the wind-up lunge.
+
+`$1619E (souther_state2_claw_launch)` (`+$67 = $01`) sets `+$6D = 1`, re-reads the target's action state for
+the jump flag, advances `+$67` unless the target is jumping with `+$52 >= $1A`,
+and creates the `$99` afterimage.
+
+`$161C6 (souther_state2_claw_dash)` (`+$67 = $02`) is the dash proper, and it is the reason a lane
+sidestep beats it:
+
+```text
+if +$50 in [$18, $40) and lane close ( +$52 < $06 with +$61 set, else < $18 ):
+    -> $16222: clear +$67/+$6D, restore the solid flag, $17B42 zeroes all
+       three velocities. The slash resolves here.
+otherwise:
+    +$1c = ±$00080000        ; 8px/frame toward a point $18 in front of target
+    create the $99 afterimage, integrate, keep dashing
+```
+
+The dash writes **only** `+$1C`. It never corrects `+$20`, so it cannot follow
+a lane change once committed, and its resolve condition needs the target within
+`$18` (24px) of his lane. Stepping more than 24px off that lane makes him
+overshoot instead of resolving. This is the exact opposite of Antonio, whose
+dash tracks lane and has to be answered with a hop.
+
+For the derived player strategy this yields three rules, all numeric:
+
+| Threat | Gate | Denial |
+| --- | --- | --- |
+| jump counter (`$16234 (souther_counter_jump_attack)`) | player action `$16`/`$17`/`$42`/`$43`, `+$52 < $12`, `+$50 < $78`, primary `$01` or `$02`+tactical `$00` | do not start a jump attack inside 120px × 18px of him |
+| slash commit (`$15EDA (souther_state1_active_combat)`) | `+$77 == 0`, `+$66 == 0`, `+$52 < $1C`, `+$50` in `[$18, $50/$58/$68)` | approaching widens it; the 24px inner abort denies the start entirely |
+| committed dash (`$161C6 (souther_state2_claw_dash)`) | resolves at `+$50 ∈ [$18,$40)` with `+$52 < $18` | step >24px off his lane; he only steers on X |
+
+His shared stats from `$17EDC (boss_init_combat_stats)` are base damage `$14` and base health `$20`, so
+a suplex chain during the shared `$03`/`$04` recovery states is the efficient
+answer once a hit lands.
 
 ### Abadede (`$30`, `$143D0 (abadede_update)`)
 
@@ -1625,7 +1789,7 @@ not merely to the generic tracked-enemy count.
 | Round | Boss-side implementation | Important exception |
 |---:|---|---|
 | 1 | Antonio, type `$56` | ELC contains adjacent 1P/2P-qualified variant records. |
-| 2 | Souther, type `$55` | Counter/target logic reacts to player action and facing, not only distance. |
+| 2 | Souther, type `$55` | Counter/target logic reacts to player action and facing, not only distance: `$16234 (souther_counter_jump_attack)` promotes him straight to the claw when the player's action state is a jump attack (`$16`/`$17`/`$42`/`$43`) inside `$78` X by `$12` lane, and the ordinary commit gate at `$15EDA (souther_state1_active_combat)` widens with the player's own `+$1C` velocity. |
 | 3 | Abadede, type `$30` + linked `$31` | Bespoke charge framework; does not use `$17EDC (boss_init_combat_stats)`. |
 | 4 | Bongo, type `$57` + linked `$97` | Flame/charge link is synchronized to parent animation. |
 | 5 | Onihime/Yasha, two type `$58` objects | Same-type pairing splits targets; survivor becomes unpaired automatically. |
@@ -1714,7 +1878,10 @@ registers combat objects; the engine advances the campaign.
 2. Capture linked objects `$96-$99` in the framebuffer and SAT to assign exact
    names (boomerang, claw trail, flame, or invisible hitbox) to every state.
 3. Decode every family primary/tactical table into named moves without relying
-   on visible retail descriptions.
+   on visible retail descriptions. Souther (`$55`) is now done — both family
+   states and both tactical tables are decoded above, including the `$16234 (souther_counter_jump_attack)`
+   jump counter — so this remains open for Bongo (`$57`) and the twins
+   (`$58`) only.
 4. Match each raw `object+$59` selection bit to the exact displayed answer text
    in both Mr. X prompts; the static route matrix itself is now decoded in the
    story-flow manuscript.

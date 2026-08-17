@@ -288,7 +288,7 @@ FFB8D0, p2_character_id_ingame, "100% - B - In-game character ID copy on P2 obje
 FFB8D8, p2_char_slot, "100% - W - Char-select slot on P2 object+$58: 0=Adam (left), 1=Axel (center), 2=Blaze (right)"
 FFB8DE, p2_carried_weapon_ptr, "95% - W - P2 object+$5E pointer to the currently carried type-$08..$0C weapon"
 FFB8E0, p2_carried_weapon_type, "95% - B - P2 object+$60 carried weapon object type; zero when unarmed"
-FFB900, object_table, "100% - Start of 32-slot, $80-byte gameplay object table; ordinary enemies use types $20-$2A, with type +$00, primary state W +$30, health W +$32, and target pointer W +$42"
+FFB900, object_table, "100% - Start of 66-slot, $80-byte gameplay object table; ordinary enemies use types $20-$2A, with type +$00, primary state W +$30, health W +$32, and target pointer W +$42"
 FFFC14, elc_spawn_stream_cursor, "100% - L - Current cursor in the Nemesis-decoded ELC spawn stream consumed by process_timed_spawn_records"
 FFFC04, p1_button_held, "100% - W - P1 active-high controller snapshot: high byte is held buttons, low byte at $FFFC05 is pressed-edge buttons"
 FFFC05, p1_button_press, "100% - B - P1 active-high pressed-edge buttons computed as newly held bits after the previous held byte"
