@@ -1,7 +1,6 @@
 #include "SoR.hpp"
 #include "Logger.hpp"
 
-#include <chrono>
 #include <cstdint>
 #include <thread>
 
@@ -19,11 +18,6 @@ constexpr m_long kHalfDamage    = 0xFFFFFA43u;
 constexpr m_long kZ80Busreq  = 0x00A11100u;
 constexpr m_long kZ80DacBusy = 0x00A01FFDu;
 constexpr m_long kYm2612A0   = 0x00A04000u;
-
-// Matches the Z80 thread's stall poll. This routine is called from
-// sound_engine during VBlank, so waitForInterrupt() would deadlock on the
-// already-raised IPL. A short sleep lets the Z80/audio threads advance.
-constexpr auto kHardwarePoll = std::chrono::microseconds(50);
 
 } // namespace
 
@@ -94,11 +88,17 @@ void StreetsOfRage::play_level_music(m_long /*entry_*/) {
 void StreetsOfRage::sound_ym2612_acquire(m_long /*entry_*/) {
     traceEnter(0x00073298u);
 
+    // Called from sound_engine during VBlank: waitForInterrupt() would deadlock
+    // on the raised IPL. Do not sleep here either. Voices pulse $A01FFD for a
+    // few Z80 instructions per sample; a 50 µs pause after release lets the
+    // Z80 thread start a long catch-up slice, and the next BUSREQ then stalls
+    // the 68K (visible hitch). The ROM retries after three NOPs so it reclaims
+    // the bus before that happens. yield() is only for the ACK/YM polls.
     const auto waitForHardware = [this] {
         if (irqLevel() > cpu().interruptMask())
             serviceIRQ();
         else
-            std::this_thread::sleep_for(kHardwarePoll);
+            std::this_thread::yield();
         return !shouldQuit();
     };
 
@@ -109,11 +109,9 @@ void StreetsOfRage::sound_ym2612_acquire(m_long /*entry_*/) {
             break;
 
         if ((memory().readByte(kZ80DacBusy) & 0x80u) != 0) {
-            // Z80 still owns the DAC: drop the bus so it can finish. The host
-            // already runs a bounded Z80 slice on release; the extra poll sleep
-            // stands in for the ROM's three NOPs before retrying.
+            // Drop the bus so the host release path can run a Z80 slice, then
+            // hammer BUSREQ immediately like the ROM's three-NOP retry.
             memory().writeWord(kZ80Busreq, 0);
-            waitForHardware();
             continue;
         }
 

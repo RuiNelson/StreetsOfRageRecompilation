@@ -198,10 +198,13 @@ keeping the generated declaration, dispatcher, and call sites intact.
   `SoRManualFunctions.cpp`.
 - Sound helpers live in `SoRSound.cpp`. `$073298 (sound_ym2612_acquire)`
   replaces the generated BUSREQ / DAC-busy / YM-status spins with
-  `waitForByteValue` plus a short sleep. Do not use `waitForInterrupt()`
-  there: the routine runs from `$19D16 (vblank_handler)` via
-  `$72914 (sound_engine)`, so the IPL is already raised and an IRQ wait
-  would deadlock.
+  `waitForByteValue` and `yield()`. Do not use `waitForInterrupt()` there:
+  the routine runs from `$19D16 (vblank_handler)` via `$72914 (sound_engine)`,
+  so the IPL is already raised and an IRQ wait would deadlock. Do not sleep
+  on the DAC-busy retry: voices pulse `$A01FFD (z80_dac_busy)` briefly, and
+  a host sleep after release lets the Z80 thread start a long slice that
+  stalls the next BUSREQ (frame hitch). Retry immediately, like the ROM's
+  three NOPs.
 - Preserve 68000-visible register, memory, flag, stack, and control-flow
   effects expected by callers.
 - Base behavior on `output/sor.asm`, analysis data, and bounded runtime

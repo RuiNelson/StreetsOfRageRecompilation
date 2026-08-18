@@ -347,7 +347,7 @@ PSG volume envelopes also use a pointer table near `$728D0`.
 
 | Reference | Role |
 | --- | ------ |
-| `$73298 (sound_ym2612_acquire)` | BUSREQ, wait ACK, wait `$A01FFD (z80_dac_busy)` clear, wait YM ready. Manual body in `SoRSound.cpp`: host waits (sleep, not `waitForInterrupt`) because this runs from `$19D16 (vblank_handler)` |
+| `$73298 (sound_ym2612_acquire)` | BUSREQ, wait ACK, wait `$A01FFD (z80_dac_busy)` clear, wait YM ready. Manual body in `SoRSound.cpp`: `yield` on ACK/YM (not `waitForInterrupt`, not sleep) because this runs from `$19D16 (vblank_handler)`; DAC-busy retries immediately after bus release so PCM voices do not stall the 68K |
 | `$73206 (sound_ym2612_write)` | Part 0: reg → `$A04000 (ym2612_a0)`, data → `$A04001 (ym2612_d0)` |
 | `$7323E (sound_ym2612_write_part1)` | Part 1: reg → `$A04002 (ym2612_a1)`, data → `$A04003 (ym2612_d1)` |
 | `$731FA (sound_ym2612_write_channel)` | Add channel hw index; part 0 or part 1 |
