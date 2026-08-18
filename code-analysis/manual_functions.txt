@@ -58,3 +58,4 @@
 # The full engine/channel ticks stay generated until the native port is solid.
 01069E # queue_sound_id
 011B12 # play_level_music
+073298 # sound_ym2612_acquire (host wait instead of BUSREQ/DAC/YM busy-spins)

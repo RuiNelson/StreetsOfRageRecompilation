@@ -196,6 +196,12 @@ keeping the generated declaration, dispatcher, and call sites intact.
 - Record manual addresses in `code-analysis/manual_functions.txt`.
 - Implement native bodies in the established hand-written source, normally
   `SoRManualFunctions.cpp`.
+- Sound helpers live in `SoRSound.cpp`. `$073298 (sound_ym2612_acquire)`
+  replaces the generated BUSREQ / DAC-busy / YM-status spins with
+  `waitForByteValue` plus a short sleep. Do not use `waitForInterrupt()`
+  there: the routine runs from `$19D16 (vblank_handler)` via
+  `$72914 (sound_engine)`, so the IPL is already raised and an IRQ wait
+  would deadlock.
 - Preserve 68000-visible register, memory, flag, stack, and control-flow
   effects expected by callers.
 - Base behavior on `output/sor.asm`, analysis data, and bounded runtime
