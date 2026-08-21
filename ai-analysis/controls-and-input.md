@@ -461,6 +461,19 @@ play (`+$54` held, `+$55` edge). The stable front/back hold actions that accept
 new B/C edges are `$60`/`$61` (front) and `$66`/`$67` (back). Grab animation
 locks such as `$62`/`$64`/`$68`/`$6A`/`$6C`/`$6E` ignore fresh attack edges.
 
+**Which body is held** is the player's `+$4C`, not `+$60`. `+$60` is the
+weapon/pickup link `$3136` writes; a hold and a carried weapon coexist, so
+during a live hold `+$60` may still read the pipe in the actor's hand — or
+`$00`. `+$4C` holds the low word of the held object's address, and `$AAA0`
+requires it to be **zero** before it will issue a fresh grab code, which is
+what makes it the authoritative "am I already holding something". Confirmed
+live against a round-1 Antonio hold (see `enemy-ai.md`, "Being held by a
+player").
+
+The C crossover runs through the `$76`/`$80` family for roughly 28 agent
+ticks before back hold `$66` appears, and the actor is still holding the body
+for all of them.
+
 ### Player holding an enemy: knee vs throw (`$2BA8`)
 
 While the player is in a confirmed hold, `$2BA8` resolves a new logical attack

@@ -832,6 +832,33 @@ need a live trace or framebuffer capture. autoplay's `phases.py` has been
 updated to decode primary state 2 as `CombatPhase.ATTACKING` unconditionally
 for type `$56` on this evidence.
 
+#### Being held by a player (primary `$04`, and the player's `+$4C`)
+
+Live capture, round 1, one-player Blaze (autoplay's `tools/antonio_diag.py`
+plus raw object dumps):
+
+- A player who walks into Antonio without attacking takes a **real hold** —
+  the same `$AAA0` contact code path ordinary enemies use. Front hold
+  `$60`/`$61` accepts B (knee, 2 damage) and C (crossover to back hold
+  `$66`/`$67`); B there is the suplex `$68`/`$69`, 5 damage, and it drops him
+  into primary `$07`.
+- While held, Antonio's primary byte `+$30` reads **`$04`** — the same value
+  as the shared later-boss hit reaction (`$164CA`). There is no separate
+  "grabbed" primary for this path: `$06`-`$09` are only reached by the throw
+  itself. So the boss object alone cannot distinguish "recovering from a
+  punch" from "in the player's hands".
+- The **player** side does carry the link: `+$4C` holds the low word of the
+  held object's address (`$B900` for object-table slot 0). This is the same
+  field `$AAA0` requires to be zero before it will issue a fresh grab code,
+  so it is the ROM's own "what am I holding". The player's `+$60`
+  (`OBJ_HELD_TYPE`) is **not** it: that is the weapon/pickup link written by
+  `$3136`, and during an Antonio hold it reads `$00`, or the type of a weapon
+  the actor happens to be carrying at the same time — carrying a pipe and
+  holding Antonio coexist.
+- Nothing times the hold out. With no input, the pair stays locked: measured
+  at 70 and 90 seconds of a completely static front hold, ending only when
+  the round clock killed the player.
+
 #### Boomerang linked object (`$96`)
 
 `$17206 (antonio_boomerang_link_or_spawn)` scans forward through the object
