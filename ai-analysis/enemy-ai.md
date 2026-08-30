@@ -1097,6 +1097,42 @@ His shared stats from `$17EDC (boss_init_combat_stats)` are base damage `$14` an
 a suplex chain during the shared `$03`/`$04` recovery states is the efficient
 answer once a hit lands.
 
+#### The uncommittable corridor
+
+The three rules above are usually read as three separate things to avoid. Read
+together with the standoff handler they describe one continuous path on which
+`$15EDA (souther_state1_active_combat)` can never fire, from the far side of
+the arena to inside his guard, and it is worth stating explicitly because it is
+not obvious from any single gate:
+
+- the slash commit needs `+$52 < $1C` **and** `+$50 >= $18`. Both. So a
+  position satisfies *neither* half of the gate whenever the player is either
+  more than 28px off his lane **or** closer than 24px on X;
+- those two conditions overlap. A player who holds a lane offset over 28px
+  while closing X, and only converges the lane once inside 24px, is never at
+  any instant inside the commit gate — the lane gate covers the whole
+  approach, and the inner abort takes over exactly where the lane gate is
+  given up. There is no crossing between them;
+- the pocket is stable, not a moment. `$15F98 (souther_state1_standoff)` sends
+  every `+$50 < $19` tick to the band-restore path at `$1606A`, which writes
+  `+$1C = ±$00010000` — **1px per frame** away, against the ~2px/frame a
+  walking player makes. He cannot escape the pocket faster than he is
+  followed. (Above `$78` and below `$90` he writes no X velocity at all; only
+  past `$90` does he close, and also at 1px/frame.)
+
+So the whole fight reduces to: reach the pocket off-lane, then stay in it and
+strike. The only two things that can still hit a player in the pocket are the
+jump counter, which is refused by simply not jumping (`$16234`'s `+$79` comes
+from the player's *own* action state), and a claw that was already committed
+before the pocket was reached, which `$161C6`'s lane-only resolve condition
+lets a >24px lane step defeat.
+
+Note the asymmetry with the standoff dash this exploits: the 4px/frame
+`+$1C` in `$15FCC` is the *screen-clamp* escape (`+$28` outside `$80..$1C0`)
+and the `$16106` dash timer, not the ordinary retreat. Cornering him against
+the clamp therefore does not make him faster in the pocket; it removes the
+1px/frame drift's room instead.
+
 ### Abadede (`$30`, `$143D0 (abadede_update)`)
 
 Abadede predates the `$55-$58` framework. His state byte still lives at `+$30`
