@@ -848,11 +848,11 @@ plus raw object dumps):
   itself. So the boss object alone cannot distinguish "recovering from a
   punch" from "in the player's hands".
 - The **player** side does carry the link: `+$4C` holds the low word of the
-  held object's address (`$B900` for object-table slot 0). This is the same
+  held object's address (`$FFB900 (object_table)` for object-table slot 0). This is the same
   field `$AAA0` requires to be zero before it will issue a fresh grab code,
   so it is the ROM's own "what am I holding". The player's `+$60`
   (`OBJ_HELD_TYPE`) is **not** it: that is the weapon/pickup link written by
-  `$3136`, and during an Antonio hold it reads `$00`, or the type of a weapon
+  `$3136 (find_close_interaction_target)`, and during an Antonio hold it reads `$00`, or the type of a weapon
   the actor happens to be carrying at the same time — carrying a pipe and
   holding Antonio coexist.
 - Nothing times the hold out. With no input, the pair stays locked: measured
@@ -1048,11 +1048,31 @@ standoff bands are `d3/d4 = $78/$90`, replaced by `$88/$98` when `+$5D == 2` —
 this is the code-level form of "pair roles split targeting" for the Round 6
 double Souther.
 
-`$160D0 (souther_state1_close_lane)` (`+$67 = $01`) closes lane at 4px/frame and drops back to tactical
-`$00` once the target's lane `+$14 < $14` or `+$50 < $19`.
+`$160D0 (souther_state1_close_lane)` (`+$67 = $01`) re-runs `$16234 (souther_counter_jump_attack)`, then
+drops back to tactical `$00` once the target's lane `+$14 < $14` or `+$50 < $19`; otherwise it writes a
+facing-signed `+$1C = ±$00040000` (4px/frame). That is the approach axis, not the lane — despite the
+name, this handler never writes `+$20` anywhere in its own body. See the note below the next paragraph
+for where the lane value it's named for actually gets set.
 
 `$16106 (souther_state1_dash_timer)` (`+$67 = $02`) simply counts `+$5C` down and, at zero, clears `+$67`
-and zeroes `+$1C`.
+and zeroes `+$1C`. It never touches `+$20` either.
+
+Neither substate handler above is where the lane actually closes. The only write to `+$20` anywhere in
+primary `$01` is inside `$15F98 (souther_state1_standoff)`'s own screen-clamp branch (`$15FCC`, entered
+when `+$28` is outside `$80..$1C0`): that branch sets `+$1C` and `+$20` together and then sets
+`+$67 = 2` directly, jumping straight past tactical `$01`. Since `$16106 (souther_state1_dash_timer)` never rewrites `+$20`, the
+value `$15FCC` set once keeps being integrated every frame for the whole `$28`/`$22`-frame `+$5C`
+countdown, while tactical reads `$02` the entire time. Live capture (autoplay's
+`tools/souther_diag.py`, sampling `boss.tactical`/`boss.world_y` every tick) confirms the resulting
+asymmetry: across a representative trace, tactical `$01` appeared on only 2 of 696 primary-`$01` ticks,
+while 30 of 153 tactical-`$02` ticks showed a nonzero `world_y` delta averaging ≈3.9px — matching the
+4px/frame `$15FCC` sets, sampled intermittently over the countdown. Tactical `$01` is rare not because
+of a labeling error but because it is reached only through the separate arming branch at the top of
+`$15F98 (souther_state1_standoff)` (`+$7B >= $78`, `+$77` clear, target lane `+$14 >= $10`, `move.b #$01,$67(a0)` then an immediate
+`rts` with no movement that tick), and `$160D0 (souther_state1_close_lane)`'s own exit check above is narrow enough that the state
+is typically abandoned again within a tick or two of being entered. The two labels are correctly
+assigned to their addresses — `$16106 (souther_state1_dash_timer)`'s description already matched its code exactly — but the
+tactical table is the wrong place to look for the lane-closing write itself; `$15F98 (souther_state1_standoff)` is where it lives.
 
 #### State 2: the claw dash (`$16118 (souther_state2_claw_commit)`)
 
@@ -1122,14 +1142,14 @@ not obvious from any single gate:
 
 So the whole fight reduces to: reach the pocket off-lane, then stay in it and
 strike. The only two things that can still hit a player in the pocket are the
-jump counter, which is refused by simply not jumping (`$16234`'s `+$79` comes
+jump counter, which is refused by simply not jumping (`$16234 (souther_counter_jump_attack)`'s `+$79` comes
 from the player's *own* action state), and a claw that was already committed
-before the pocket was reached, which `$161C6`'s lane-only resolve condition
+before the pocket was reached, which `$161C6 (souther_state2_claw_dash)`'s lane-only resolve condition
 lets a >24px lane step defeat.
 
 Note the asymmetry with the standoff dash this exploits: the 4px/frame
 `+$1C` in `$15FCC` is the *screen-clamp* escape (`+$28` outside `$80..$1C0`)
-and the `$16106` dash timer, not the ordinary retreat. Cornering him against
+and the `$16106 (souther_state1_dash_timer)` dash timer, not the ordinary retreat. Cornering him against
 the clamp therefore does not make him faster in the pocket; it removes the
 1px/frame drift's room instead.
 
