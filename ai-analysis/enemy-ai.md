@@ -1153,6 +1153,22 @@ and the `$16106 (souther_state1_dash_timer)` dash timer, not the ordinary retrea
 the clamp therefore does not make him faster in the pocket; it removes the
 1px/frame drift's room instead.
 
+**The two halves are not equally available to a player, and the difference is
+the lane closing in `$15F98 (souther_state1_standoff)`.** The pocket half is
+stable, as above: 1px/frame of drift against 2px/frame of following. The
+*off-lane* half is not, because the same handler closes lane toward the
+target at **4px/frame** — twice the rate a walking player opens it. A lane
+offset over `$1C` is therefore something an approach can arrive at and never
+something it can hold for the length of one, and the corridor's "no crossing
+between the two gates" only describes a player who is already there. This is
+measurement rather than disassembly: autoplay held offsets of 40px and 64px
+all the way in across four batches of scored round-2 fights and neither
+changed the damage taken, because reaching strike range at all still means
+crossing the band the gate lives in. See `autoplay/CLAUDE.md`, "Souther was a
+stalemate" onward. Reaching the pocket *fast* is the part that pays; holding
+lane on the way there is not, and the claw that is already committed is
+answered by the `$18` step above rather than by the approach.
+
 ### Abadede (`$30`, `$143D0 (abadede_update)`)
 
 Abadede predates the `$55-$58` framework. His state byte still lives at `+$30`
