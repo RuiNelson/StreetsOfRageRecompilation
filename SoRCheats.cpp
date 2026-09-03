@@ -6,6 +6,10 @@ namespace SoRCheats {
 namespace {
 
 std::atomic_bool    p1PunchPowerEnabled_{false};
+// Set on the main thread by handleOptionHotkey, drained on the CPU thread by
+// applyPendingSoRCheats -- see SoRCheats.hpp.
+std::atomic_uint    pendingCheats_{kCheatNone};
+std::atomic_int     pendingLevelJump_{-1};
 std::atomic_bool    altControlsEnabled_{false};
 std::atomic_bool    altAttackHeld_[2]    = {false, false};
 std::atomic_bool    altAttackPressed_[2] = {false, false};
@@ -85,6 +89,22 @@ void requestFreePoliceCall(m_long objectAddress) {
 
 bool consumeFreePoliceCall(m_long objectAddress) {
     return freePoliceCaller_.compare_exchange_strong(objectAddress, 0u, std::memory_order_acq_rel);
+}
+
+void requestCheats(unsigned bits) {
+    pendingCheats_.fetch_or(bits, std::memory_order_acq_rel);
+}
+
+unsigned consumeCheats() {
+    return pendingCheats_.exchange(kCheatNone, std::memory_order_acq_rel);
+}
+
+void requestLevelJump(int level) {
+    pendingLevelJump_.store(level, std::memory_order_release);
+}
+
+int consumeLevelJump() {
+    return pendingLevelJump_.exchange(-1, std::memory_order_acq_rel);
 }
 
 } // namespace SoRCheats

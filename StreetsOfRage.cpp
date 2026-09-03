@@ -119,6 +119,24 @@ bool isAlreadyDying(SystemMemory &memory, m_long object) {
     return memory.readWord(object + kObjectHealthOffset) >= 0x8000u;
 }
 
+// An object slot whose primary state is still zero is **mid-spawn**, not a
+// live enemy: a wave's slots are populated before `$937A` runs, so for one
+// frame they hold a complete, visible, uninitialised entity -- type byte
+// already written, everything else not yet. autoplay's observer had to learn
+// the same thing from the read side (`world_map._is_dormant_combatant`, which
+// records five of them appearing for a single tick at state $00 with zero
+// health and zero velocity, and the AI punching at the nearest).
+//
+// Writing a death into one of those is what reset the console. The family
+// sweep runs twice a second for a whole level, so it lands on that one-frame
+// window every so often -- measured at four runs in sixteen -- and a trace
+// caught the transition exactly: the actor walking normally at full health
+// with four lives, reaching x=2268, which is precisely where round 2's wave 2
+// spawns, and the very next poll reading level 0, 'Sega logo', lives 0.
+bool isStillSpawning(SystemMemory &memory, m_long object) {
+    return memory.readWord(object + kObjectPrimaryStateOffset) == 0u;
+}
+
 // Put one ordinary enemy through the cartridge's own forced-death sweep.
 // Split out of killInstantiatedEnemies so the per-family cheats below kill
 // exactly the way the kill-everything cheat already does.
@@ -145,7 +163,7 @@ int killOrdinaryEnemiesMatching(SystemMemory &memory, bool (*matches)(m_byte)) {
 
         if (!isOrdinaryEnemy(type) || !matches(type))
             continue;
-        if (isAlreadyDying(memory, object))
+        if (isAlreadyDying(memory, object) || isStillSpawning(memory, object))
             continue;
 
         killOrdinaryEnemy(memory, object, attacker);
@@ -167,6 +185,14 @@ int killInstantiatedEnemies(SystemMemory &memory) {
     for (int slot = 0; slot < kObjectSlotCount; ++slot) {
         const m_long object = kObjectTable + static_cast<m_long>(slot) * kObjectSlotSize;
         const m_byte type = memory.readByte(object);
+
+        // Same one-frame spawn window the family sweep has to skip -- see
+        // isStillSpawning. This is the K hotkey, pressed by hand rather than
+        // twice a second, so it is far less likely to land on it; the guard is
+        // here because the hazard is identical, not because it was measured
+        // from this path.
+        if (isStillSpawning(memory, object))
+            continue;
 
         if (isOrdinaryEnemy(type)) {
             killOrdinaryEnemy(memory, object, attacker);
@@ -249,16 +275,20 @@ void StreetsOfRage::logCall(m_long source, m_long callsite, m_long target) {
     }
 }
 
+// Every hotkey that changes emulated RAM only *records* what it wants here.
+// This runs on the main thread; the game runs on the CPU thread, and writing
+// object-table bytes from under it is what resets the console. See
+// SoRCheats.hpp's note, and applyPendingSoRCheats below.
 void StreetsOfRage::handleOptionHotkey(OptionHotkeyCode keyCode) {
     if (keyCode.source != OptionHotkeyCode::Source::Keyboard)
         return;
 
     switch (keyCode.keyboardKey) {
         case SDLK_L:
-            incrementByte(memory(), kP1Lives, "P1 lives");
+            SoRCheats::requestCheats(SoRCheats::kCheatAddLife);
             return;
         case SDLK_S:
-            incrementByte(memory(), kP1SpecialAttacks, "P1 special attacks");
+            SoRCheats::requestCheats(SoRCheats::kCheatAddSpecial);
             return;
         case SDLK_P: {
             const bool enabled = !SoRCheats::p1PunchPowerEnabled();
@@ -268,13 +298,9 @@ void StreetsOfRage::handleOptionHotkey(OptionHotkeyCode keyCode) {
                         enabled ? "on" : "off");
             return;
         }
-        case SDLK_K: {
-            const int killed = killInstantiatedEnemies(memory());
-            Logger::log("[cheat] killed %d instantiated enem%s",
-                        killed,
-                        killed == 1 ? "y" : "ies");
+        case SDLK_K:
+            SoRCheats::requestCheats(SoRCheats::kCheatKillAll);
             return;
-        }
         case SDLK_W: {
             const m_long player = activePlayerObject(memory());
             if (player == 0u) {
@@ -291,19 +317,19 @@ void StreetsOfRage::handleOptionHotkey(OptionHotkeyCode keyCode) {
         // N is the ninja. G and B were the good/bad ending jumps until those
         // were dropped as no longer needed.
         case SDLK_G:
-            logFamilyKill("Garcia", killOrdinaryEnemiesMatching(memory(), isGarcia));
+            SoRCheats::requestCheats(SoRCheats::kCheatKillGarcia);
             return;
         case SDLK_N:
-            logFamilyKill("Haku-Ro", killOrdinaryEnemiesMatching(memory(), isHakuRo));
+            SoRCheats::requestCheats(SoRCheats::kCheatKillHakuRo);
             return;
         case SDLK_B:
-            logFamilyKill("Signal", killOrdinaryEnemiesMatching(memory(), isSignal));
+            SoRCheats::requestCheats(SoRCheats::kCheatKillSignal);
             return;
         case SDLK_J:
-            logFamilyKill("Jack", killOrdinaryEnemiesMatching(memory(), isJack));
+            SoRCheats::requestCheats(SoRCheats::kCheatKillJack);
             return;
         case SDLK_U:
-            logFamilyKill("Nora", killOrdinaryEnemiesMatching(memory(), isNora));
+            SoRCheats::requestCheats(SoRCheats::kCheatKillNora);
             return;
         default:
             break;
@@ -313,9 +339,44 @@ void StreetsOfRage::handleOptionHotkey(OptionHotkeyCode keyCode) {
     if (level < 0)
         return;
 
-    memory().writeWord(kLevel, static_cast<m_word>(level));
-    memory().writeWord(kWave, 0);
-    memory().writeWord(kGameState, kLevelIntroState);
+    SoRCheats::requestLevelJump(level);
+}
+
+// The CPU-thread half. Called from the vblank waits in
+// SoRManualFunctions.cpp, which is the game's own frame boundary: its logic
+// for the frame is done and it is waiting for the interrupt, so no object
+// update can be part-way through a record these writes are about to change.
+void applyPendingSoRCheats(SystemMemory &memory) {
+    const unsigned pending = SoRCheats::consumeCheats();
+    if (pending != SoRCheats::kCheatNone) {
+        if (pending & SoRCheats::kCheatAddLife)
+            incrementByte(memory, kP1Lives, "P1 lives");
+        if (pending & SoRCheats::kCheatAddSpecial)
+            incrementByte(memory, kP1SpecialAttacks, "P1 special attacks");
+        if (pending & SoRCheats::kCheatKillAll) {
+            const int killed = killInstantiatedEnemies(memory);
+            Logger::log("[cheat] killed %d instantiated enem%s",
+                        killed,
+                        killed == 1 ? "y" : "ies");
+        }
+        if (pending & SoRCheats::kCheatKillGarcia)
+            logFamilyKill("Garcia", killOrdinaryEnemiesMatching(memory, isGarcia));
+        if (pending & SoRCheats::kCheatKillHakuRo)
+            logFamilyKill("Haku-Ro", killOrdinaryEnemiesMatching(memory, isHakuRo));
+        if (pending & SoRCheats::kCheatKillSignal)
+            logFamilyKill("Signal", killOrdinaryEnemiesMatching(memory, isSignal));
+        if (pending & SoRCheats::kCheatKillJack)
+            logFamilyKill("Jack", killOrdinaryEnemiesMatching(memory, isJack));
+        if (pending & SoRCheats::kCheatKillNora)
+            logFamilyKill("Nora", killOrdinaryEnemiesMatching(memory, isNora));
+    }
+
+    const int level = SoRCheats::consumeLevelJump();
+    if (level < 0)
+        return;
+    memory.writeWord(kLevel, static_cast<m_word>(level));
+    memory.writeWord(kWave, 0);
+    memory.writeWord(kGameState, kLevelIntroState);
     Logger::log("[cheat] loading level %d of %d", level + 1, kLevelCount);
 }
 

@@ -236,6 +236,46 @@ For deterministic gameplay automation, prefer the checked-in remote client
 scripts and the `megadrive_remote` API over imprecise sleeps or unbounded key
 presses.
 
+### Debug cheats run on the wrong thread, and must not touch a spawning slot
+
+Two rules, both paid for by lost measurement runs rather than reasoned out.
+
+**Nothing in `handleOptionHotkey` may write emulated RAM.** That handler runs
+on the **main** thread and `run()` on the **CPU** thread
+(`MegaDriveEnvironment/README.md`, "The important threading rules"), so a
+write from it races the game's own object update. `SoRCheats`'
+`requestFreePoliceCall`/`consumeFreePoliceCall` pair already had the right
+shape -- record on the main thread, consume on the CPU thread inside a manual
+function -- and every other hotkey now follows it: the handler records into
+`SoRCheats::requestCheats`/`requestLevelJump`, and `applyPendingSoRCheats`
+drains them from the vblank waits in `SoRManualFunctions.cpp`, which is the
+game's own frame boundary.
+
+**A slot whose primary state is still `$0000` is mid-spawn and must be left
+alone** (`isStillSpawning`). A wave's object slots are populated before
+`$937A` runs, so for one frame a slot holds a complete, *visible*,
+uninitialised entity: the type byte is already written while nothing else is.
+`killOrdinaryEnemiesMatching` selects on that type byte, so without the guard
+the family sweep can write a death (`$0300`, health `$FFFF`, `+$37` flag)
+into an object the spawn code is still building.
+
+That second one **resets the console**, and it is the bug: measured at four
+runs in sixteen with `autoplay`'s `debug_scenario` sweep running twice a
+second through round 2. A full per-tick trace
+(`autoplay/tools/round2_death_diag.py`) caught the transition -- the actor
+walking normally at full health with four lives, reaching x=2268, which is
+exactly where round 2's wave 2 spawns, and the very next poll reading level 0,
+`'Sega logo'`, lives 0. No death, no damage, no dispatch dump: a boot.
+
+`autoplay`'s own observer had to learn the identical lesson from the read
+side (`world_map._is_dormant_combatant`, which records five such slots
+appearing for a single tick at state `$00` and the AI punching at the
+nearest), so treat "the type byte is set" as *not* meaning "this object
+exists" anywhere in this codebase.
+
+The threading fix came first, is correct on its own terms, and did **not**
+fix the reset -- do not read it as the cure.
+
 ## Disassembly and discovery
 
 Use the repository entry points:

@@ -255,6 +255,14 @@ void StreetsOfRage::compute_player_attack_descriptor(m_long /*entry_*/) {
 void StreetsOfRage::wait_vblank_and_upload_graphics(m_long /*entry_*/) {
     traceEnter(0x00010502u);
 
+    // The one point in the frame where a debug hotkey may safely change
+    // emulated RAM: the game's logic for this frame is finished and it is
+    // waiting on the interrupt, so nothing is part-way through the object
+    // table. Applying these from the hotkey handler instead -- on the main
+    // thread, under a running CPU -- reset the console once every four
+    // scored runs. See SoRCheats.hpp.
+    applyPendingSoRCheats(memory());
+
     memory().writeByte(kVBlankMailbox, 1);
     cpu().setStatus(kStatusIrqEnabled);
 
@@ -270,6 +278,11 @@ void StreetsOfRage::wait_vblank_and_upload_graphics(m_long /*entry_*/) {
 
 void StreetsOfRage::wait_vblank_without_graphics_upload(m_long /*entry_*/) {
     traceEnter(0x00010514u);
+
+    // Same frame-boundary drain as above -- both vblank waits are entry
+    // points, and a hotkey pressed during a frame that takes the other one
+    // would otherwise sit pending until the next.
+    applyPendingSoRCheats(memory());
 
     memory().writeByte(kVBlankMailbox, 2);
     cpu().setStatus(kStatusIrqEnabled);
