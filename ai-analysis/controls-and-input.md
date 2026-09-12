@@ -462,7 +462,7 @@ new B/C edges are `$60`/`$61` (front) and `$66`/`$67` (back). Grab animation
 locks such as `$62`/`$64`/`$68`/`$6A`/`$6C`/`$6E` ignore fresh attack edges.
 
 **Which body is held** is the player's `+$4C`, not `+$60`. `+$60` is the
-weapon/pickup link `$3136` writes; a hold and a carried weapon coexist, so
+weapon/pickup link `$3136 (find_close_interaction_target)` writes; a hold and a carried weapon coexist, so
 during a live hold `+$60` may still read the pipe in the actor's hand — or
 `$00`. `+$4C` holds the low word of the held object's address, and `$AAA0`
 requires it to be **zero** before it will issue a fresh grab code, which is
@@ -498,6 +498,41 @@ Other hold inputs (not confused with B+Up):
 | **B+C** chord while holding | Held-target rear/escape family `$4A` via `$322A (player_attack_jump_chord)` |
 
 Live autoplay contract matches this: knees from B alone; throws from **B+back**.
+
+### The knee chain, the release, and the one crossover
+
+Three counters in the holding player's own object decide what a hold can
+still do. All three were confirmed frame by frame in lockstep against a held
+Souther (autoplay's `tools/souther_hold_lab.py`).
+
+**The knee chain.** `$2BA8`'s B edge sets `+$58` bit 6 and writes `$6A` to
+`+$61` on a hold's first knee. While bit 6 is set and `+$61` is inside
+`[$6A, $6E)`, the next knee is `+$61 + 2`: `$6A`, `$6C`, then `$6E`. The third
+one also changes the reaction code it hands the held body (`$08` to `$0C`),
+and against a later boss it is the heavy hit that knocks him away and ends
+the hold (see `enemy-ai.md`). Bit 6 survives only actions `$60`, `$6A` and
+`$6C` -- `sub_3936` masks `+$58` through the byte table at `$394E` on every
+action change -- so the walk before a grab, a crossover, or any other action
+restarts the chain at one.
+
+**The release.** Holding the stick *back* (Left/Right opposite the facing
+bit) in a front or back hold, with no B/C edge, runs `loc_235A`: `+$63` counts
+down and the hold drops on the step it goes negative. `$3266` seeds `+$63`
+with 3 when the hold is taken and nothing resets it mid-hold, so partial back
+presses accumulate. Measured: a fresh hold released on the 8th back frame. On
+the release the player's facing bit flips (`bchg #0,+$30`), `+$4C`/`+$7D`
+clear, and the action becomes walk `$02` (armed: `$30`). A held later boss
+reads the cleared `+$7D` through `$17CF2` and goes straight back to primary 1.
+
+**One crossover per hold.** `sub_2FE4` turns a C edge into crossover `$76`
+from the front hold and `$80` from the back hold. `sub_26E2` finishes it on
+animation frame 6, landing in `$66` from `$76` or `$60` from `$80` (the
+`$AD18` probe at frame 3 can swap the two families). The same frame sets
+`+$4B` bit 7, and only a fresh grab (`$3266`) clears it; a crossover that finds
+it already set branches to `loc_278A`, which lands the player (`$14`, or `$40`
+armed) outside the hold. Measured against Souther: the second crossover of one
+hold dropped him 24 px from the player, he committed on his next update, and
+the claw landed three frames later.
 
 ### Player held by an enemy: counter is C then B
 

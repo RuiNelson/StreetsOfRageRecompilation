@@ -924,8 +924,10 @@ pair role, and a target-hold counter. This supports the characteristic response
 to a player who commits to a jump or approaches from a vulnerable side.
 
 The handler creates linked types `$98/$99` at `$16BC6/$16C2E`. They are
-animation-synchronized attack/afterimage objects rather than separately
-tracked enemies. The claw sequence can reserve the target's interaction state,
+animation-synchronized visual objects rather than separately tracked enemies:
+the `$98` "claw" carries no box id at all, and the claw's hit is Souther's own
+attack box (see "The claw box, the side-dependent gate, and holding him"
+below). The claw sequence can reserve the target's interaction state,
 advance through several contact phases, and either continue the slash or fall
 back to recovery depending on collision result.
 
@@ -1110,12 +1112,13 @@ For the derived player strategy this yields three rules, all numeric:
 | Threat | Gate | Denial |
 | --- | --- | --- |
 | jump counter (`$16234 (souther_counter_jump_attack)`) | player action `$16`/`$17`/`$42`/`$43`, `+$52 < $12`, `+$50 < $78`, primary `$01` or `$02`+tactical `$00` | do not start a jump attack inside 120px × 18px of him |
-| slash commit (`$15EDA (souther_state1_active_combat)`) | `+$77 == 0`, `+$66 == 0`, `+$52 < $1C`, `+$50` in `[$18, $50/$58/$68)` | approaching widens it; the 24px inner abort denies the start entirely |
-| committed dash (`$161C6 (souther_state2_claw_dash)`) | resolves at `+$50 ∈ [$18,$40)` with `+$52 < $18` | step >24px off his lane; he only steers on X |
+| slash commit (`$15EDA (souther_state1_active_combat)`) | `+$77 == 0`, `+$66 == 0`, `+$52 < $0A` (target above him) or `< $1C`, `+$50` in `[$18, $50/$58/$68)` | approaching widens it; the 24px inner abort denies the start entirely |
+| committed dash (`$161C6 (souther_state2_claw_dash)`), **jump-counter claw only** | resolves at `+$50 ∈ [$18,$40)` with `+$52 < $18` | step >24px off his lane; he only steers on X |
 
-His shared stats from `$17EDC (boss_init_combat_stats)` are base damage `$14` and base health `$20`, so
-a suplex chain during the shared `$03`/`$04` recovery states is the efficient
-answer once a hit lands.
+His shared stats from `$17EDC (boss_init_combat_stats)` are base damage `$14` and base health `$20`.
+The efficient answer is the hold, taken by walking into him rather than after
+a landed hit: the hit reaction `$03` cannot be grabbed from at all (see "The
+claw box, the side-dependent gate, and holding him" below).
 
 #### The uncommittable corridor
 
@@ -1141,11 +1144,17 @@ not obvious from any single gate:
   past `$90` does he close, and also at 1px/frame.)
 
 So the whole fight reduces to: reach the pocket off-lane, then stay in it and
-strike. The only two things that can still hit a player in the pocket are the
+take the hold (a strike from the pocket knocks him back out of it -- see
+below). The only two things that can still hit a player in the pocket are the
 jump counter, which is refused by simply not jumping (`$16234 (souther_counter_jump_attack)`'s `+$79` comes
 from the player's *own* action state), and a claw that was already committed
 before the pocket was reached, which `$161C6 (souther_state2_claw_dash)`'s lane-only resolve condition
 lets a >24px lane step defeat.
+
+(The lane half of this is side-dependent, which the paragraph above does not
+say and every early reading of it missed: the gate is `$0A`, not `$1C`, for a
+target *above* his lane -- see "The claw box, the side-dependent gate, and
+holding him" below.)
 
 Note the asymmetry with the standoff dash this exploits: the 4px/frame
 `+$1C` in `$15FCC` is the *screen-clamp* escape (`+$28` outside `$80..$1C0`)
@@ -1168,6 +1177,83 @@ crossing the band the gate lives in. See `autoplay/CLAUDE.md`, "Souther was a
 stalemate" onward. Reaching the pocket *fast* is the part that pays; holding
 lane on the way there is not, and the claw that is already committed is
 answered by the `$18` step above rather than by the approach.
+
+#### The claw box, the side-dependent gate, and holding him
+
+Everything in this subsection was re-derived from the disassembly for
+autoplay's Souther plan (`autoplay/src/sor_autoplay/ai/souther.py`) and then
+measured frame by frame in lockstep (`autoplay/tools/souther_hold_lab.py`).
+Where it disagrees with the text above, this is the corrected reading.
+
+**The lane gate depends on which side the target is on.** `+$61` is written by
+`$17B2C` as `smi` of (target lane − his lane), so it is set exactly when the
+target stands *above* his lane. `$15EDA (souther_state1_active_combat)`'s lane
+test is therefore `+$52 < $0A` (10px) against a target above him and `< $1C`
+(28px) against one level with him or below. Both bodies' boxes are lane ±8, so
+contact needs the lanes under 16px apart: a target 11-15px above him is out of
+the commit gate and still inside grab range. Below him there is no such band.
+
+**The claw is his own attack box, not the `$98` object.** On commit `$15EDA
+(souther_state1_active_combat)` adds 4 to `+$8`, selecting animation 4 of his
+set `$2E44A`: 20 frames at delay 2. Its frames carry attack shapes `$6D` (0..48px
+forward), `$6F` (46..86, frames 3-6) and `$71` (40..80, frames 12-15), all
+three over lane −10..+24 of his own lane. The type-`$98` object `$16C2E
+(souther_create_claw)` creates carries no box id, so nothing hits through it,
+and the `+4` lane offset `$16C6E (souther_position_claw)` gives it is
+irrelevant to collision. During the same animation his *body* leans forward:
+shapes `$69` (12..36) and `$6B` (12..42), against the idle `$65` (−10..+12).
+
+**An ordinary claw is a swing in place, not a dash.** `$16158
+(souther_state2_claw_windup)` steps `+$10` by ±8 on animation frame `$13`, the
+last of the 20, and the swing ends back in primary `$01`. Tactical `$01`/`$02`
+(`$1619E (souther_state2_claw_launch)`, `$161C6 (souther_state2_claw_dash)`)
+are entered only through `$16234 (souther_counter_jump_attack)`, which is what
+writes `+$67 = 1`. The lane-blind 8px/frame dash and its `$18` resolve lane
+therefore describe the counter's claw only. The ordinary claw has no travel to
+sidestep; it is avoided by staying out of its box: lane −10..+24 plus half a
+player body, 0..86px forward.
+
+**He updates at 30 Hz.** Every timer and velocity in his handlers advances once
+per two frames (`+$62` counts down every other frame in every lab trace), so
+the rates quoted per frame above are per *update*. The standoff's band-restore
+path moves him 1px per update on X and either mirrors the target's lane or
+drifts up 1px per update. The 4px-per-update rush, with its lane homing to
+18-21px above the target (`$179AC`), runs when the target faces away from him.
+
+**Grab beats hit.** `$AAA0` tests the player's attack box `+$64` against the
+enemy's body box first, and when they overlap it returns without testing the
+enemy's own attack box that frame. The overlap is a grab (code 3) when the
+player's `+$34` is clear (no strike live), `+$4C` is clear (nothing already
+held), `+$7C` is not 3 and the two elevations are within 8px, and a hit (code 2)
+otherwise. The carried weapon is not consulted. A player walking into him with
+the walking frame's box out therefore takes a hold even through a claw that is
+already swinging, as long as that box reaches his leaning body first.
+`loc_17B8C` accepts the grab in his primaries `$01`, `$02` and `$04`, and a set
+`+$66` blocks the commit. A strike is the opposite case: `+$34` non-zero turns
+the same contact into a hit, and the hitstun `$163D0` buys is a state whose
+collision is not processed, so it cannot be grabbed from.
+
+**Holding him.** `$3266` takes a front hold `$60` when the two face each other
+and a back hold `$66` when the player is behind him. The held boss reacts
+through `$17CF2`, which indexes the table at `$17D10` by the holder's `+$7D`
+(set from the player action table at `$32F2`), and he never times the hold
+out. Damage per move: knee 2 (`$6A`, `$6C`), third knee 3 plus the knockback
+that ends the hold (`$6E`), suplex 5, throw 4. `$17C36
+(boss_apply_pending_damage)` treats health ≤ 0 as lethal. The knee chain, the
+release countdown and the one-crossover rule live in the player's own object
+(`controls-and-input.md`, "The knee chain, the release, and the one
+crossover"). On a release `loc_235A` clears the player's `+$7D`, and he goes
+straight to primary `$01`, placed 32px in front of the player on the player's
+lane (`$17D76`).
+
+Measured in lockstep (Blaze): knee, knee, release, walk straight back in. He
+was re-held 4-6 frames after each release, six cycles in a row, with no damage
+taken: 4 health per ~55 frames, out of the player's hands for a handful of
+frames each cycle. With two frames of injected input delay he does commit, 3
+frames after the release, and the walk-in still takes the hold at frame 6
+because his leaning body walks into the player's box. The throw and the suplex
+both leave him 100-165px away on the player's lane, which is the re-approach
+every hold-and-finish plan pays for.
 
 ### Abadede (`$30`, `$143D0 (abadede_update)`)
 
