@@ -324,7 +324,18 @@ does not carry into a jump.
 
 Jump-start handler `$1FC0` only decrements frame timer `+$0D`. All three
 characters use jump anim bank `c = $04` with frame-0 duration **5**, so crouch
-lasts **5 frames** before launch. Animation does not advance during crouch.
+lasts **5 object updates** before launch. Animation does not advance during
+crouch.
+
+**Every rate in this section is per object update, and an update is two
+video frames.** `$AD8E (update_objects_and_build_sprites)` updates both
+players, waits a VBlank of its own (`$10514
+(wait_vblank_without_graphics_upload)`), and only then runs the 66 object
+slots; the main loop waits the second VBlank. Every object therefore moves
+once per two 60 Hz frames (plus an occasional lag frame when a pass overruns).
+Measured in lockstep: the crouch timer steps 5→1 over **10** frames, and a
+walking player's X changes by 3.0 on every other frame. See "Measured in
+lockstep" below for the whole flight.
 
 ### Launch (end of crouch)
 
@@ -333,28 +344,28 @@ When the crouch timer expires, `$1FC0`:
 1. advances action by 2 (`$10 → $12`);
 2. `$2EF2` re-enters free-flight anim and again zeros X/Y via `$3614`;
 3. `$3832` writes initial Z velocity from the character table at `$3842`;
-4. `$384E` sets X velocity to **±`$00030000` (±3.0 px/frame)** if Left or
+4. `$384E` sets X velocity to **±`$00030000` (±3.0 px/update)** if Left or
    Right is held, and updates facing; if neither is held, **X stays 0**.
 
-On that same transition frame, gravity is **not** applied yet; `$442C`
+On that same transition update, gravity is **not** applied yet; `$442C`
 integrates position once with the launch velocities.
 
 | Character | ID | `$3842` long | Launch \(v_z\) |
 |---|---:|---:|---:|
-| Axel | 0 | `$FFF88000` | **−7.5** px/frame |
-| Adam | 1 | `$FFF78000` | **−8.5** px/frame |
-| Blaze | 2 | `$FFF68000` | **−9.5** px/frame |
+| Axel | 0 | `$FFF88000` | **−7.5** px/update |
+| Adam | 1 | `$FFF78000` | **−8.5** px/update |
+| Blaze | 2 | `$FFF68000` | **−9.5** px/update |
 
 Negative Z velocity raises the character (object `+$18` decreases). Positive Z
 velocity falls toward the floor sample from `$AD2A`.
 
 ### Free flight
 
-Each free-flight frame (`$1FDC`):
+Each free-flight update (`$1FDC`), in this order:
 
 | Step | Routine | Effect |
 |---|---|---|
-| Gravity | `$389A` | \(v_z \mathrel{+}= `$E800`\) (**+0.90625** px/f²) |
+| Gravity | `$389A` | \(v_z \mathrel{+}= `$E800`\) (**+0.90625** px/update²) |
 | Air steer | `$38C0` | Left/Right adds **±`$6000` (±0.375)** to \(v_x\); clamp **±`$38000` (±3.5)**; updates facing |
 | Kick edge | `$3914` | If attack bit 4 is newly pressed: set `+$58` bit 2, action ← `(action & $FE) + 4` (`$12 → $16`), re-init anim, play kick sound |
 | Fall clamp | `$3886` | \(v_z \le `$C0000` (**12.0**) |
@@ -409,42 +420,65 @@ position integration for the jump-attack anim group.
 
 When falling collision in `$3E78` finds floor height `d6`: snap `+$18` to the
 floor, clear \(v_z\), play land sound, set action `$14` (or weapon `$40`). Land
-handler `$1FE8` uses another **5-frame** timer, then returns to ground idle
-`$02` via `(action & $FE) − $12`.
+handler `$1FE8` uses another **5-update** timer (10 frames), then returns to
+ground idle `$02` via `(action & $FE) − $12`.
 
-### Closed-form trajectory summary
+### Hit freeze
 
-With constant \(v_x = 3.0\) (direction held), crouch 5 frames, no early kick:
+`$21B4`, the first thing the kick handler `$2000` calls, starts a freeze on
+the update after a damaging contact (`+$7C` = 2): `+$59` bit 7 is set and
+`+$4F` loaded with 4, and while it counts down the handler skips gravity and
+`$442C` skips integration. The flight stands still for 4 updates and then
+resumes along the same path, so which bodies a kick crosses does not depend on
+the freezes -- only when it crosses them.
 
-| Char | Free-flight frames to land | Approx. horizontal range | Apex (relative) |
-|---|---:|---:|---:|
-| Axel | 18 | **54** px | ≈ −35 |
-| Adam | 20 | **60** px | ≈ −44 |
-| Blaze | 22 | **66** px | ≈ −55 |
+### Measured in lockstep
 
-Kicking from the first free-flight frame (lighter fall gravity) extends that
-to about **60 / 69 / 75** px. Air steer can push \(|v_x|\) to 3.5. Stationary
-launches (\(v_x = 0\) at takeoff) only gain range from mid-air L/R.
+Lockstep host, one frame per step, from grounded idle: C + Right on frame 0,
+Right held throughout, B on the first free-flight update; object `+$10`,
+`+$18`, `+$1C`, `+$24`, `+$30`, `+$34`, `+$64` and `+$70` sampled every frame
+(autoplay's `tools/jump_kick_lab.py`, all three characters, kicked, unkicked,
+late-kicked, vertical and direction-released variants). The recurrence below
+reproduces every 16.16 position and every attack box of every variant exactly.
 
-Discrete recurrence (faithful agent solver form):
+| Char | Updates to land (no kick) | X travelled (no kick) | Apex | Kick box from the edge |
+|---|---:|---:|---:|---|
+| Axel | 19 (17) | **67.1** (62.4) px | −34.9 | same update, 3 damage |
+| Adam | 23 (~19.5) | **77.3** (69.4) px | −44.2 | same update, 3 damage |
+| Blaze | ~24 (~21) | **84.0** (76.4) px | −54.7 | **6 updates later**, 2 damage |
+
+The kicked flight goes further than the unkicked one for two reasons: the
+lighter fall gravity, and the one air-steer step taken before the edge
+(v_x 3.0 → 3.375, then locked by the kick, which has no air steer). Blaze's
+kick animation carries no attack box on its first two frames (3 updates
+each). Standing (idle) body boxes, relative and facing right: Axel x[0..13]
+z[−51..0], Adam x[−5..+7] z[−53..0], Blaze x[+2..+12] z[−48..0], lane ±8. So
+the kick box rides clear above a standing body near the apex -- Axel's box
+bottom is 19 px above his origin and a standing body's top 51, so nothing
+overlaps while he is more than 32 px up -- and reaches it far out on the way
+down: Axel's kick lands on a standing body as far as ~110 px from takeoff. A
+lag frame (an object pass that overruns) occasionally adds one frame between
+two updates.
+
+Discrete recurrence, one step per object update:
 
 ```text
-// After 5 crouch frames at ground z_g:
+// 5 crouch updates at ground z_g, then the launch update:
 vz ← vz0[char];  vx ← ±3.0 if dir held else 0
-// First free-flight frame (no gravity yet):
-x ← x + vx;  z ← z + vz
-// Later free-flight / kick frames:
-if kick and vz ≥ 0:  vz ← vz + 0.53125
-else:                vz ← vz + 0.90625
-vx ← clamp(vx + air_steer, −3.5, +3.5)
+x ← x + vx;  z ← z + vz                  // no gravity yet
+// Each later update:
+if kicking:  vz ← vz + (0.90625 if vz < 0 else 0.53125)   // sign tested first
+else:        vz ← vz + 0.90625
+             if dir held: vx ← clamp(vx ± 0.375, −3.5, +3.5); facing ← dir
+             if fresh B:  kicking ← true                   // keeps vx
 vz ← min(vz, 12)
 x ← x + vx;  z ← z + vz
-// Land when z ≥ z_g after a falling integrate (ROM uses collision probe)
+// Lands on the update whose integrate reaches z ≥ z_g (z snaps to z_g)
 ```
 
 Multi-enemy use: the kick remains active for the rest of the airtime after B.
-Any foe whose body AABB intersects the moving attack box on some kick frame is
-hit. Same-lane packs on the flight path are therefore one of the strongest
+Any foe whose body AABB intersects the moving attack box on some kick update
+is hit. Same-lane packs on the flight path are therefore one of the strongest
 uses of jump-kick; a predictive solver should score plans by **how many live
 hostiles the arc will damage**, not only primary-target distance bands.
 
