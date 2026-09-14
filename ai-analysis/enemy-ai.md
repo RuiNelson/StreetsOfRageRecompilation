@@ -775,8 +775,9 @@ Antonio uses the family-C table rooted near `$16CF4`. Initialization at
 `$16D0A (antonio_state0_init)` selects a player, initializes stats through `$17EDC (boss_init_combat_stats)`, loads animations
 from `$2E8B4`, and discovers a same-type partner if the ELC supplied one.
 
-The tactical code keeps wider spacing than the close-range bosses and selects
-an attack when X is roughly `$28-$78` and lane separation is small.
+Everything he decides is decided in primary 1: two gates -- the dash and the
+kick -- run first on every update, then a tactical table (see "Body state
+machine" below).
 
 **Correction:** an earlier version of this section attributed the boomerang's
 positioning to `$16C6E (souther_position_claw)`. That address is actually Souther's own claw-object
@@ -789,48 +790,123 @@ The target selector at `$16D40 (antonio_select_target)` has explicit pair-role t
 is used by the optional extra/variant record as well as by repeated Round 8
 encounters; it is not evidence for a story-level second Antonio in every mode.
 
-#### Body state machine (states 0-2) and the user-reported power kick
+#### Body state machine: one update of primary 1, and the kick
 
-Antonio's own body cycles three primary states, distinct from the linked
-boomerang's own sub-state machine below:
+`$16D0A (antonio_state0_init)` selects a target, initializes the combat stats
+and animation, and advances to primary 1. Everything Antonio decides after
+that is decided in primary 1, once per object update -- 30 Hz, since
+`$AD8E (update_objects_and_build_sprites)` runs both players, waits a VBlank,
+then every object. `$16DA0 (antonio_state1_active_combat)` does, in order:
 
-- **State 0** — `$16D0A (antonio_state0_init)`: selects a target, initializes
-  combat stats/animation, advances to state 1.
-- **State 1** — `$16DA0 (antonio_state1_active_combat)`: turns to face the
-  target (tactical `$09` while the target is outside the facing cone at
-  `+$28`); once facing, maintains the linked boomerang object every tick
-  while tactical `>=6`; arms tactical `$08` (the boomerang wind-up/throw
-  commit, `$16E88`) when target X-distance `+$50` is in `[$28,$78)` and
-  `+$52<$14` — this is the existing "dash-like commit" already decoded as
-  `CombatPhase.CHARGE` in `phases.py`, and matches the `$28-$78` attack
-  window this section already described for the boomerang.
-- **State transition 1→2** (`$16F0E`, inside state 1): independently of the
-  boomerang arm, advances `+$30` from 1 to 2 when the target is within a
-  distance/velocity/facing-gated window: target X-velocity `+$1C(target)`
-  (its sign relative to Antonio's own facing `+$60`), target flag
-  `+$31(target)` bit 1 (facing or action flag, not yet named), and distance
-  thresholds `$50`/`$68`/`$78` selected by that branch — reached whether the
-  target is closing, standing still, or retreating within range. A **target
-  velocity of exactly zero is one of the trigger paths**, which is the
-  player's own signature while throwing a stationary ground combo. Antonio
-  plays a distinct animation (index 4, vs. the dash's index 0) via
-  `sub_0001588A` on this transition.
-- **State 2** — `$171CC (antonio_state2_close_strike)`: a short committed
-  action — tactical is cleared to 0 on entry, so the pre-existing
-  tactical-based `CHARGE`/`ATTACKING` heuristic **cannot see this state at
-  all**; it applies pending damage and runs until object `+$0A` reaches 8,
-  then returns to state 1.
+1. `$16D40 (antonio_select_target)`; `$179F8` (target unavailable, `+$77`,
+   while its action is `$5A`-`$5F` or its `+$59`/`+$4B` bit 1 is set);
+   `$17B0C` (face the target; `+$50`/`+$52` absolute X and lane distance;
+   `+$60`/`+$61` set when the target is left of / above him);
+   `$17C36 (boss_apply_pending_damage)`; the held dispatch `$17CF2`; and the
+   contact test `$17B52` -> `$AA22` (see "Contact order" below);
+2. boomerang upkeep (`$17206 (antonio_boomerang_link_or_spawn)`) while
+   tactical is under 6;
+3. **the screen test.** `+$28` is his biased screen X, written by
+   `$AF46 (emit_object_sprite_mapping)` (`$80` is the left edge). Outside
+   `[$80, $1C0)` he is off screen and walks back on: tactical `$09`, X
+   velocity 4 px/update toward the screen centre (`$120`), lane velocity +4
+   when the target's lane is under `$38` and -4 otherwise, `+$5C` = `$48`
+   (`$46` for pair role 2) -- and **both gates below are skipped**. An earlier
+   version of this section read `+$28` as a facing angle and tactical `$09`
+   as "turning to face the target";
+4. with the target available, `+$6A` bit 0 records `+$50 < $78` ("near"),
+   then **the dash gate** `$16E74`: tactical not already 8, `+$50` in
+   `[$28, $78)` and `+$52 < $14` arm tactical 8 -- X velocity 4 px/update at
+   the target (`$16E88`), the lane velocity left as it was, integrate, done;
+5. **the kick gate** `$16EAE` (a dash already armed comes straight here).
+   The X threshold is read off the *target's own* `+$1C` high word, negated
+   when `+$60` is set: negative (walking into him) `$78`, positive (walking
+   away) `$50`, zero `$68` when `+$60` equals the target's `+$31` bit 1 and
+   `$50` otherwise. No player code sets `+$31` bit 1 (only bit 0, in `$7250`),
+   so a player standing still is kicked from `$68` on his right and `$50` on
+   his left. The lane gate is **`+$52 < $08` when the target is above his
+   lane** (`+$61`) and `< $10` otherwise. On success: tactical and `+$78`
+   cleared, primary 2, animation `$04` from frame 1 (from frame 0 when the
+   idle was showing its frame 2), no integrate;
+6. otherwise the tactical dispatch `$17A5C` through the table at `$16F42`:
 
-This state-1→2 transition is a strong, ROM-grounded match for the
-user-reported "power kick that can break a player's combo or grab": it is a
-short, separately-animated commit, gated on the target's own
-velocity/facing rather than pure distance the way the boomerang arm is, and
-specifically fires while the target is stationary — as a player is while
-mid-combo. What is **not** yet confirmed is the move's visual identity (is
-it actually a kick?) and the exact semantics of `+$31(target)` bit 1; both
-need a live trace or framebuffer capture. autoplay's `phases.py` has been
-updated to decode primary state 2 as `CombatPhase.ATTACKING` unconditionally
-for type `$56` on this evidence.
+| `+$67` | Handler | What it does |
+| ---: | --- | --- |
+| 0 | `$16F96` | near: back off 1.5 px/update for `$20` updates, lane from `$179AC`; far: stop, then the pose (`+$50 >= $C0`) or the lane approach |
+| 1 | `$16FFE` | the pose (animation `$2C`) for `$1C` updates, then a 1 px/update walk -- toward from `$80` out, away inside it |
+| 2 | `$1703E` | that walk (`$28`), `$1C` updates, the lane wobbling by `$17A6E`; then the lane approach |
+| 3, 4 | `$1705C`, `$170B8` | stand (`$24`), then walk toward; reached only from tactical 2 with `+$50 < $14`, which "far" excludes |
+| 5 | `$170E4` | lane walk 1 px/update toward the target; `+$52 < $14` starts the wind-up |
+| 6 | `$17120` | the boomerang wind-up (`$30`): `$24` updates standing still |
+| 7 | `$17132` | the throw (`$34`); a target that turned its back within `$E0` and `$14` of lane gets the dash; otherwise he waits to catch the boomerang |
+| 8 | `$16F68` | the dash: on while `+$50 >= $28` (or inside it with `+$52 < $10`), off at `$E0`; lane homing by `$1797E`, 4/2/1/0 px at `+$52` of `$20`/`$10`/`$08`/less |
+| 9 | `$16F56` | the walk back on screen, `+$5C` updates |
+
+Tacticals 1, 2, 4, 5 and 7 hand a near target straight back to tactical 0,
+so everything from 1 to 7 happens only with the target 120 px or more away:
+the boomerang is a long-range move, and up close he has exactly two -- the
+dash, which is harmless idle animation 0 carrying him at 4 px/update into the
+kick gate, and the kick.
+
+**His lane (`$179AC`, tactical 0).** A target *below* him is kept 18-21 px
+down: 4 px/update away under 8, 1 px away at 8-17, still at 18-21, toward
+1/2/4 px at 22/26/32 and beyond. A target *above* him is rushed at 4
+px/update, through its lane. So he parks just outside his own below-gate, and
+the side where his gate is narrowest is the side he closes on at once.
+
+**The kick** (primary 2, `$171CC (antonio_state2_close_strike)`) is the
+user-reported power kick, identified by its boxes (set `$2E8B4`, animation
+`$04`, nine frames of three updates, every box lane +-8):
+
+| Frame | Attack box (px forward) | Body box |
+| ---: | --- | --- |
+| 0 | -- | -14..15 |
+| 1 | -8..30, z -36..-6 | -6..22 |
+| 2 | -8..60, z -36..-6 | -6..22 |
+| 3-6 | 12..84, z -50..-32 | 14..40, z -74..0 |
+| 7, 8 | -- | -14..15 |
+
+It runs until `+$0A` reaches 8 -- 21 updates from frame 1 -- applying pending
+damage and the contact test every update and never integrating: he stands
+still through it. `$AF46 (emit_object_sprite_mapping)` latches `+$02`/`+$03` from the frame it draws and
+only then steps the frame (`$B0C8`), so the frame on screen is the one that
+collides on his next update, and the first kick box is live one update after
+the gate fires.
+
+**Contact order** (`$AAA0`, player side): the player's attack box `+$64` --
+while walking, the walk animation's box, Axel 0..16, Adam 0..20, Blaze 0..19
+px ahead -- is tested against his body box *first*. On overlap with the
+player's `+$34` clear, `+$4C` clear and the two within 8 px of height it is
+grab code 3, and his attack box is not tested at all that update. All three
+axes compare inclusively (`$AB88`), so lanes 16 apart still touch. A walk
+that meets his leaning body -- 22 px out on frames 1-2, 40 px on frames 3-6
+-- therefore takes the hold through a kick already on its frames.
+
+Whether any of that is tested at all is read off the *player*. `$AA34`
+skips a player whose `+$59` bit 1 is set -- every hit reaction sets it
+(`$333E (resolve_player_hit_or_ko)`, `$33EC`, `$3468`, `$34CA`) and the floor
+landing `$3F24` clears it, so a knocked-down player is not kicked again --
+and tests no contact at all while the player's `+$7C` bit 0 still holds a
+contact code not yet consumed. The player's boxes are the ones `$4140`
+cached at the end of the player's own update, before the object pass's
+`$43AA (clamp_players_to_gameplay_bounds)` pulls it back inside the camera
+and the lane band, so a walk pinned at a clamp makes contact from one step
+past where it stands. Both confirmed in lockstep (autoplay's
+`tools/antonio_lab.py`): no frame of a kick landed on a player lying in a
+hit reaction, and a walk held into the camera's left edge took the hold
+2 px short of where the clamped walking box reaches.
+
+**Held** (`$17CF2`, jump table at `$17D10`, indexed by the holder's `+$7D`):
+0 and 8 release him (`$17D3E`: straight to primary 1 where he stands); 1 is
+the front hold (`$17D54`, placed by `$17D76`'s `$28` -- 40 px in front of the
+holder, on its lane; Souther's entry is `$20`); 2 the back hold (`$17D7C`);
+3 a knee (2); 4 the third knee (3, plus the knockback flag); 5 thrown
+(`$17DB6`, primary 6); 6 the suplex (`$17E52`, primary 7); 7 the throw
+(`$17E96`, primary 8); 9 nothing.
+
+Taken together there is one geometry that is kick-proof and grab-ready by
+construction: **8 to 16 px above his lane**. autoplay's `ai/antonio.py`
+replays all of the above update by update and plans the engage on it.
 
 #### Being held by a player (primary `$04`, and the player's `+$4C`)
 
@@ -899,8 +975,8 @@ lower-confidence pieces of that state machine:
   `+$7C`, 1 sets `+$7D`, 2 re-enters the reverse state above). On sustained
   contact each advances the child's state via a `+$6B` countdown and copies
   the parent's lane into the child's `+$52`. `$17320 (antonio_boomerang_catch_check_b)` additionally applies a
-  small lane-distance-gated velocity nudge before checking facing-angle exit
-  bounds at `+$28`. Why Antonio's boomerang has two similar catch-check
+  small lane-distance-gated velocity nudge before checking the screen-X exit
+  bounds at `+$28` (the renderer's biased screen X, not an angle). Why Antonio's boomerang has two similar catch-check
   routines instead of one shared path is not confirmed. Confidence 65%.
 - `$173D8 (antonio_boomerang_follow_parent_animation)`: positions the child
   from the parent's current animation-frame index (`+$A` on the parent,
@@ -2063,19 +2139,20 @@ registers combat objects; the engine advances the campaign.
 2. Capture linked objects `$96-$99` in the framebuffer and SAT to assign exact
    names (boomerang, claw trail, flame, or invisible hitbox) to every state.
 3. Decode every family primary/tactical table into named moves without relying
-   on visible retail descriptions. Souther (`$55`) is now done — both family
-   states and both tactical tables are decoded above, including the `$16234 (souther_counter_jump_attack)`
-   jump counter — so this remains open for Bongo (`$57`) and the twins
-   (`$58`) only.
+   on visible retail descriptions. Souther (`$55`) and Antonio (`$56`) are
+   done — both family states and every tactical handler are decoded above,
+   including Souther's `$16234 (souther_counter_jump_attack)` jump counter and
+   Antonio's `$16F42` table, dash and kick gates — so this remains open for
+   Bongo (`$57`) and the twins (`$58`) only.
 4. Match each raw `object+$59` selection bit to the exact displayed answer text
    in both Mr. X prompts; the static route matrix itself is now decoded in the
    story-flow manuscript.
-5. Antonio's primary state 2 (`$171CC antonio_state2_close_strike`, entered
-   from state 1 at `$16F0E`) is now a strong candidate for the user-reported
-   combo/grab-breaking power kick — see the "Body state machine" subsection
-   under Antonio above. Still needs a live trace or framebuffer capture to
-   confirm the move's visual identity and to name target-object flag `+$31`
-   bit 1, which gates part of the state-1→2 transition.
+5. Resolved: Antonio's primary 2 (`$171CC (antonio_state2_close_strike)`) is
+   the power kick, identified by the attack and body boxes its animation
+   selects (the "Body state machine" subsection under Antonio). The target
+   flag `+$31` bit 1 that selects `$68` or `$50` for a standing target is
+   never set by player code (only bit 0 is, in `$7250`), so for a player the
+   choice reduces to which side of him it stands on.
 
 ### Boss analysis-data update ledger
 

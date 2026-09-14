@@ -51,7 +51,7 @@ P1 is always the object at `$FFB800 (p1_object)`; P2 is always at `$FFB880 (p2_o
 | `+$51` | byte | Animation/object interaction gate, also used to reserve a grabbed target. | Medium-high. |
 | `+$54` | word | Remapped held/pressed input pair; byte `+$55` is the edge/press byte used by action tests. | High. |
 | `+$56` | byte | Deferred/fallback incoming damage when the attacker's live `+$34` cannot be used. | High. |
-| `+$58`, `+$59` | bytes | Player action, combo, invulnerability, and transition flags. | Medium; individual bits need names per state. |
+| `+$58`, `+$59` | bytes | Player action, combo, invulnerability, and transition flags. `+$59` bit 1 is the hit-reaction bit: every hit reaction sets it (`$333E (resolve_player_hit_or_ko)`, `$33EC`, `$3468`, `$34CA`) and the floor landing `$3F24` clears it; while it is set `$AA34` tests no enemy contact on the player and a later boss's `$179F8` counts the player as unavailable (`enemy-ai.md`, Antonio). | Medium; `+$59` bit 1 high (writers, readers and a lockstep trace), the other bits need names per state. |
 | `+$5A`, `+$5B` | bytes | Saved animation frame and duration during an interrupted/continued action. | High. |
 | `+$5C` | byte | Short timer used by attack/combo and temporary-state logic. | Medium. |
 | `+$5E` | word | Pointer to the object currently grabbed/held. | High. |
@@ -577,6 +577,6 @@ connection.
    reset and instead changes the bonus-life threshold index. The ROM has no
    static writer, so this is unreachable in ordinary cleared-RAM play; its
    intended developer/debug contract remains unknown.
-2. Several `+$58/+$59` bits combine invulnerability, combo continuation, grab state, and temporary locks. They should be named only after per-state traces, not globally from one call site.
+2. Several `+$58/+$59` bits combine invulnerability, combo continuation, grab state, and temporary locks. They should be named only after per-state traces, not globally from one call site. `+$59` bit 1 now has one (the hit-reaction bit in the field table above); the rest remain open.
 3. The time-over path enters a global timed display state before resuming object updates. The indirect branch at `$109D4` should be traced in 1P, P2-only, and 2P modes to document exactly when each active player is forced into the fatal state.
 4. The mechanics of both caller-index scripts are now statically complete. A framebuffer/object-table capture would only refine the retail visual names of individual type-`$05/$0D/$0E` child actors; it is not needed for timing, damage, or attribution.
