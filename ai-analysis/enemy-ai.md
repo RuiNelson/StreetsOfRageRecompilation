@@ -1373,11 +1373,148 @@ The base `(health, damage)` pairs at `$145BC` are Easy `($20,$10)`, Normal
 variant bonuses from ELC fields, so a repeated Abadede need not have exactly
 the canonical Round 3 values.
 
-The core behavior is a charge/clothesline cycle. `$1401E` flips velocity signs
-toward the selected player, while `$14048` updates facing. Collision dispatcher
-`$13ED8 (bespoke_boss_collision_dispatch)` routes contact outcomes: a clean hit marks the player interaction,
-received attacks subtract the attacker's `+$34` from `+$32`, and lethal damage
-selects state `$0E`.
+The canonical Round 3 Abadede therefore has 32 health and hands 32 damage
+(`+$34`) to every player his contact lands on.
+
+#### Dispatch, timers and the linked body
+
+`$143D0 (abadede_update)` dispatches the primary `+$30` through the word
+table at `$14466`; most handlers dispatch again on the substate `+$5B`
+(`$12B4C`), and every timer he runs is the word at `+$54`. His target is
+`+$5C` (`$129F8`: P1 in a one-player game, the player nearer on X with two).
+The linked type `$31` is a second sprite that follows him (`$1569C` copies
+his position with a per-pose offset) and has no collision of its own.
+`$13ED8 (bespoke_boss_collision_dispatch)` is Mr. X's; Abadede's own contact
+dispatch is `$154E0`. Everything runs once per object update, 30 Hz
+(`$AD8E (update_objects_and_build_sprites)` waits a VBlank between the
+players and the objects).
+
+| Primary | Handler | Behaviour |
+|---:|---:|---|
+| `$00` | `$144E0 (abadede_init)` | creates `$31`, stats, then primary 1 |
+| `$01` | `$145EC` | approach: substate 0 `$145F8` aims, 1 `$14616` walks |
+| `$02` | `$14656` | the pause, then the decision |
+| `$03` | `$146F0` | retreat: 0 `$146FC` aims, 1 `$1472E` walks away |
+| `$04`/`$05` | `$1477A`/`$147A6` | a strike landed: the shake (no contact test), then primary 3 |
+| `$06` | `$14B0E` | knocked down (a heavy hit, the police, a lethal blow): flight, floor, then `$0A` or the death |
+| `$07` | `$14BDC` | the charge: 0 set-up, 1 the run, 2 the brake, 3 the punch |
+| `$08` | `$14D04` | he holds and throws a player |
+| `$09` | `$1512E` | suplexed (5 points) |
+| `$0A` | `$14A8A` | getting up (8 updates), then primary 1 |
+| `$0B` | `$1485C` | held (below) |
+| `$0C` | `$15266` | the death |
+| `$0D` | `$14EA2` | held from behind, handed so at the grab |
+| `$0E` | `$14F46` | thrown (4 points on the landing) |
+| `$0F` | `$147C0` | hit by a type-`$0C` object; not decoded |
+
+#### Approach, pause, retreat, charge
+
+- **State 1** re-aims both velocities at the target every update (`$1566E`:
+  each turned toward it, 6 px an update) and, while the high-word lane gap is
+  `$10` or more, steps the lane -- and X, only while `|dx| >= $18` (`$12A78`
+  with `$00100018`; there is no clamp). Under `$10` it stops for the pause:
+  `+$54` = 4.
+- **State 2** stands, re-aiming, for four updates, then decides: a lane gap
+  of `$10` or more walks again (primary 1); `$50 < |dx| <= $70` with his
+  screen X `+$28` in `[$80, $1C0)` (`$97CE`) backs off first (primary 3);
+  anything else charges (primary 7).
+- **State 3** walks away from the target at 6 px an update, facing it, with
+  no lane speed, for 20 updates or until `+$28` leaves `[$80, $1C0)`, then
+  pauses again.
+- **State 7**: the set-up (`$14BEC`) turns a 12 px/update X velocity toward
+  the target and zeroes the lane speed -- **the lane he starts on is the lane
+  he keeps**, and nothing re-aims the run. Each run update (`$14C38`) tests
+  contact, then, while `|dx| >= $10`, steps and stops at a screen edge
+  (`+$28` as the last render left it: `<= $80` running left, `>= $1C0`
+  running right) into the pause with `+$54` = 1. Under `$10` the brake: 2
+  updates with no contact test (`$14CB4`), then the punch, animation `$14`,
+  for 15 updates (`$14CDC`), then primary 3.
+
+#### What touches a player
+
+His update is the only place his contact is tested (`$154E0` calls `$AA22`),
+in states 1, 2, 3 and the charge's run and punch. The shake, the brake, the
+hold states, the knockdown and the getting-up test nothing: he can be
+neither hit nor grabbed there, and hurts no one. `$AAA0` tests the player's
+attack box against his body first, and his attack box against the player's
+body only when that misses. The boxes (set `$34B94`; shapes `$1A68E`, lanes
+`$1AB8E`) are the same on every frame of the animations he fights in:
+
+| Animation | Attack box | Body box |
+|---|---|---|
+| walk `$04`/`$06` (states 1-3) | `$37`/`$36`: 8 px behind to 32 ahead, lane +-2 | `$2E`/`$2D`: +-12, lane +-10 |
+| run `$08`/`$0A` | `$33`/`$32`: 16 px behind to 32 ahead, lane +-8 | `$2E`/`$2D` |
+| punch `$14`/`$16` | `$31`: 32 px behind him to his origin; `$30`'s record has a negative width and never meets a body | none |
+
+The contact codes (`$15504`):
+
+- **1, his box on the player**: in states 1 and 2 he takes the player
+  (`+$7C`/`+$7D` = 1/2) into state 8's hold and throw; in the run it is a hit
+  (`+$7D` = 1) for his `+$34`; in state 3 it is dropped (`+$7C` cleared). In
+  the punch `$14CDC` clears the target's `+$7C` right after the test, so **the
+  punch that ends the charge never lands on the player it targets**: the run's
+  box is the charge's only damage.
+- **2, a strike on him** (counted only inside `[$78, $1C8)` of his screen X):
+  state 4, or state 6 when the strike carried the knockdown flag (the
+  player's `+$42` into his `+$37`), and the striker's `+$34` off his health.
+  State 4 sets up 10 updates of shake (state 5), then primary 3.
+- **3, the grab** (the player's attack box with `+$34` clear, `+$4C` clear,
+  heights within 8): the primary from the table at `$155B2`, by the player's
+  `+$7D` -- `$0B` for a player walking in.
+
+Against a player (boxes lane +-8, inclusive compares) his body is met from
+18 lanes away, the run's box from 16, the walk box from 10. **Seventeen or
+eighteen lanes off the lane of his run, a walking player takes him and
+nothing of his reaches the player.** On the lane, the run's box (32 px
+ahead, against a body about 12 px wide) is met in a 13-px window before a
+walking box can reach his body (19 px for Blaze, against his 12), and his
+12 px an update always lands in it against a standing player; only a strike
+reaches further (Blaze's punch box ends 68 px out) and meets the run first.
+
+His lethal tests (`$15632`, `$15094`, `$14A56`) subtract and branch `bgt` to
+the living path: a health of exactly 0 is dead, and the knockdown hands him
+to `$0C`.
+
+#### Being held (`$1485C`)
+
+Substate 0 (`$1486E`) stands him 24 px in front of the holder (`+$3E`, the
+last collider), facing it, with `+$54` = 40. Substate 1 (`$148C8`) counts
+`+$54` down and dispatches the **holder's** `+$7D` through `$14992`. The
+holder writes its own `+$7D` from its action through the byte table at
+`$32F2` (`$32D8`): `$60` 1, `$66` 2, knees `$6A`/`$6C` 3, the third knee
+`$6E` 4, the throws `$62` 5 and `$64` (Blaze) 7, the suplex `$68` 6, the
+crossovers `$76`/`$80` 9.
+
+| Holder's `+$7D` | Effect |
+|---:|---|
+| 0 (released) | primary 3, standing where the hold left him -- and his first contact test there is a fresh grab for a player walking back in |
+| 1, 2 | nothing |
+| 3 | the holder's `+$34` off his health, then 12 updates (substates 2-3, `$14A10`/`$14A42`) reading nothing, then substate 0 again (`+$54` back to 40) |
+| 4 | 6 updates later the holder's `+$34`, and the knockdown |
+| 5, 7 | primary `$0E`, the throw's flight: 4 points on the landing |
+| 6 | primary `$0D`, then `$09` while the holder's `+$7D` stays 6: the suplex, 5 points |
+| 9 | `+$54` held at 30 |
+
+With `+$54` spent -- 40 updates with nothing read -- he frees himself into
+state 3. A holder hit while holding him (`$333E (resolve_player_hit_or_ko)`
+writes 5 into its own `+$7D`) sends him on the throw's flight.
+
+Measured live (autoplay's `tools/boss_fight.py`, Blaze, turbo 4): knees
+pressed while he reads take 2 points each, and a release read the same way
+leaves him in state 3 where the hold stood him, re-held two updates later by
+the walk back in -- 16 knees, his 32 points, in about 580 game frames.
+
+The decode was checked against the running ROM in lockstep (autoplay's
+`tools/abadede_lab.py --actor wander`, a walk that never attacks, replaying
+autoplay's `ai/abadede.py` one of his updates at a time): 605 of 612 updates
+matched field by field -- position, lane, primary, substate, `+$54`, both
+velocities, the animation, its boxes, `+$28` -- through the approach, the
+pause, the retreat, all four substates of the charge, the hold, the
+knockdown and getting up. Six of the other seven are run updates on which
+the replay put his box over the player's body and the ROM landed nothing,
+each with him arriving from behind a player facing away (cause not found;
+the replay errs toward the hit), and one a knockdown the player's own
+knocked-down flight gave him.
 
 Abadede also has explicit multi-instance coordination. `$14486` scans all
 object slots for another type `$30`; if one is active outside selected reaction
