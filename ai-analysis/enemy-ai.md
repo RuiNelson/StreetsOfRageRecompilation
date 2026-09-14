@@ -1387,15 +1387,103 @@ charge loops.
 
 ### Bongo (`$57`, `$174E0 (bongo_update)`)
 
-Bongo's family-D state machine circles in the lane, corrects screen-edge
-position, and then commits to a multi-stage acceleration/charge. The attack
-chain around `$176B4-$177E2` uses distance and phase counters rather than a
-single random decision.
+Bongo uses the family-D table at `$174F4`: primary `$00` `$1750A` (init:
+ground `+$4C` from `+$18`, pair link, stats, animation set `$2EF62`), `$01`
+`$175BA` (approach), `$02` `$17682` (wind-up and charge), and the shared
+later-boss states `$03`-`$0A` (`$163D0`...`$16A60 (later_boss_police_special_reaction)`). `$174E0 (bongo_update)`
+runs `$16AEC (later_boss_enter_police_special_reaction)` and `$16A1A`, clears
+his `+$34` -- he never deals damage with his own body -- and dispatches.
+Everything runs once per object update, 30 Hz (`$AD8E (update_objects_and_build_sprites)` waits a VBlank
+between the players and the objects).
 
-Linked type `$97`, created at `$1781E`, is positioned from Bongo's animation
-and facing and implements the flame/contact portion of the attack. Parent and
-linked object exchange animation-phase information so the hit region appears
-only during the appropriate breath/charge frames.
+**He never touches anyone himself.** None of the animations he fights in
+carries an attack box: idle `$00`, charge `$04`, wind-up `$24`/`$28`/`$2C`,
+turn `$30` (and their mirrored members, bit 1 of `+$08`) all show attack id
+0 over body `$95` (x -18..14, lane -8..+8, z -64..0) or `$94` (its mirror).
+The attack boxes in the set (`$B4`-`$B7`, `$C0`/`$C1`) belong to the shared
+thrown/knocked-down animations. His one weapon is the flame.
+
+#### State 1 (`$175BA`): face, approach, keep the lane gap
+
+After `$1753A (bongo_select_target)`, `$17AF6` (`+$50`/`+$52` absolute X and
+lane distance, `+$60`/`+$61` target left/above -- it does *not* turn him),
+`$17C36 (boss_apply_pending_damage)`, `$17CF2` (the held dispatch) and the
+contact test `$17B52`:
+
+- a non-zero tactical `+$67` is the **turn**: `+$68` counts down from 10
+  with him standing still, then the idle animation facing the target and
+  tactical 0;
+- tactical 0 with the target on his back side sets the turn (`$1765E`:
+  velocities zeroed, animation `$30`);
+- otherwise X velocity is `$8000` (0.5 px/update) on his facing -- the
+  left-facing value is made by `not.w` on the high word, so pair role 2's
+  `$10000` becomes `$FFFE0000`, -2.0 -- and the lane velocity keeps
+  `+$52` in `[$50, $60)`: 0.5 px away when closer (a level target counts as
+  below him: he steps up), 0.5 px in from `$60`;
+- `+$50 >= $B0` walks (`$17744`: pushed back inside screen X `[$50, $1F0)`,
+  then `$17AB8`); under `$B0` he starts the wind-up without moving: primary
+  2, tactical 0, `+$68` = 5, animation `$24` set by `$17A24`/`$17A34`, which
+  keeps the frame index and the running countdown and changes only the
+  reload and the latched boxes.
+
+#### State 2 (`$17682`): wind-up, launch, charge
+
+The same preamble, then the tactical table at `$176AA`:
+
+| Tactical | Handler | Behaviour |
+|---:|---:|---|
+| 0 | `$176B4` | `+$68` from 5, drifting at state 1's last velocities; then animation `$28`, `+$68` = 5 |
+| 1 | `$176D6` | the same, then animation `$2C`, `+$68` = 10 |
+| 2 | `$176E6` | the same, then **the launch**: the flame (`$1781E`), sound `$B6`, X velocity 2 px/update on his facing, lane velocity `+$52 / (+$50 / 2)` in 8.8 (`divs.w`, so he would reach the target's lane as he reaches its X), capped at 6, toward the target's lane; animation `$04` |
+| 3 | `$17762` | the charge: both speeds + `$2000` (0.125) an update, capped at 6, the lane only while `+$52 >= 8`, each keeping its sign (`tst.w` of the high word) -- it never re-aims; with the target on his back side and `+$50 >= $50`, tactical 4 with `+$79` = `$14` |
+| 4 | `$177E2` | the run-out: 20 updates, or until his screen X `+$28` leaves `[$50, $1F0)`; then primary 1 facing the way he ran (`$177FE`), which the next update answers with the turn |
+
+So the launch comes 21 updates after the `$B0` gate (1 + 5 + 5 + 10), and
+every charge ends past the target at a screen edge on a lane clamp -- the
+launch aims at the target's lane and the acceleration carries him past it.
+
+#### The flame (type `$97`, `$17858`)
+
+`$1781E` takes the first free slot after his, copies his `+$4A` into its
+`+$34` (32 on Normal), links both `+$6E` through `$17238
+(boss_link_child_object)` (flags `+$01` = `$0C`: animated, never culled)
+and starts animation `$38`. `$178D0` places it 20 px ahead of him on his
+facing, his lane + 4, and `$33`/`$34` above his height (his frame 0 or
+not). Its update:
+
+- state 0, the **ignition** (`$38`/`$3A`: boxes `$9D`, `$9F`, `$A1`, four
+  updates each): the contact test (`$AA22`), then -- on its own `+$0D` == 1
+  and frame 2 -- animation `$3C`/`$3E` (box `$A3`/`$A2`, one update a frame)
+  and state 1; placed on him either way, **whatever state he is in**;
+- state 1: the contact test, then gone (`$171F6`) the first update he is out
+  of primary 2, else placed on him.
+
+`$A3` spans x -16..+56 about the flame -- **+4..+76 ahead of him** -- and
+lane -10..+24 about its own lane: **-6..+28 of his**. Against a player body
+(lane -8..+8, inclusive compares) that is every lane from 14 above him to 36
+below. It has **no body box**, so in `$AAA0` it always takes the "object's
+attack box on the player's body" path: nothing a player does touches it, and
+the grab path that shields a holding player from, say, Antonio's kick is
+never entered -- a holder is hit like anyone else.
+
+#### Contact order and the hold
+
+His update's `$17B52` runs first: the player's attack box (a walking box
+included) against his body -- the grab (code 3) when the player's `+$34` is
+clear, `+$4C` clear and heights within 8. The flame's test in the same pass
+then sees the grab's code in the player's `+$7C` and `$AA34` tests nothing.
+The hold is the shared `$17D54`/`$17D7C` (front at `$17D76`'s 32 px out,
+facing the holder; back at `$17DB0`'s 32 px, facing away). An **igniting**
+flame keeps being placed on him through the hold, so a front grab inside the
+first 12 updates after a launch is the flame's hit on the holder; a burning
+one is tested once more where it was and removed.
+
+Two geometries follow from all of this during a charge: 15-16 lanes above
+his lane (outside the flame's 14, inside the grab's 16) and behind him once
+his origin has passed the target by 9 px. Verified against the running ROM
+in lockstep (`autoplay/tools/bongo_lab.py`): 2253 of his updates over two
+seeded runs, ten charges, every field of states 1 and 2 and of the flame
+matching, bar the two updates where a player's respawn knocked him back.
 
 The target selector `$1753A (bongo_select_target)` alternates players more aggressively than
 Antonio's and uses pair roles to avoid duplicate targets. Round 6 uses Bongo as
@@ -2163,8 +2251,9 @@ registers combat objects; the engine advances the campaign.
    on visible retail descriptions. Souther (`$55`) and Antonio (`$56`) are
    done — both family states and every tactical handler are decoded above,
    including Souther's `$16234 (souther_counter_jump_attack)` jump counter and
-   Antonio's `$16F42` table, dash and kick gates — so this remains open for
-   Bongo (`$57`) and the twins (`$58`) only.
+   Antonio's `$16F42` table, dash and kick gates — and so is Bongo (`$57`):
+   states 1 and 2, the `$176AA` table and his `$97` flame. This remains open
+   for the twins (`$58`) only.
 4. Match each raw `object+$59` selection bit to the exact displayed answer text
    in both Mr. X prompts; the static route matrix itself is now decoded in the
    story-flow manuscript.
