@@ -837,8 +837,8 @@ then every object. `$16DA0 (antonio_state1_active_combat)` does, in order:
 | 2 | `$1703E` | that walk (`$28`), `$1C` updates, the lane wobbling by `$17A6E`; then the lane approach |
 | 3, 4 | `$1705C`, `$170B8` | stand (`$24`), then walk toward; reached only from tactical 2 with `+$50 < $14`, which "far" excludes |
 | 5 | `$170E4` | lane walk 1 px/update toward the target; `+$52 < $14` starts the wind-up |
-| 6 | `$17120` | the boomerang wind-up (`$30`): `$24` updates standing still |
-| 7 | `$17132` | the throw (`$34`); a target that turned its back within `$E0` and `$14` of lane gets the dash; otherwise he waits to catch the boomerang |
+| 6 | `$17120` | the throw (`$30`): `$24` updates standing still; its frame 2 launches the boomerang (see "Boomerang linked object") |
+| 7 | `$17132` | after the throw (`$34`); a target that turned its back within `$E0` and `$14` of lane gets the dash; otherwise he waits on the boomerang -- walks toward the lane it homes on, catches it within 8 px of his hand, and is back in tactical 0 once it is gone |
 | 8 | `$16F68` | the dash: on while `+$50 >= $28` (or inside it with `+$52 < $10`), off at `$E0`; lane homing by `$1797E`, 4/2/1/0 px at `+$52` of `$20`/`$10`/`$08`/less |
 | 9 | `$16F56` | the walk back on screen, `+$5C` updates |
 
@@ -958,39 +958,60 @@ plausibly re-arming a fresh boomerang once a full throw/return cycle
 completes — is not confirmed (70%).
 
 The child object runs its own top-level update,
-`$17262 (antonio_linked_attack_dispatcher)`, dispatched through a table at
-`$17272` keyed by the child's own primary state. Confirmed and
-lower-confidence pieces of that state machine:
+`$17262 (antonio_linked_attack_dispatcher)`: it clears itself once the
+parent's slot is empty, and otherwise dispatches through the word table at
+`$17272` on its own `+$30`. Read in full, the four states are:
 
-- `$1727A (antonio_boomerang_attached_timer)`: decrements a timer at the child's `+$7B`; reaching 0 despawns the
-  object via the shared 32-byte clear at `$171F8`. Confidence 65% — this
-  reads as an attached/wind-up timeout, but the exact state it belongs to in
-  the child's own primary-state numbering is not confirmed.
-- `$17286 (antonio_boomerang_reverse_and_return)`: reverses and scales down
-  the child's X-velocity (`asr.l #3` then negate — the return arc), sets the
-  return countdown `+$7B=$0B`, advances the child to primary state 3, and
-  plays a sound. Confidence 80%.
-- `$172B2 (antonio_boomerang_catch_check_a)` / `$17320 (antonio_boomerang_catch_check_b)` — near-duplicate collision/catch checks via the shared
-  `sub_0000AA22` contact routine (outcome `d7`: 3 clears a hit latch at
-  `+$7C`, 1 sets `+$7D`, 2 re-enters the reverse state above). On sustained
-  contact each advances the child's state via a `+$6B` countdown and copies
-  the parent's lane into the child's `+$52`. `$17320 (antonio_boomerang_catch_check_b)` additionally applies a
-  small lane-distance-gated velocity nudge before checking the screen-X exit
-  bounds at `+$28` (the renderer's biased screen X, not an angle). Why Antonio's boomerang has two similar catch-check
-  routines instead of one shared path is not confirmed. Confidence 65%.
-- `$173D8 (antonio_boomerang_follow_parent_animation)`: positions the child
-  from the parent's current animation-frame index (`+$A` on the parent,
-  looked up in a per-frame dx/dy/dz offset table at `$17494`) while attached
-  or in flight, plays a catch sound, and advances the child's own primary
-  state when that frame index changes. This is Antonio's actual equivalent
-  of Souther's `$16C6E (souther_position_claw)` corrected above. Confidence 75%.
+| `+$30` | Routine | What it does |
+| --- | --- | --- |
+| 0 | `$173D8 (antonio_boomerang_follow_parent_animation)` | rides his animation, with no box |
+| 1 | `$172B2 (antonio_boomerang_catch_check_a)` | the outbound flight |
+| 2 | `$17320 (antonio_boomerang_catch_check_b)` | the return |
+| 3 | `$1727A (antonio_boomerang_attached_timer)` | knocked away by a player's attack, harmless until it clears itself |
 
-Net effect matches the visible choreography this section already described:
-the boomerang follows Antonio out, reverses into a return arc, and is
-collision-checked back into his hand. The exact primary-state numbering for
-the child object, and which sub-states are actually a visible thrown
-projectile versus a still-attached prop, remain the open item already
-tracked below (needs framebuffer/VRAM tracing, not just static disassembly).
+The "catch check" and "attached timer" names predate this decode; the
+`labels.csv` descriptions carry the states.
+
+- **Riding his animation** (`$173D8 (antonio_boomerang_follow_parent_animation)`): his `+$08`/2 indexes a byte table at
+  `$17494` that gives the offset of a per-frame list of record numbers, and
+  his `+$0A` picks the record -- four bytes at `$173A0`: X offset (signed),
+  lane offset, height above him, child animation. Record 0 also hides it. A
+  record naming child animation `$40` or above, different from the one it
+  shows, **launches** it: X velocity `+14` for `$40` and `-14` otherwise,
+  lane velocity `+4.5`, `+$6B = $20`, state 1. The throw animation `$30`
+  (mirrored `$32`) runs records 0, 10, 12, 12, 12, 0 (1, 11, 13, 13, 13,
+  0), so its **frame 2** launches it from 64 px in front of him at height
+  48, about twelve updates into tactical 6.
+- **Out** (`$172B2 (antonio_boomerang_catch_check_a)`): first the `$AA22` contact test with the boomerang as
+  the attacker (outcome 1: it hit a player, whose `+$7D` it sets; 2: a
+  player's attack hit it, `$17286 (antonio_boomerang_reverse_and_return)`; 3: a walking box on it, whose grab code
+  in `+$7C` it clears), then `0.4375` off its X speed and `0.1875` off its
+  lane velocity, every update. When `+$6B` runs out it stops dead and turns:
+  `lea $64(a0),a1`, `$17A94`, `$17B2C`, `move.w $14(a1),$52(a0)` is meant to
+  aim its return at the target's lane, but `lea` leaves `a1` pointing into
+  the boomerang itself, so `+$52` becomes its own `+$78` word -- 0 in a slot
+  that `$171F8` cleared whole -- and `+$61` that word's side of its lane.
+  State 2. Out, it travels 217 px past the launch point in 31 moving updates
+  and dives 46 px down the street (52 at the bottom of the arc, 24 in).
+- **Back** (`$17320 (antonio_boomerang_catch_check_b)`): the same contact test, the X speed building `0.4375`
+  an update back toward him, and the lane velocity changing `0.1875` an
+  update toward `+$52` (by `+$61`) until it is within 4 px, then 0; it clears
+  itself outside screen X `[-$80, $2C0)` at `+$28`. So it climbs to the top
+  of the street as it comes back, sweeping every lane in between.
+- **Knocked away** (`$17286 (antonio_boomerang_reverse_and_return)`, then `$1727A (antonio_boomerang_attached_timer)`): X velocity `-(v/8)`, lane
+  velocity `+4`, height velocity `-11`, `+$7B = $0B`, state 3; `$1727A (antonio_boomerang_attached_timer)`
+  counts `+$7B` down and clears the object at 0.
+
+Its flying animations `$40`/`$42` cycle four boxes, one update each -- X
+`-4..22`, `-18..18`, `-20..6`, `-20..16` for `$40`, mirrored for `$42`, lane
+`-8..+8`, the same box for attack and body -- and the riding animations
+`$38` to `$3E` have none. Tactical 7 (`$17132`), past its near and
+turned-back checks, waits on it: while it returns he walks his lane 1 px an
+update toward its `+$52` and catches it when his hand, `$18` in front of
+him, is within 8 px of it -- the object is cleared and he is back in
+tactical 0, as he is at once when there is no boomerang left at all.
+autoplay's `ai/antonio.py` (`BoomerangSim`) flies it update by update, and
+its lockstep lab (`tools/antonio_lab.py`) checks it field by field.
 
 ### Souther (`$55`, `$15E70 (souther_update)`)
 
