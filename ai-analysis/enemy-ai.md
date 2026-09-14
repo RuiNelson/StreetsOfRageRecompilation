@@ -1506,15 +1506,16 @@ the walk back in -- 16 knees, his 32 points, in about 580 game frames.
 
 The decode was checked against the running ROM in lockstep (autoplay's
 `tools/abadede_lab.py --actor wander`, a walk that never attacks, replaying
-autoplay's `ai/abadede.py` one of his updates at a time): 605 of 612 updates
+autoplay's `ai/abadede.py` one of his updates at a time): over two runs,
+2026 of 2036 updates outside state 8 (which the replay does not model)
 matched field by field -- position, lane, primary, substate, `+$54`, both
 velocities, the animation, its boxes, `+$28` -- through the approach, the
 pause, the retreat, all four substates of the charge, the hold, the
-knockdown and getting up. Six of the other seven are run updates on which
-the replay put his box over the player's body and the ROM landed nothing,
-each with him arriving from behind a player facing away (cause not found;
-the replay errs toward the hit), and one a knockdown the player's own
-knocked-down flight gave him.
+knockdown and getting up. Seven of the other ten are run updates on which
+the replay, taking the player's body at its widest (+-12 for Blaze), put his
+box over it and the ROM landed nothing: the player's cached `+$70` on those
+updates was 10 px wide (-2..+8 facing right, -5..+5 facing left). The other
+three are knockdowns the player's respawn landing gave him.
 
 Abadede also has explicit multi-instance coordination. `$14486` scans all
 object slots for another type `$30`; if one is active outside selected reaction
