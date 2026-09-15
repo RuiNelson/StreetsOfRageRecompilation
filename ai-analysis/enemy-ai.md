@@ -345,9 +345,14 @@ below: it is not a state worth its own row.
 | `$0A` | `$DDE6` | The same "damaging special" entry already documented above for Garcia `$22` state `$13` |
 | `$0B`, `$0F` | `$9B36 (ordinary_enemy_hit_reaction_dispatch)` | Reached a second way — see below |
 | `$0C` | `$F078 (nora_type26_feign_injury_recovery)` | "Feign injury" recovery (below) |
-| `$10` | `$F2AC (ordinary_enemy_knockdown_trigger_state)` | Shared with Jack `$27` state `$03` |
-| `$12` | `$F2BC (ordinary_enemy_blocked_delegate_state)` | Shared with Jack `$27` state `$07` |
-| `$13`-`$15` | `$F5F2 (ordinary_enemy_special_lunge_lane_setup)`/`$F64A (ordinary_enemy_special_lunge_distance_gate)`/`$F6BC (ordinary_enemy_special_lunge)` (`ordinary_enemy_special_lunge_*`) | A second, ROM-shared scripted lunge — see below |
+
+Her table ends there: it is thirteen words, `$00`-`$0C`. The word at `$1037C`,
+right after it, is the first entry of Jack's own table (`$F27E
+(jack_type27_dispatcher)` loads that address), and no handler of hers ever
+stores a state above `$0C` into `+$30` -- the only values her code writes are
+`$01`, `$03`, `$07`, `$08`, `$0B` and `$0C`. An earlier reading of this table
+ran past its end and gave her states `$0D`-`$17`, among them a "lunge shared
+with Jack"; those are Jack's states `$00`-`$0A` (see "Jack" below).
 
 ### The whip is a live position test, not just a static box
 
@@ -384,30 +389,190 @@ the ordinary 24-frame hitstun `$9B88 (ordinary_enemy_apply_contact_damage)`'s ow
 the whip engage state `$08` once that timer expires or the target has
 moved 80px of lane distance away.
 
-### A second scripted lunge, shared with Jack
+### Not a lunge, and not shared
 
-`$F6BC (ordinary_enemy_special_lunge)` — reached through
-`$F5F2 (ordinary_enemy_special_lunge_lane_setup)` and
-`$F64A (ordinary_enemy_special_lunge_distance_gate)`, states `$13`-`$15` on
-Nora's own table — writes object `+$1C`/`+$20`
-(`OBJ_VEL_X_ORDINARY`/`OBJ_VEL_LANE_ORDINARY`) directly on entry:
+`$F5F2 (ordinary_enemy_special_lunge_lane_setup)`,
+`$F64A (ordinary_enemy_special_lunge_distance_gate)` and
+`$F6BC (ordinary_enemy_special_lunge)` are Jack's states `$08`-`$0A`, and only
+his: Nora's table ends before them (above). Nor is `$F6BC (ordinary_enemy_special_lunge)` a lunge. It does
+write `+$1C`/`+$20` once, on entry, to `$0002C000`/`$00022000` (2.75 and 2.125
+px an update), but its X sign runs *away* from the target:
 
 ```text
-+$1C(a0) = ±$0002C000   ; 16.16 fixed point ≈ ±2.75 px/frame (X)
-+$20(a0) = ±$00022000   ; ≈ ±2.125 px/frame (lane)
+move.l #$0002c000, d1
+move.w $10(a1), d0        ; target X
+cmp.w  $10(a0), d0
+blt.s  keep               ; target on his left: +2.75, rightward
+neg.l  d1                 ; target on his right: -2.75, leftward
 ```
 
-sign chosen toward the target, exactly Signal's slide pattern above but
-faster on both axes and carrying no attack shape of its own — the hit, when
-it lands, is decided by the generic per-frame pipeline against Nora's
-ordinary body box once the lunge has carried her into the player. Dumping
-Jack's (`$27`) own primary-state table at `$1037C` found the *identical*
-three addresses at his states `$08`-`$0A`, alongside `$F2AC (ordinary_enemy_knockdown_trigger_state)`/`$F2BC (ordinary_enemy_blocked_delegate_state)`/`$F2CE (ordinary_enemy_reselect_target_state)`
-at his states `$03`/`$07`/`$01` — proof this lunge, the knockdown-trigger
-and blocked-delegate states, and the "reselect target" state `$F2CE (ordinary_enemy_reselect_target_state)` are
-shared ordinary-enemy toolkit routines usable from more than one type's own
-table, not code unique to either type despite living inside the address
-range starting at Jack's own `$F27E (jack_type27_dispatcher)`.
+while the lane sign runs toward the target's lane. It is a diagonal back-off
+onto the target's lane, ended by `|lane gap| <= 8`, and it hands over to his
+aligned throw (`$0B`). A live trace confirmed it: with the player 84 px to his
+right he moved at `-2.75, +2.125`. The three label names predate this reading
+and are kept only as symbols; the section on Jack below is what they do.
+
+## Jack (`$27`) and his axes (`$28`)
+
+**Jack never strikes with his own body.** His animation set
+`$2556C (jack_animation_set)` carries two kinds of attack box only: `$25`/`$1D`
+on animation 2, the thrown-body flight (those frames have no body box), and
+`$2B`/`$2C` on animations `$0C`/`$0E`, which only the type-`$28` helper plays.
+None of his state handlers tests an attack box against a player. Every hit he
+lands is one of his axes, and the whole of him is organised around them.
+
+His body box is `$24` (x -12..0, lane +-8, z -60..0) facing right and `$3C`
+(x 0..12) facing left: all of it *behind* his origin. The axes' box is `$2B`
+(x +-11, lane +-8, z -10..+2), `$2C` (x +-7, z -14..0) for the torch set
+(his `+$40` bit 4). Health 9/14/17 by variant, +4 on the hardest difficulty;
+like every ordinary enemy he dies only on a *negative* health word.
+
+### States (`$1037C`, nineteen words)
+
+`$F27E (jack_type27_dispatcher)` indexes nineteen words at `$1037C`. The next
+twelve bytes are the relative table of his `$28` helper (`$103A2`, used by
+`$FFFC14 (elc_spawn_stream_cursor)` through `$101CC`), and Haku-Ro
+`$2A`'s table follows at `$103AE`.
+
+| State | Handler | Role |
+| --- | --- | --- |
+| `$00` | `$937A (ordinary_enemy_activate)` | Activation |
+| `$01` | `$F2CE (ordinary_enemy_reselect_target_state)` | Re-select the target, then `$F2DE[+$40 & $0F]`: `$0C`, `$0D`, `$0F` or `$12` |
+| `$02` | `$9B36 (ordinary_enemy_hit_reaction_dispatch)` | Hitstun (a grab still lands) |
+| `$03` | `$F2AC (ordinary_enemy_knockdown_trigger_state)` | Clears `+$52`, then the knockdown `$11` |
+| `$04` | `$A43E` | Pepper freeze / scripted |
+| `$05` | `$A04A` | Held by a player |
+| `$06` | `$9D16` | Death |
+| `$07` | `$F2BC (ordinary_enemy_blocked_delegate_state)` -> `$DBCC` | Lane dodge, facing the target every update |
+| `$08` | `$F5F2 (ordinary_enemy_special_lunge_lane_setup)` | Lane 8 or 56, then 40 px toward the target |
+| `$09` | `$F64A (ordinary_enemy_special_lunge_distance_gate)` | The X gate |
+| `$0A` | `$F6BC (ordinary_enemy_special_lunge)` | Diagonal back-off onto the target's lane |
+| `$0B` | `$F728` | Aligned throw (both juggled axes) |
+| `$0C` | `$F55E` | Juggle approach |
+| `$0D` | `$F4A6` | Retreat to the screen edge |
+| `$0E` | `$F410` | Ranged throw, three axes |
+| `$0F` | `$F2E6` | Jump |
+| `$10` | `$F3B6` | Look about: **no contact test at all** |
+| `$11` | `$991A (ordinary_enemy_begin_knockdown)` | Knockdown |
+| `$12` | `$F286` -> `$E20A` | Juggle walk |
+
+`$F2DE` holds `$0C00, $0D00, $0F00, $1200`: every reset (`$0100`) of his lands
+in the state his ELC record's `+$40` low nibble names, so each Jack runs one
+loop for his whole life -- his *personality*. The ELC streams place
+personality 0 in rounds 2, 4, 6 and 8, personality 1 in rounds 6 and 8 (one of
+them two-player only), personality 2 in round 5 (eight records in one timed
+batch, several two-player only) and personality 3 in round 5.
+
+- **0, approach and aligned throw.** `$F55E` spawns his juggle (`$F544`) if
+  `+$52` bit 0 was clear, faces the target, and walks at 2 px an update to
+  108 px on his side of it, on its lane (a 160-update timeout resets him).
+  `$F5F2 (ordinary_enemy_special_lunge_lane_setup)` then walks to lane 8 when the target is below lane `$20`, lane 56
+  otherwise, and 40 px toward it. `$F64A (ordinary_enemy_special_lunge_distance_gate)` gates on the X gap: past 64 px the
+  back-off `$0A`, 40-64 px a reset, closer a 40 px back-off at 3.5 px an
+  update and the gate again. `$F6BC (ordinary_enemy_special_lunge)`'s diagonal ends within 8 lanes of the
+  target (off screen, in `$07`), and `$F728` stands and throws.
+- **1, retreat and ranged throw.** `$F4A6` walks to the screen edge behind
+  him (`cam_x + $120` facing left, `cam_x + $20` facing right) over eight legs
+  at random lanes (`$F53C`) and speeds (2.5-5 px an update, `$DD68`), then
+  `$F410` throws. The target within 64 px on X (`$F482`) aborts either into
+  `$07`.
+- **2, jumps.** `$F2E6` jumps at a point near the target (its approach offsets
+  plus `$1031A[random]`), 1-4 px an update, v_z -6..-11, lands, holds 4
+  updates, then `$F3A2[+$11 & 3]`: look about (`$10`, 10-17 updates, sometimes
+  flipping his facing every 3), throw (`$0E`) or jump again.
+- **3, juggle walk.** `$F286` spawns the juggle and runs `$E20A` with Jack's
+  own tables: one walk-animation cycle toward a point near the target (1-5 px
+  an update, `$102FA`), then `$1030A[random]` -- `$12` seven times in eight,
+  `$0E` otherwise.
+
+`$07` (`$DBCC`, shared with the Garcia types' blocked state) moves him along
+the lane at 3 px an update away from the target's half (target above lane
+`$38`: down), to lane `$58` or `$18`, then walks on X toward and past the
+target until he is 80 px beyond it, and resets (`$01`). What matters in play:
+
+- the lane direction ignores the target on three levels (`level_`, 0-based):
+  round 4 always up, round 6 always down, round 7 down left of X `$388` and up
+  from there;
+- an entry within 7 frames of the previous one counts `+$6E` up (any other
+  entry clears it): 10 px an update from the fifth, 13 from the sixteenth, and
+  the lane direction flips on every other such entry;
+- the X walk is a string of legs, each a random speed and walk animation from
+  `$DD68` (2.5, 3, 4 or 5 px an update) for a random `$1033A` length (16, 8,
+  10 or 5 updates, `+$50`); the sign is `+$31` bit 2, set at entry when he
+  stood at or right of the target (walk left);
+- every step goes through `$9F6A`: with no floor under him he falls
+  (`$973E`); a hole or a wall 10 px ahead re-enters `$07`; a solid prop
+  (`$3B8A`) resets him (`$01`); and `$9F96 (ordinary_enemy_advance_x_bounded)`
+  refuses a step to X < 0 (≤ `$2F0` in round 7) or ≥ `$1510` (`$1400` in
+  round 8) and does nothing else. Traced live in round 5: walking right into
+  `$1510` he stood at X 5390, off screen, for 65 s, because the player, held
+  by the camera at 5344, never got 80 px behind him;
+- it calls `$9E4C` -- face the target -- on every update, after its contact
+  test: in this state he turns as the player walks past him.
+
+### The juggle (`$F544`, `$FC1C`, `$FCB6`)
+
+`$F544` creates a type-`$28` spawner (helper state 5, `$FC1C`) that spawns two
+juggled axes 8 updates apart and removes itself. A juggled axe (state 1,
+`$FCB6`):
+
+- on each arc's start sets z to **absolute 128** (`move.w #$0080,+$18`), v_z
+  -9, v_x -1 and its offset `+$54` to +24 (Jack facing right) or -8 (left);
+- rides at Jack's lane + 8 and Jack's X + `+$54`, the offset drifting by
+  v_x; `$973E`'s gravity (1.125, capped at 16) brings it back to 128 after 15
+  updates -- heights 120, 113, 107, 103, 99, 97, 96, 96, 97, 99, 103, 107,
+  113, 120, 128;
+- at 128, with Jack's animation word 0 or 2 (the juggle stance), walks back
+  at +4 px an update until it reaches his hand (X + 24 facing right, X - 8
+  facing left) and starts again -- or, in `$0B`, hands itself over to the
+  throw; with his animation anything else (hit, held, throwing) it drops
+  (state 3, `$FED6`): `$100A4` moves it on its velocities and `$973E` drops
+  it (1.125 an update, capped at 16) until it lands and is removed. It runs
+  no contact test of its own, but its box (`$2B`) and damage (12) stay live
+  in the player's hit test all the way down: traced live, an arc a front
+  hold cut short fell 128, 137, 147, 158 onto the holder 22 px away. The
+  copy a player strike knocks off an axe (4 px an update away from the
+  strike, popping up at -4.875) carries damage 0.
+
+So both axes orbit 8-24 px in front of him on lanes +0..+16 of his, a cycle of
+about 20 updates. Because the arc is pinned to z 128 whatever the floor, on a
+street whose floor is at 160 (round 2) the box reaches a standing body only
+near the bottom of the arc and on the way back to the hand. Each axe tests
+contact in its own update: any contact code but 2 (a player strike on it) is
+a hit, 1 on `+$7C`/`+$7D`, the damage the helper's own `+$34` (12/16/20).
+
+### The throws (`$F410`, `$F728`, `$FE46`, `$FEE4`)
+
+A thrown axe (state 4, `$FEE4`) sets Jack's `+$31` bit 4 on entry and waits
+16 px behind his hand, at his lane - 1, 64 px above his feet -- over every
+head -- until his animation shows frame 1. It is then released from 32 px in
+front of him, 48 px above his feet (a standing player's head: 3 px into
+Blaze's body box, more into Axel's and Adam's), at 10 px an update on its
+lane, until it leaves the screen or hits. A player strike on it (code 2)
+knocks it harmlessly away; a held bat or pipe swinging into it (code 5, `$48`)
+reflects it back along the street.
+
+- `$F410` (ranged): face the target, animation `$14` at 3 updates a frame
+  (`$0303`), clear `+$52`; on each loop's frame 0 spawn a thrown axe -- three,
+  12 updates apart -- and reset on the fourth. `$F482`'s 64 px abort drops the
+  one still waiting.
+- `$F728` (aligned, after `$0A`): wait (80 updates at most) for a juggled axe
+  to reach his hand. The first to arrive is tossed high (state 2, `$FE46`: up
+  past z -20, 32 updates hung behind him, then down), the second is thrown at
+  once; the tossed one is thrown in turn if it comes back down while his throw
+  animation still plays, else dropped.
+
+### Contact and the hold
+
+A player's walking box on his body with 8 px of height is the grab
+(`$AAA0`); only the states above that run a contact test can be grabbed (`$10`
+and the knockdown cannot). A held ordinary enemy never breaks free. The hold
+places him 32 px in front of the holder (28 in a back hold) on the holder's
+lane, and his axes still in the air follow him, so a **front hold on a
+juggling Jack is itself a hit**: his offsets point at whoever he faced when
+each arc began, which is the holder. A back hold keeps them on the far side
+until they drop at the end of their arcs. In the hold, knees do the holder's
+`+$34` (2, 2, then 3 and a knockback) and the suplex (`$A2EC`) a flat 5.
 
 ## Collision, reactions, grabs, and death
 
