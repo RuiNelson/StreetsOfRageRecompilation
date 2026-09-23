@@ -277,6 +277,36 @@ front. `$450C` compares the attacker's `+$64` against the victim's `+$70`, so
 `+$70` is X +0..+13, Y ±8, which is what a body-sized reading of this move was
 actually observing.
 
+#### The chord update by update, from the ROM
+
+The measured frame counts above are the ROM's own schedule, which the
+decode makes exact. `$2EF2` starts the action's animation and loads
+`+$0D` from `$3A30 (player_frame_timing_table)`'s per-frame rows (`$3A14 (player_load_frame_timer)`: row `+$0C`, entry `+$0A`),
+and the chord's handler (`$20EC (player_rear_attack_update)`, armed `$225C (player_armed_rear_attack_update)`) steps a frame each time
+`+$0D` runs out (`$39E8 (player_step_animation_frame)`) and hands back to the ground control
+(`loc_2CD2`) in the same update frame 3 comes up. `$423C (player_attack_descriptor_table)`'s descriptor byte
+for the frame gives the damage (low nibble, `+$34`) and the hit property
+(high nibble, OR'd into `+$42`; 1 = knockdown). Update 0 is the player
+update that sees the B+C edge:
+
+| Character | Frames of animation `$24` (`$3A30 (player_frame_timing_table)` row) | Box out | Free again | Damage / property |
+|---|---|---:|---:|---|
+| Axel | 1, 5, 2 (row 8) | updates 1-5 | update 8 | 3 / knockdown |
+| Blaze | 3, 8, 3 (row 26) | updates 3-10 | update 14 | 2 / knockdown |
+| Adam | `$22` crouch 5 (animation `$0C`), `$24` 5 + 9 airborne, `$14` landing 5 | updates 10-18 | update 24 | 3 / knockdown |
+
+Adam's chord is a **hop**: `$24` leaves the floor with `+$24` = -6.25 and
+0.90625 of gravity an update, peaks 24-25 px up on its 7th airborne update,
+and its box (`$DF`: 42 px behind to 14 in front, 43..17 above his feet) is
+out from the 6th airborne update to the landing -- recorded in lockstep,
+height for height. His body box goes to `$A9`/`$AB` for the hop, so he reads
+as airborne for 14 updates. With a weapon in hand the chord is `$4A` (`$4C`
+for Adam), playing the same animation, box and damage.
+
+During the chord Blaze's body box moves *behind* her -- `$75` (-13..-5) on
+frames 0 and 2, `$77` (-7..-2) on frame 1, 44..28 above her feet -- which is
+the side the chord is thrown at.
+
 ## Jump and jump-kick (ROM physics)
 
 This section is the mathematical model of the unarmed jump-kick. Addresses are
@@ -395,8 +425,8 @@ Free flight (anim `$10`) has **0** damage on frame 0. A duel flag at
 
 ### Kick hitboxes
 
-`$4140` builds the attack AABB (`+$64`, from box id `+$02`) and the body AABB
-(`+$70`, from box id `+$03`) out of anim frame box IDs and tables `$1ABA8` /
+`$4140 (player_cache_boxes)` builds the attack AABB (`+$64`, from box id `+$02`) and the body AABB
+(`+$70`, from box id `+$03`) out of anim frame box IDs and tables `$1ABA8 (player_shape_table)` /
 `$1AB8E`. The direction is fixed by `$450C`, which tests the attacker's `+$64`
 against the victim's `+$70` and only then reads the attacker's `+$34`.
 
@@ -556,7 +586,7 @@ with 3 when the hold is taken and nothing resets it mid-hold, so partial back
 presses accumulate. Measured: a fresh hold released on the 8th back frame. On
 the release the player's facing bit flips (`bchg #0,+$30`), `+$4C`/`+$7D`
 clear, and the action becomes walk `$02` (armed: `$30`). A held later boss
-reads the cleared `+$7D` through `$17CF2` and goes straight back to primary 1.
+reads the cleared `+$7D` through `$17CF2 (later_boss_held_dispatch)` and goes straight back to primary 1.
 
 **One crossover per hold.** `sub_2FE4` turns a C edge into crossover `$76`
 from the front hold and `$80` from the back hold. `sub_26E2` finishes it on
@@ -701,7 +731,7 @@ while the main pause path only considers players whose bits are already set in
 | `$389A` / `$38AE` | Full and kick-fall gravity. |
 | `$3914` | Free-flight attack edge → jump-kick action `$16`. |
 | `$41EA (compute_player_attack_descriptor)` | Per-frame kick damage / reaction nibbles. |
-| `$4140` / `$1ABA8` | Body and attack AABB construction. |
+| `$4140 (player_cache_boxes)` / `$1ABA8 (player_shape_table)` | Body and attack AABB construction. |
 | `$442C` | Position integrate (`+$1C`/`+$20`/`+$24` → `+$10`/`+$14`/`+$18`). |
 | `$3B00` / `$3CE2` | Per-frame vertical collision: rising `$3D12`, floor dispatch `$3D5C`. |
 | `$3D12` / `$3D64` | C-edge + Up held while `+$45` set → latch `+$46` (landing tech). |

@@ -861,11 +861,11 @@ retail name alone.
 Each family owns a top-level primary-state table, but delegates geometry to the
 same helpers:
 
-- `$179F8` rejects unavailable players;
+- `$179F8 (later_boss_target_unavailable)` rejects unavailable players;
 - `$17A94/$17AF6` measure absolute X distance and side;
 - `$17B0C/$17B2C` face and measure lane distance;
 - `$17924-$179AC` convert signed deltas into stepped velocities;
-- `$17AB8` integrates all axes, clamps the lane to `$00-$70`, and clamps height
+- `$17AB8 (later_boss_integrate)` integrates all axes, clamps the lane to `$00-$70`, and clamps height
   against the ground plane;
 - `$17A5C` dispatches the tactical byte at `+$67`.
 
@@ -963,12 +963,12 @@ that is decided in primary 1, once per object update -- 30 Hz, since
 `$AD8E (update_objects_and_build_sprites)` runs both players, waits a VBlank,
 then every object. `$16DA0 (antonio_state1_active_combat)` does, in order:
 
-1. `$16D40 (antonio_select_target)`; `$179F8` (target unavailable, `+$77`,
+1. `$16D40 (antonio_select_target)`; `$179F8 (later_boss_target_unavailable)` (target unavailable, `+$77`,
    while its action is `$5A`-`$5F` or its `+$59`/`+$4B` bit 1 is set);
-   `$17B0C` (face the target; `+$50`/`+$52` absolute X and lane distance;
+   `$17B0C (later_boss_face_and_measure)` (face the target; `+$50`/`+$52` absolute X and lane distance;
    `+$60`/`+$61` set when the target is left of / above him);
-   `$17C36 (boss_apply_pending_damage)`; the held dispatch `$17CF2`; and the
-   contact test `$17B52` -> `$AA22` (see "Contact order" below);
+   `$17C36 (boss_apply_pending_damage)`; the held dispatch `$17CF2 (later_boss_held_dispatch)`; and the
+   contact test `$17B52 (later_boss_contact_test)` -> `$AA22` (see "Contact order" below);
 2. boomerang upkeep (`$17206 (antonio_boomerang_link_or_spawn)`) while
    tactical is under 6;
 3. **the screen test.** `+$28` is his biased screen X, written by
@@ -1004,7 +1004,7 @@ then every object. `$16DA0 (antonio_state1_active_combat)` does, in order:
 | 5 | `$170E4` | lane walk 1 px/update toward the target; `+$52 < $14` starts the wind-up |
 | 6 | `$17120` | the throw (`$30`): `$24` updates standing still; its frame 2 launches the boomerang (see "Boomerang linked object") |
 | 7 | `$17132` | after the throw (`$34`); a target that turned its back within `$E0` and `$14` of lane gets the dash; otherwise he waits on the boomerang -- walks toward the lane it homes on, catches it within 8 px of his hand, and is back in tactical 0 once it is gone |
-| 8 | `$16F68` | the dash: on while `+$50 >= $28` (or inside it with `+$52 < $10`), off at `$E0`; lane homing by `$1797E`, 4/2/1/0 px at `+$52` of `$20`/`$10`/`$08`/less |
+| 8 | `$16F68` | the dash: on while `+$50 >= $28` (or inside it with `+$52 < $10`), off at `$E0`; lane homing by `$1797E (later_boss_lane_home)`, 4/2/1/0 px at `+$52` of `$20`/`$10`/`$08`/less |
 | 9 | `$16F56` | the walk back on screen, `+$5C` updates |
 
 Tacticals 1, 2, 4, 5 and 7 hand a near target straight back to tactical 0,
@@ -1052,7 +1052,7 @@ skips a player whose `+$59` bit 1 is set -- every hit reaction sets it
 (`$333E (resolve_player_hit_or_ko)`, `$33EC`, `$3468`, `$34CA`) and the floor
 landing `$3F24` clears it, so a knocked-down player is not kicked again --
 and tests no contact at all while the player's `+$7C` bit 0 still holds a
-contact code not yet consumed. The player's boxes are the ones `$4140`
+contact code not yet consumed. The player's boxes are the ones `$4140 (player_cache_boxes)`
 cached at the end of the player's own update, before the object pass's
 `$43AA (clamp_players_to_gameplay_bounds)` pulls it back inside the camera
 and the lane band, so a walk pinned at a clamp makes contact from one step
@@ -1061,7 +1061,7 @@ past where it stands. Both confirmed in lockstep (autoplay's
 hit reaction, and a walk held into the camera's left edge took the hold
 2 px short of where the clamped walking box reaches.
 
-**Held** (`$17CF2`, jump table at `$17D10`, indexed by the holder's `+$7D`):
+**Held** (`$17CF2 (later_boss_held_dispatch)`, jump table at `$17D10`, indexed by the holder's `+$7D`):
 0 and 8 release him (`$17D3E`: straight to primary 1 where he stands); 1 is
 the front hold (`$17D54`, placed by `$17D76`'s `$28` -- 40 px in front of the
 holder, on its lane; Souther's entry is `$20`); 2 the back hold (`$17D7C`);
@@ -1105,7 +1105,7 @@ plus raw object dumps):
 `$17206 (antonio_boomerang_link_or_spawn)` scans forward through the object
 table for a free slot and initializes a new type-`$96` object there: palette
 byte from `+$4A`, a shared parent-link value at `+$4C`, and a hitbox/damage
-descriptor `$225C` at `+$E`. It then falls into two helpers shared with
+descriptor `$225C (player_armed_rear_attack_update)` at `+$E`. It then falls into two helpers shared with
 Souther's own claw-object creation path (confirmed because Souther's
 `$16C42` calls the first one too):
 
@@ -1152,7 +1152,7 @@ The "catch check" and "attached timer" names predate this decode; the
   player's attack hit it, `$17286 (antonio_boomerang_reverse_and_return)`; 3: a walking box on it, whose grab code
   in `+$7C` it clears), then `0.4375` off its X speed and `0.1875` off its
   lane velocity, every update. When `+$6B` runs out it stops dead and turns:
-  `lea $64(a0),a1`, `$17A94`, `$17B2C`, `move.w $14(a1),$52(a0)` is meant to
+  `lea $64(a0),a1`, `$17A94 (later_boss_measure_x)`, `$17B2C (later_boss_measure_lane)`, `move.w $14(a1),$52(a0)` is meant to
   aim its return at the target's lane, but `lea` leaves `a1` pointing into
   the boomerang itself, so `+$52` becomes its own `+$78` word -- 0 in a slot
   that `$171F8` cleared whole -- and `+$61` that word's side of its lane.
@@ -1229,7 +1229,7 @@ shared `$17A5C`:
 #### The state 1 → state 2 slash gate (`$15EDA (souther_state1_active_combat)`)
 
 `$15EDA (souther_state1_active_combat)` reselects the target, runs the availability probe
-`$179F8`, the facing/lane measure `$17B0C`, `$17C36 (boss_apply_pending_damage)`, and
+`$179F8 (later_boss_target_unavailable)`, the facing/lane measure `$17B0C (later_boss_face_and_measure)`, `$17C36 (boss_apply_pending_damage)`, and
 increments both `+$78` and `+$7B`. It then tests, in this order, whether to
 commit to the claw:
 
@@ -1448,7 +1448,7 @@ measured frame by frame in lockstep (`autoplay/tools/souther_hold_lab.py`).
 Where it disagrees with the text above, this is the corrected reading.
 
 **The lane gate depends on which side the target is on.** `+$61` is written by
-`$17B2C` as `smi` of (target lane − his lane), so it is set exactly when the
+`$17B2C (later_boss_measure_lane)` as `smi` of (target lane − his lane), so it is set exactly when the
 target stands *above* his lane. `$15EDA (souther_state1_active_combat)`'s lane
 test is therefore `+$52 < $0A` (10px) against a target above him and `< $1C`
 (28px) against one level with him or below. Both bodies' boxes are lane ±8, so
@@ -1497,7 +1497,7 @@ collision is not processed, so it cannot be grabbed from.
 
 **Holding him.** `$3266` takes a front hold `$60` when the two face each other
 and a back hold `$66` when the player is behind him. The held boss reacts
-through `$17CF2`, which indexes the table at `$17D10` by the holder's `+$7D`
+through `$17CF2 (later_boss_held_dispatch)`, which indexes the table at `$17D10` by the holder's `+$7D`
 (set from the player action table at `$32F2`), and he never times the hold
 out. Damage per move: knee 2 (`$6A`, `$6C`), third knee 3 plus the knockback
 that ends the hold (`$6E`), suplex 5, throw 4. `$17C36
@@ -1710,8 +1710,8 @@ thrown/knocked-down animations. His one weapon is the flame.
 
 After `$1753A (bongo_select_target)`, `$17AF6` (`+$50`/`+$52` absolute X and
 lane distance, `+$60`/`+$61` target left/above -- it does *not* turn him),
-`$17C36 (boss_apply_pending_damage)`, `$17CF2` (the held dispatch) and the
-contact test `$17B52`:
+`$17C36 (boss_apply_pending_damage)`, `$17CF2 (later_boss_held_dispatch)` (the held dispatch) and the
+contact test `$17B52 (later_boss_contact_test)`:
 
 - a non-zero tactical `+$67` is the **turn**: `+$68` counts down from 10
   with him standing still, then the idle animation facing the target and
@@ -1724,7 +1724,7 @@ contact test `$17B52`:
   `+$52` in `[$50, $60)`: 0.5 px away when closer (a level target counts as
   below him: he steps up), 0.5 px in from `$60`;
 - `+$50 >= $B0` walks (`$17744`: pushed back inside screen X `[$50, $1F0)`,
-  then `$17AB8`); under `$B0` he starts the wind-up without moving: primary
+  then `$17AB8 (later_boss_integrate)`); under `$B0` he starts the wind-up without moving: primary
   2, tactical 0, `+$68` = 5, animation `$24` set by `$17A24`/`$17A34`, which
   keeps the frame index and the running countdown and changes only the
   reload and the latched boxes.
@@ -1771,7 +1771,7 @@ never entered -- a holder is hit like anyone else.
 
 #### Contact order and the hold
 
-His update's `$17B52` runs first: the player's attack box (a walking box
+His update's `$17B52 (later_boss_contact_test)` runs first: the player's attack box (a walking box
 included) against his body -- the grab (code 3) when the player's `+$34` is
 clear, `+$4C` clear and heights within 8. The flame's test in the same pass
 then sees the grab's code in the player's `+$7C` and `$AA34` tests nothing.
@@ -1806,12 +1806,12 @@ pointers (`+$5E`), and registers both bosses in the late-phase HUD slots
 `$FFF502/$FFF508` when bit 6 of `$FFFA05 (level_spawn_flow_flags)` is set.
 
 Both objects share one update entry, one target selector, one animation set at
-`$2DD70`, and the same primary-state table. Differentiation is data-driven:
+`$2DD70 (onihime_yasha_animation_set)`, and the same primary-state table. Differentiation is data-driven:
 
 | Mechanism | Effect |
 |---|---|
 | Pair role `+$5D` ∈ {0,1,2} | 0 = unpaired/survivor; 1/2 = twin A/B |
-| Role seed into `+$7B` | Init copies `+$5D → +$7B`. Role 2 sets **bit 1 of `+$7B`**, so twin B starts on the **grab/throw AI path**; twin A starts on the **approach/jump path** |
+| Role seed into `+$7B` | Init copies `+$5D → +$7B`. Role 2 sets **bit 1 of `+$7B`**, so twin B starts on the **grab/throw AI path**; twin A starts on the **approach path** (chase, backflip, flying kick) |
 | Sticky target lock `+$74` | Once a player is chosen, reselection is suppressed until approach clears the lock |
 | Unpair on death | `$17F9C (boss_unlink_pair)` clears the survivor's `+$5D/$5E` so role-gated transitions relax |
 
@@ -1828,7 +1828,8 @@ Base combat stats from `$17EDC (boss_init_combat_stats)`: damage `$20`, health
 onihime_yasha_update (every object tick):
     +$34 = 0                              ; clear outgoing contact damage
     later_boss_enter_police_special_reaction ($16AEC)
-    consume_forced_reaction_flags ($16A1A) ; pair-coordinated hitstun via $FFFA53
+    consume_forced_reaction_flags ($16A1A) ; $FFFA53: set to 3 by $9494 on a
+                                          ; player's respawn -- every twin knocked back
     primary_state = +$30
     jump primary_state_table[$158D8 + state*2]  via loc_$15848
 ```
@@ -1839,8 +1840,8 @@ Primary-state table at `$158D8` (absolute ROM addresses, high word forced to
 | `+$30` | Address | Role |
 |---:|---:|---|
 | `$00` | `$158EE` | One-shot init (link pair, stats, anim, first target) |
-| `$01` | `$159C2` | **Active combat** — approach / jump / grab setup |
-| `$02` | `$15D0C` | **Committed grab/throw** sequence |
+| `$01` | `$159C2 (onihime_yasha_state1_active_combat)` | **Active combat** — approach / backflip / grab setup |
+| `$02` | `$15D0C (onihime_yasha_state2_commit)` | **Committed**: the flying kick, or the throw of a grabbed player |
 | `$03` | `$163D0` | Shared hit reaction / recovery entry |
 | `$04` | `$164CA` | Shared recovery continuation |
 | `$05` | `$164FC` | Shared lethal / death gate |
@@ -1902,7 +1903,7 @@ object owns the special DMA stepper documented under graphics analysis.
 the other approaches). Pair role still matters for *behavior*, not for the
 nearest-X choice itself.
 
-`$179F8` marks a player unavailable (`boss.+$77 = 1`) when the player has
+`$179F8 (later_boss_target_unavailable)` marks a player unavailable (`boss.+$77 = 1`) when the player has
 interaction/invuln bits or primary state in `$5A`–`$5F`.
 
 ```text
@@ -1958,280 +1959,227 @@ flowchart TD
 Player X for the distance test is read from the live object bases
 `$FFB810` / `$FFB890` (P1/P2 object `+$10`).
 
-#### State 1 — active combat (`$159C2`)
+#### State 1 — active combat (`$159C2 (onihime_yasha_state1_active_combat)`)
 
-Every tick of state 1 rebuilds geometry, applies damage, then either runs the
-**grab-setup path** or the **approach/tactical path**.
+Every update of state 1 rebuilds geometry, applies damage, then either runs
+the **grab-setup path** or the **approach path**. Everything below was
+decoded from the disassembly and then checked field by field against
+lockstep recordings of the ROM (`autoplay/tools/twins_lab.py --check`: every
+twin update of four runs, 2,500-3,900 each, no field off outside the held
+throw and a respawn's knock-back, which the model does not replay).
 
 ```text
 function state1_active(boss):
     +$37 &= 1; +$34 = 0
     target = onihime_yasha_select_target()
     $179F8(target)                 ; refresh +$77 unavailable
-    $17B0C()                       ; face + lane measure → +$52, +$61
-    boss_apply_pending_damage()
-    $17CF2(); $17B52()             ; interaction / collision maintenance
-                                   ; leaves result code in d7
+    $17B0C()                       ; +$09 bit 1 = the target's side: the mirror
+                                   ; bit of +$08, so the animation faces it
+                                   ; every update; +$50/+$60, +$52/+$61
+    boss_apply_pending_damage()    ; may take the whole update (state 3)
+    $17CF2(); $17B52()             ; held dispatch; contact test -> d7
 
-    if +$7B bit 1:                 ; grab/throw AI (role 2, or promoted)
+    if +$7B bit 1:                 ; grab path (role 2, or a promoted survivor)
         return grab_setup_path()   ; $15B2A
     else:
-        return approach_path()     ; $159F8…
+        return approach_path()     ; $159F8
 ```
+
+The twins build their boxes from the **player** shape table `$1ABA8 (player_shape_table)`
+(`sub_0000AB24` switches tables for type `$58`): they are Blaze's sprites,
+and several ids are hers. Their set, `$2DD70 (onihime_yasha_animation_set)`, right-facing members (the
+left-facing member follows with the mirrored ids; frame durations in
+updates, 0 = static):
+
+| Anim | Frames x updates | Attack box | Body box | Use |
+|---:|---|---|---|---|
+| `$00` | 1 x static | `$8F` 0..19 | `$4F` 2..12 | idle -- the attack box is the grab path's grab |
+| `$04` | 4 x 5 | `$8F` 0..19 | `$51` -5..5 | walk |
+| `$08` | 2 x 10 | none | none | hit reaction / knockdown (+`$0C`, +4 in flight) |
+| `$1C` | 3 x 10 | none | none | getting up (state 5) |
+| `$24` | 1 x static | none | `$7B` -1..7, z -51..-28 | flying kick, rising |
+| `$28` | 1 x static | none | `$79` 8..16, z -42..0 | flying kick crouch and landing |
+| `$2C` | 4 x 4 | `$8B` 3..49, z -38..-6 on frames 2-3 | `$7D`/`$7F`/`$81` | flying kick, falling |
+| `$40` | 12 x 2 | `$8F` on frames 10-11 | none | backflip |
+| `$44` | 13 x 2 | `$8F` frames 0-1 and 12, `$73` -13..13 at the feet on 2-11 | none | grab path's jump-in |
+
+Every box is lane -8..+8. A backflip and a jump-in carry **no body box at
+all**: nothing can hit a twin in either.
 
 ##### Approach path (role 1 / normal)
 
 ```text
 function approach_path(boss):
-    if collision_result d7 == 1:
-        target.+$7C = 0            ; clear player-side latch
-
+    if d7 == 1:
+        target.+$7C = 0            ; its own box on the target is no hit here
     if +$4B bit 0 was set (consume) and pair_role == 0:
-        set +$7B bit 1             ; unpaired survivor can promote to grab AI
+        set +$7B bit 1             ; unpaired survivor: the grab path
         return
-
-    # Commit window: target usable, not already in jump substate 2,
-    # lane dist in [$10, $20), X dist < $70
-    if +$77 == 0 and +$67 != 2
-       and $10 <= +$52 < $20 and +$50 < $70:
-        +$67 = 0
-        +$30 += 1                  ; → state 2 grab/throw commit
-        if anim_index (+$08) >= 4:
-            +$78 = 9
-            return
-        else:
-            +$78 = 0
-            start_anim($28)        ; via $1588A facing-aware
-            return
-
-    # Otherwise run tactical substate table at $15A5E
-    dispatch +$67 via $17A5C
+    # The flying kick's commit ($15A0E): target usable, not backflipping,
+    # 16-31 lanes off, inside 112 px
+    if +$77 == 0 and +$67 != 2 and $10 <= +$52 < $20 and +$50 < $70:
+        +$67 = 0; +$30 = 2
+        if +$08 >= 4: +$78 = 9     ; from any non-idle animation: launch next update
+        else: +$78 = 0; start_anim($28)   ; from the idle: 10 updates of crouch
+        return
+    dispatch +$67 via $17A5C       ; table $15A5E
 ```
 
-Tactical substate table `$15A5E` (relative offsets, dispatched by `+$67`):
+`d7 == 1` is `$AAA0`'s "its attack box on the target's body" -- and the
+approach path clears the code the same update, so **in state 1 the approach
+twin never damages anyone** (its idle and walk carry the `$8F` box for the
+grab path's sake).
+
+Tactical table `$15A5E`:
 
 | `+$67` | Handler | Behaviour |
 |---:|---:|---|
-| `$00` | `$15A7E` | **Idle/pressure.** Clears sticky lock `+$74`. Tries close-range jump arm. Counts `+$78`; after 10 ticks → substate `$01` and walk anim `$04`. While counting, if anim index ≥ 4, re-init anim 0 via `$15888`. |
-| `$01` | `$15AAC` | **Chase.** Tries jump arm; sets stepped X/lane velocities (`$1792C/$17954`) and integrates (`$17AB8`). |
-| `$02` | `$15ABA` | **Jump attack.** Phased by `+$78` (see below). |
+| `$00` | `$15A7E (onihime_yasha_approach_idle)` | **Idle.** Clears the sticky lock `+$74`; backflip arm (`$15A64 (onihime_yasha_arm_backflip)`); counts `+$78` to 10, then tactical `$01` with the walk. Re-inits the idle only from an animation index of 4 or more. |
+| `$01` | `$15AAC (onihime_yasha_approach_chase)` | **Chase.** Backflip arm; X 4 px an update at the target (`$1792C (later_boss_x_toward_4)`); lane `$17954 (later_boss_lane_keep_32)`; integrate. |
+| `$02` | `$15ABA (onihime_yasha_backflip)` | **Backflip** (below). |
 
-Close-range jump arm `$15A64` (called from substates 0 and 1):
+`$17954 (later_boss_lane_keep_32)` keeps the lane gap at the edge of 32: 1 px an update **toward** the
+target's lane while 32 or more apart, 1 px **away** from it inside 32. A
+chasing twin therefore drifts off a target that shares its lane -- into the
+commit window, unless the target follows it.
+
+Backflip arm `$15A64 (onihime_yasha_arm_backflip)` (tactical 0 and 1, before anything else):
 
 ```text
-if abs_X (+$50) < $60:
-    +$78 = 0
-    +$67 = 2                       ; enter jump substate
-    start_anim($40) via $15884     ; pops return, commits anim
+if +$50 < $60:
+    +$78 = 0; +$67 = 2
+    start_anim($40)                ; pops the caller: the update ends
 ```
 
-Jump attack `$15ABA`:
+Backflip `$15ABA (onihime_yasha_backflip)` (also the grab path's tactical 3):
 
 ```text
 +$78 += 1
-if +$78 < 4:  return                 ; wind-up
+if +$78 < 4: return                ; wind-up, standing
 if +$78 == 4:
-    lane_vel (+$20) = ±$00010000     ; sign from target lane side +$61
-    Y_vel   (+$24) = $FFF8C000       ; upward impulse
-    face target ($17942)
-    queue_sound(-$60)
-    integrate and return
-if still airborne (Y != ground +$4C):
-    +$24 += $0000C000                ; gravity
+    +$20 = +1.0, or -1.0 with the target above   ; toward the target's lane
+    +$24 = -7.25
+    $17942                         ; +$1C = +4 with the target on the left:
+                                   ; 4 px an update AWAY from the target
     integrate
-else:                                ; landed
-    queue_sound(-$5F)
-    $17B42()                         ; post-land cleanup
-    +$78 = 0; +$67 = 0; +$30 = 1
-    start_anim(0)
+elif airborne (+$18 word != +$4C word):
+    +$24 += 0.75; integrate
+else:                              ; landed ($15AF4)
+    zero velocities; +$78 = +$67 = 0; +$30 = 1; start_anim(0)
 ```
 
-```mermaid
-flowchart TD
-    A(["State 1 approach path"]) --> D7{"d7 == 1?"}
-    D7 -->|yes| CLR7C["Clear target +$7C"]
-    D7 -->|no| BIT4B
-    CLR7C --> BIT4B{"+$4B bit0 set and unpaired?"}
-    BIT4B -->|yes| PROMO["Set +$7B bit1 → grab AI next tick"]
-    BIT4B -->|no| WIN{"Commit window?\n+$77==0, +$67!=2,\nlane in [16,32), X<$70"}
-    WIN -->|yes| TO2["+$30 = 2 commit\nanim $28 or timer 9"]
-    WIN -->|no| TAC{"+$67 tactical"}
-    TAC -->|0| T0["$15A7E idle/pressure\nclear +$74, count to 10"]
-    TAC -->|1| T1["$15AAC chase velocities"]
-    TAC -->|2| T2["$15ABA jump attack"]
-    T0 --> ARM{"X dist < $60?"}
-    T1 --> ARM
-    ARM -->|yes| ARM2["+$67=2, anim $40"]
-    ARM -->|no| END(["rts / integrate"])
-    T2 --> JP{"+$78 phase"}
-    JP -->|"1..3"| WAIT["wind-up"]
-    JP -->|4| LAUNCH["lane ±$1.0, Y=$FFF8C000\nsound, integrate"]
-    JP -->|">4 airborne"| GRAV["gravity $C000/tick"]
-    JP -->|landed| LAND["sound, +$30=1, +$67=0"]
-```
+21 updates in the air, 84 px away and 21 lanes toward the target's lane.
+**Correction:** earlier revisions called this the twins' "jump attack" and
+had it cover the last ~94 px and land on the player. `$17942 (later_boss_x_away_4)` negates the
+velocity `$1792C (later_boss_x_toward_4)` uses: it is a retreat. Recorded in lockstep: a twin 88 px
+from Blaze flipped from x 5345 to 5429 while she stood at 5252.
 
-##### Grab-setup path (`$15B2A`, role 2 / promoted)
+So the approach twin **never comes inside 96 px on its feet**: it chases to
+under 96 and flips back out, idles ten updates, and chases again. Its one
+attack is the flying kick of state 2.
 
-Entered when `+$7B` bit 1 is set. Uses a **second** tactical table at `$15BE0`
-when the grab cannot be finalized this tick.
+##### Grab-setup path (`$15B2A (onihime_yasha_grab_setup)`, role 2 / promoted)
 
 ```text
 function grab_setup_path(boss):
-    if d7 != 1: goto tactical_grab           # need successful interaction code
-    if target unavailable or +$67 == 3: abort_player_latch; goto tactical_grab
-    if boss not on ground and player not on ground: abort; goto tactical_grab
-
-    # Finalize grab → state 2
-    if player on ground but boss not:
-        +$78 = $F8
-        snap boss Y to ground
-    else:
-        +$78 = 0
-    +$67 = 0
-    +$30 += 1                                # → state 2
-    +$72 = target
-
-    # Side / facing → throw variant
-    dx = boss.X - target.X
-    if dx >= 0:
-        side = 1; face_bit = target.facing
-        if face_bit clear: use variant A (d1=3, anim=$34, offset=+$18)
-        else:              use variant B (d1=2, anim=$30, offset=+$2C)
-    else:
-        side = 0; symmetric facing tests → same A/B choice
-
-    target.interaction (+$7D) = variant
-    boss.+$79 = variant
-    snap target lane/Y to boss lane/ground
-    place target.X = boss.X ± offset
-    start_anim(anim | facing) via $1589C
+    if d7 == 1:                            ; its box on the target's body
+        if +$77 or +$67 == 3: target.+$7C = 0
+        elif the twin, or the target, stands on the twin's floor (+$4C):
+            finalize: +$30 = 2, place the target, throw variant by side and
+            the target's facing (below) -- the throw is 32 damage
+            return
+        else: target.+$7C = 0
+    dispatch +$67 via table $15BE0
 ```
-
-Tactical grab table `$15BE0`:
 
 | `+$67` | Handler | Behaviour |
 |---:|---:|---|
-| `$00` | `$15C18` | If unpaired and `+$4B` bit 0: **clear** grab-mode bit (drop back to approach). Else try grab-commit helper `$15BE8`, then `$15C72`. If target free and `+$7A` toggle / unpaired: may clear grab mode. Else force substate `$01` and anim `$04`. |
-| `$01` | `$15C60` | Commit helper + chase velocities (`$17924/$1797E`) + integrate. |
-| `$02` | `$15CE0` | Animation-synced height bob (±`$1C` on specific frames) then fall into jump-land logic at `$15AF4`. |
+| `$00` | `$15C18 (onihime_yasha_grab_idle)` | Consumes `+$4B` bit 0 (unpaired: back to the approach path). Clears `+$74`; `$15BE8 (onihime_yasha_backflip_from_staggered)`; `$15C72 (onihime_yasha_jump_in)`; waits while the target is unavailable; toggles `+$7A` -- paired, straight to tactical `$01` with the walk; unpaired, every other pass drops to the approach path. |
+| `$01` | `$15C60 (onihime_yasha_grab_walk)` | `$15BE8 (onihime_yasha_backflip_from_staggered)`; `$15C72 (onihime_yasha_jump_in)`; X 2 px an update at the target (`$17924 (later_boss_x_toward_2)`); lane `$1797E (later_boss_lane_home)` (4/2/1/0 px at a gap of 32+/16+/8+/less, toward it); integrate. |
+| `$02` | `$15CE0 (onihime_yasha_jump_in_flight)` | The jump-in's flight: 28 px up on the first update of frame 2 of `$44`, 28 down on frame 12, then `$15AF4 (onihime_yasha_fall_or_land)`'s fall and landing. |
+| `$03` | `$15ABA (onihime_yasha_backflip)` | The backflip. |
 
-Grab-commit helper `$15BE8`:
+`$15BE8 (onihime_yasha_backflip_from_staggered)` arms tactical 3 -- **a backflip away**, not a leap at the target --
+when the target is unavailable (a hit reaction, a knockdown, `$5A`-`$5F`),
+inside 144 px, with the twin's `+$28` in (`$80`, `$1C0`). Earlier revisions
+called it a pounce.
 
-```text
-if +$77 == 0: return                    # target AVAILABLE ⇒ no leap
-if X dist >= $90: return
-if screen-space X not in ($80, $1C0): return
-+$78 = 0; +$67 = 3; start_anim($40)     # leap-to-grab arm
-```
+`$15C72 (onihime_yasha_jump_in)`, the **jump-in** (`+$24` = -10, 3 px an update at the target,
+animation `$44`), fires only at a target that **faces the twin**: inside
+64 px on that alone; at 64-111 px only with the target on the twin's floor
+and its `+$1C` high word "walking away" -- negative with the target on the
+twin's left, **non-negative** (so standing counts) with it on the right: the
+two branches are not mirrors. A target with its back to the grab twin gets
+neither: the twin walks in at 2 px an update, and its walking box `$8F`
+(0..19 ahead) on the body is the grab.
 
-The `+$77` test is `tst.b $77(a0) / bne` — the helper proceeds **only when the
-target is unavailable**, the opposite polarity of the finalize path `$15B2A`
-and of the approach commit window in `$159F8`, which both require `+$77 == 0`.
-`$179F8` sets `+$77 = 1` for a player in hurt/knockdown/death states
-`$5A`–`$5F` or carrying the `+$59`/`+$4B` bit-1 interaction flags, so this
-leap is a **pounce on an already staggered player**, not a general approach.
+#### State 2 — commit (`$15D0C (onihime_yasha_state2_commit)`)
 
-Facing-aware jump-in `$15C72` (when closing for a grab):
-
-```text
-# Prefer jump when X < $40, or when $40..$70 and the player is on the ground.
-# Both paths then require the player's X velocity to point toward the boss and
-# the player facing bit (+$09 bit 1) to agree with the side sign +$60; the two
-# side branches are exact mirrors, so the net condition is "the player is
-# closing on, and facing, the boss".
-if should_jump:
-    +$67 = 2; +$78 = 0
-    +$24 = $FFF60000                   # stronger upward impulse than approach jump
-    face ($17928); integrate; sound
-    start_anim($44)
-```
-
-```mermaid
-flowchart TD
-    G(["State 1 grab-setup $15B2A"]) --> OK{"d7==1 and target usable\nand +$67!=3 and someone grounded?"}
-    OK -->|no| TG{"+$67 grab tactical $15BE0"}
-    OK -->|yes| FIN["+$30=2, sync player pose\nchoose throw variant by side/facing"]
-    TG -->|0| G0["$15C18 hold / maybe drop grab mode"]
-    TG -->|1| G1["$15C60 chase"]
-    TG -->|2| G2["$15CE0 height bob → land"]
-    G0 --> HC{"$15BE8 commit window?\ntarget staggered +$77!=0,\nX<$90, screen X mid"}
-    HC -->|yes| LEAP["+$67=3, anim $40"]
-    G0 --> JC{"$15C72 jump-in?"}
-    G1 --> JC
-    JC -->|yes| JIN["+$67=2, Yvel=$FFF60000, anim $44"]
-```
-
-#### State 2 — grab/throw commit (`$15D0C`)
-
-Once `+$30 == 2`, the twin no longer freelances: it drives a **frame timer**
-`+$78` and either a normal leap-throw or the held-player throw path when
-`+$7B` bit 1 is still set.
+Once `+$30 == 2` the twin runs a fixed timeline on `+$78`: the approach
+twin's **flying kick**, or the throw of a grabbed player while `+$7B` bit 1
+is set (`$15E06 (onihime_yasha_held_throw)`, not detailed here).
 
 ```text
-function state2_throw(boss):
-    +$37 &= 1
-    +$34 = base_damage (+$4A)          # restore contact damage for the throw
-    a1 = +$72; re-check availability and X/lane
-    boss_apply_pending_damage(); interaction helpers
-
-    if +$7B bit 1:
-        return held_throw_choreography()   # $15E06
-    if d7 == 1:
-        target.+$7D = 1
-
-    +$78 += 1
-    t = +$78
-    if t == $2A: re-init current anim; return
-    if t == $2C:
-        if unpaired: set +$7B bit 1        # survivor may re-enter grab AI
-        +$78 = 0; +$30 = 1
-        re-init anim; return
-    if t < $0A: return                     # wind-up
-    if t == $0A:
-        sound; lane_vel = (target.lane - boss.lane) / 16
-        Y_vel_word = $FFF6
-        X_vel = ±$0002AAAA by side +$60
-        start_anim($24); integrate; return
-    if t == $18: sound
-    if t == $14: start_anim($2C)
-    if still airborne: gravity $C000; integrate
-    elif Y_vel != 0:
-        land sound; $17B42(); start_anim($28)
-    else: return
-```
-
-Held-player choreography `$15E06` (both twins can reach this after a successful
-setup; role 2 starts closer to it):
-
-```text
-function held_throw_choreography(boss):
-    variant = +$79; mirror to target.+$7D
+function state2(boss):
+    +$37 &= 1; +$34 = +$4A          ; 32: its box does damage now
+    $179F8; $17A94; $17B2C          ; no facing update: the kick keeps its side
+    boss_apply_pending_damage(); $17CF2(); $17B52()
+    if +$7B bit 1: return held_throw()        ; $15E06
+    if d7 == 1: target.+$7D = 1               ; the kick landed -- and it flies on
     +$78 += 1; t = +$78
-    if (t == $16 and variant == 9) or (t == $2E and variant == 4):
-        if unpaired: clear +$7B bit 1
-        goto land_and_return_state1 ($15B0A)
-    if t == 2:
-        if variant == 2:  new_variant=9; anim=$38
-        else:             new_variant=4; anim=$3C
-        write variants; start_anim; throw sound
+    if t == $2A: start_anim(0); return
+    if t == $2C: unpaired -> set +$7B bit 1; +$78 = 0; +$30 = 1; start_anim(0); return
+    if t < $0A: return                        ; crouch (from the idle)
+    if t == $0A:                              ; launch
+        +$20 = (target +$14 - its +$14) asr 4 ; 1/16 of the lane gap an update
+        +$24 high word = -10
+        +$1C = +-2.667 at the target
+        start_anim($24); integrate; return
+    if t == $14: start_anim($2C)
+    if airborne: +$24 += 0.75; integrate
+    elif +$24 != 0: zero velocities; start_anim($28)   ; landed
 ```
 
-```mermaid
-flowchart TD
-    S2(["State 2 $15D0C"]) --> H{"+$7B bit1 held-throw?"}
-    H -->|yes| HT["$15E06 held choreography"]
-    H -->|no| TIM["+$78 timer"]
-    TIM -->|"t < $0A"| WU["wind-up"]
-    TIM -->|t == $0A| LEAP["Leap: X ±$2AAAA, Y $FFF6\nlane toward player, anim $24"]
-    TIM -->|t == $14| A2C["anim $2C"]
-    TIM -->|t == $18| SND["sound"]
-    TIM -->|t == $2A| REANIM["refresh anim"]
-    TIM -->|t == $2C| DONE["+$30=1; maybe set grab bit if unpaired"]
-    TIM -->|airborne| GRAV["gravity + integrate"]
-    TIM -->|landed| LAND["anim $28"]
-    HT -->|"t==2"| SWAP["Swap to variant 9/4\nanim $38/$3C"]
-    HT -->|"end times"| BACK["land → state 1"]
-```
+The flight is **28 updates, 74.7 px on X**, and on the lane it crosses the
+target's lane (as it stood at the launch) on its 16th update and carries on
+to 1.75 times the gap. The kick box (`$8B`, 3..49 ahead, 38..6 above its
+feet) is out from the 19th update of the flight, and low enough to meet a
+standing body (feet within 42 px of the floor) from the 23rd. Its body comes
+low enough for Blaze's rear attack (the box reaches 64..24 above her feet)
+from the 24th, Axel's (72..40) from the 23rd. It lands 33-37 px short of a
+target it launched at from the chase (108-111 px), stands in the crouch
+until `t = $2C` (6 updates), and state 1 then flips it away -- or, with the
+target 16-31 lanes off, commits it again from the crouch.
+
+#### The rear attack against the twins
+
+Measured in lockstep (Blaze, Axel, Adam) and read from `$3A30 (player_frame_timing_table)`'s timing rows
+and `$423C (player_attack_descriptor_table)`'s damage bytes. Update 0 is the one whose player update sees
+the B+C edge (`$322A (player_attack_jump_chord)`); the box is on the twin updates that follow the
+listed player updates.
+
+| Character | Moves | Box out | Box `+$64` (right-facing) | Damage | Free again |
+|---|---|---:|---|---:|---:|
+| Blaze | `$20`, animation `$24`, row 26: 3 / 8 / 3 | updates 3-10 | x -53..-5, z -64..-24 | 2 | update 14 |
+| Axel | `$20`, animation `$24`, row 8: 1 / 5 / 2 | updates 1-5 | x -40..-8, z -72..-40 | 3 | update 8 |
+| Adam | `$22` crouch 5, `$24` hop, `$14` landing 5 | updates 10-18 | x -42..+14, z -43..-17 of his hop | 3 | update 24 |
+
+Adam's chord is a hop: `+$24` = -6.25, gravity 0.90625, his feet 24 px up at
+the top. With a weapon in hand the chord is action `$4A` (`$4C` for Adam) --
+the same animation, box and damage. Every live frame's descriptor carries hit
+property 1, which `$AAA0` ORs into the twin's `+$37`: the strike is a
+**knockdown**. `$17C36 (boss_apply_pending_damage)` applies it on the twin's *next*
+update: 5 px an update away from the attacker with `+$24` = -5, `$163D0`'s
+gravity of 1.0 and one bounce (`+$24` = -3): **90 px in 18 updates**, 30
+updates in state 3, 8 more getting up in state 5 (which sets `+$4B` bit 0),
+none of it with a box. Blaze's body box moves *behind* her for the chord
+(`$75`/`$77`, -13..-5 / -7..-2): a grab twin already inside ~32 px takes her
+during the startup.
+
+`$AAA0` tests the player's attack box against the twin's body **before** the
+twin's box against the player: a strike on the update a kick or a grab box
+would land wins, and hides the actor from the twin's box for that update. A
+strike registers only with the twin's `+$28` in [`$78`, `$1C8`).
 
 #### Pairing, survivor phase, and police special
 
@@ -2254,7 +2202,9 @@ flowchart LR
 Key interactions with the shared framework:
 
 - **Forced reactions** `$16A1A`: if `$FFFA53 (boss_forced_reaction_flags)` is set, a living twin outside
-  states `$00` and `$03`–`$09` is forced into the reaction path. Pair role
+  states `$00` and `$03`–`$09` is forced into the reaction path (3 px an
+  update back, `+$24` = -5). `$9494` sets it to 3 when a player respawns
+  (`$1E0E (player_spawn_or_respawn)`), so a respawn knocks both twins down. Pair role
   selects which bit of the flag byte is consumed, so both twins are not always
   yanked on the same frame.
 - **Police special** `$16AEC (later_boss_enter_police_special_reaction)` → state `$0A`: same −10 damage path as Antonio,
@@ -2279,69 +2229,38 @@ Key interactions with the shared framework:
 | `+$67` | Tactical substate (approach or grab table) |
 | `+$72` | Selected player pointer |
 | `+$74` | Sticky lock after successful select |
-| `+$77` | Target unavailable flag from `$179F8` |
+| `+$77` | Target unavailable flag from `$179F8 (later_boss_target_unavailable)` |
 | `+$78` | Multi-purpose phase timer (jump, throw, init latch) |
 | `+$79` | Active throw variant mirrored to player `+$7D` |
 | `+$7A` | Toggle used when dropping grab mode |
 | `+$7B` | Mode flags; **bit 1 = grab/throw AI path** (seeded from role) |
 
-#### Derived player strategy
+#### Derived player strategy: rear attacks from an edge
 
-This subsection is guidance derived from the gates documented above, not new
-ROM evidence. Every twin transition is decided by distance windows, target
-state, and fixed frame timers; the family draws no RNG. The gates therefore
-compose into a deterministic denial map.
+Built and measured in `autoplay` (`ai/twins.py` is the model above, played
+update by update; `ai/twins_plan.py` the plan). What the ROM makes of the
+strategy "stand at an edge, back to the twins, rear attack them as they
+come":
 
-**Focus one twin.** The pair is two independent objects with separate health
-(`$20` each on Normal), separate state machines, no shared pool, and **no
-low-health enrage**. `$17F9C (boss_unlink_pair)` only relaxes role gating on
-the survivor. Killing one removes half the incoming pressure at no cost.
+- **The grab twin** walks straight into a turned back at 2 px an update and
+  homes the lane itself: the rear attack meets it from 58 px (Blaze; Axel
+  45, Adam 47) long before its walking box reaches the body (16-17 px), and
+  it is never given its jump-in.
+- **The approach twin** never walks into anything (its backflip); its only
+  approach is the flying kick. Held within 16 lanes of it, the target denies
+  the kick outright; let it commit, the kick is a fixed path that is either
+  stepped off by the lane or met by the rear attack on its way down -- the
+  strike is tested first, so a chord live on the update its body comes low
+  enough wins against the kick box on that same update.
+- Each strike is a 90 px knockdown and 39 updates on the floor; the twin
+  walks (or chases) back to the same distance, so a twin's cycle is fixed
+  at about 85 updates whatever distance it is met at. 16 strikes a twin
+  (Blaze, 2 damage against 32 health) make ~45 s; Axel's 3 damage makes 11.
 
-**Kill the grab twin first.** Role 2 starts with `+$7B` bit 1 set and is the
-only grab source while the pair is linked: the approach twin can promote to
-the grab path only when `+$5D == 0`, which requires its partner to be dead
-already. Identify it in the opening seconds — the grabber closes and leaps
-with the grab arm (`anim $40`), while the approach twin does the lane-crossing
-hop.
-
-| Threat | Gate | Denial |
-|---|---|---|
-| Approach twin throw commit (`+$30` → 2, `$159F8`) | `+$77 == 0`, lane `+$52` ∈ [`$10`,`$20`), X `+$50` < `$70` | Stay coplanar (lane < `$10`) or more than `$20` off-lane; the half-step diagonal is the trigger band. X ≥ `$70` also denies it. |
-| Approach twin jump attack (`$15A64`) | X `+$50` < `$60`, unconditional otherwise | Distance only. At X ≥ `$60` the approach twin has no attack: substate `$00` idles ten ticks, then substate `$01` walks. |
-| Grabber leap-to-grab (`$15BE8`) | `+$77 != 0` (player staggered), X < `$90`, screen X in (`$80`,`$1C0`) | Do not take hits near the grabber; it only arms while the player is in `$5A`–`$5F` or flagged interaction/invulnerable. |
-| Grabber jump-in (`$15C72`) | X < `$40`, or `$40`–`$70` with the player grounded, closing, and facing the boss | Never walk into the grabber. Retreating or facing away fails the velocity/facing agreement. |
-| Grab finalize (`$15B2A`) | contact result `d7 == 1`, `+$77 == 0`, at least one body grounded | Jumping does not help unless the boss is airborne too; only the both-airborne case aborts. |
-
-The practical standoff is X in `$60`–`$90`: the approach twin cannot attack at
-all, and the grabber must walk in under its own power. Punish it as it closes,
-then step back out rather than pressing forward.
-
-Fixed timelines give three reliable punish windows:
-
-- **Jump attack** `$15ABA`: `+$78` ticks 1–3 are pure wind-up; the launch at
-  tick 4 commits a ballistic arc from the lane sign `+$61` and cannot steer.
-  Change lane, then punish the landing, which resets `+$67 = 0, +$30 = 1`.
-- **Whiffed throw** `$15D0C`: the timer runs to `$2C` before returning to
-  state 1, with no cancel path.
-- **Held-throw** `$15E06`: fixed at `$16` or `$2E` ticks by variant.
-
-Two force multipliers:
-
-- **Police special** (`$16AEC (later_boss_enter_police_special_reaction)` → `$16A60 (later_boss_police_special_reaction)`) deals a flat 10 damage to every
-  living boss once per event, after 300 updates for P1 or 390 for P2. Spend it
-  while both twins live: 20 total damage, and the focus target drops from `$20`
-  to `$16`, roughly a third off the first kill. Holding it for the survivor
-  halves its value. The Round 8 boss rush cannot use it because player
-  initialization forces both special counters to zero.
-- **Two players**: `$15946 (onihime_yasha_select_target)` is nearest-X with the
-  sticky lock `+$74`, cleared only in approach substate `$00`, so aggro is
-  decided when a twin idles and then holds for the whole approach. `$179F8`
-  skips hurt or downed players. The stable split is one player holding the
-  nearer standoff to own both locks while the other flanks the focus target.
-
-Difficulty scales punishment rather than durability: Hard and Hardest double
-contact damage to `$40`, while health only reaches `$25` on Hardest. Denial
-beats trading damage.
+Measured (Normal, round 5, police and food off): lockstep, Blaze -- both
+twins dead in 2,771 frames (46.2 s), no damage, 33 chords for 32 strikes;
+real time at 2x -- 46.8 s, no damage. The police special is worth 10 a twin
+once per call (`$16A60 (later_boss_police_special_reaction)`) but is not part of this plan.
 
 ##### Measured strike geometry (live, Round 5, Axel)
 
@@ -2356,35 +2275,23 @@ back.
 | Back attack damage | 3 | player `+$34` while `$20` runs (Axel: 10 damaging frames from frame 3; per-character chord timing in `controls-and-input.md`) |
 | Back attack box `+$64` | Axel X −40..−8, Y ±8 | direct read of the attack box (`+$70` is the body box) |
 | Punch reach vs a twin | **28–52 px** | teleport sweep: miss 8/12/16/20/24, hit 28…52, miss 56+ |
-| Twin health at the encounter | 22 | `+$32` |
+| Twin health at the encounter | 22 | `+$32` -- 32 on Normal (`$17EDC (boss_init_combat_stats)`); a player's respawn (`$9494`) was recorded taking 10 from each twin on the same frame |
 | Twin contact damage | 32 of an 80 HP bar | player health delta on a landed throw |
 
-Two consequences that are not obvious from the gate table:
-
-- **The punch has a near dead zone.** A body that has closed inside ~28 px is
-  not hit by it. Because `$15A64` makes the twins cover the last ~94 px
-  airborne and land *on* the player, the naive "walk in and press B" loop
-  spends the whole fight swinging inside that dead zone. Landing on top of the
-  player is their standard outcome, so the punish is: step back into 28–52
-  first, then swing.
-- **A grounded twin inside punch range does not happen by waiting.** Observed
-  approach loop: land, idle ~20 frames, walk in to ~94 px, jump. They never
-  walk closer than the jump-attack trigger, so the only grounded window is the
-  post-landing idle after `$15ABA`, and it must be closed into deliberately.
-
-At 1 damage per punch and 3 per back attack against 22 HP × 2 bodies, with 32
-damage per mistake, the police special's flat 10 per boss is not a bonus but
-the bulk of a realistic kill: one call while both live removes 20 of the 44
-total.
+**Correction:** earlier revisions drew two consequences from this sweep that
+the lockstep recordings contradict: that the twins "cover the last ~94 px
+airborne and land on the player" (that jump is the backflip away), and that
+the "only grounded window is the post-landing idle". What is true of the
+punch stands: its inner edge is ~28 px.
 
 #### Summary of the algorithm
 
 1. Spawn two type-`$58` objects; link them; seed role into `+$7B`.
 2. Each frame: police-special gate, forced-reaction gate, primary-state jump.
-3. State 1 either **approaches/jumps** (bit1 clear) or **hunts for a grab**
-   (bit1 set).
-4. Distance windows — not RNG — decide walk vs jump vs commit.
-5. State 2 plays a fixed throw timeline or a held-player variant swap.
+3. State 1 either **chases and backflips away** (bit1 clear) or **walks in
+   for a grab** (bit1 set).
+4. Distance windows — not RNG — decide walk vs backflip vs commit.
+5. State 2 plays the flying kick's fixed timeline or a held-player throw.
 6. Shared hit/death states handle damage; death unlinks the survivor.
 7. No enrage table: one body left is the entire second phase.
 

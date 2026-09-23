@@ -54,6 +54,10 @@ C0001E, vdp_disable_, "100% - VDP Disable/Debug Register (Mirror)"
 ; Streets of Rage specific
 
 005970, continue_override_threshold_table, "100% - B[4] - Values $00,$01,$07,$09 indexed by $FFFF35 on the nonstandard continue-reset path; result replaces the active player's bonus-life threshold index"
+003A30, player_frame_timing_table, "100% - W[] - Offsets to rows of per-frame update counts for player animations; $3A14 loads +$0D from row +$0C, entry +$0A. Row 8 (Axel's rear attack) 1,5,2; row 26 (Blaze's) 3,8,3"
+00423C, player_attack_descriptor_table, "100% - Per-animation offsets to per-character frame bytes read by compute_player_attack_descriptor: low nibble the frame's damage (+$34), high nibble the hit property OR'd into +$42 (bit 0 knocks down)"
+01ABA8, player_shape_table, "100% - 5-byte collision shapes (x offset, width, lane-table index, z offset, height) for players, and for type $58 (Onihime/Yasha) too"
+02DD70, onihime_yasha_animation_set, "100% - Animation set of the twins (type $58); its box ids index player_shape_table"
 078000, z80_banked_pcm_directory, "100% - 8 five-byte PCM records visible to the Z80 at banked address $8000: little-endian sample offset and length plus playback-delay byte; commands $8A-$91"
 
 ; --- Buffers ---
