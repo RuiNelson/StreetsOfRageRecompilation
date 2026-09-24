@@ -574,6 +574,97 @@ each arc began, which is the holder. A back hold keeps them on the far side
 until they drop at the end of their arcs. In the hold, knees do the holder's
 `+$34` (2, 2, then 3 and a knockback) and the suplex (`$A2EC`) a flat 5.
 
+## HakuRo: rising from below deck
+
+Reported live (user, in Portuguese, on round 5's boat stage): "No nível 5 há
+um bug que a AI fica presa num inimigo que é detetado (e bem), mas está por
+debaixo do chão do estágio (o estágio é num barco e o inimigo sai a
+saltar), a IA fica presa a tentar dar murros no inimigo, mas este ainda não
+está disponível" -- the AI correctly detects an enemy jumping up from below
+the boat's deck, but it isn't actually reachable yet, and the AI gets stuck
+repeatedly trying to punch it. Reproduced at round 5, wave 3 (0-indexed, the
+4th wave): the enemy is **HakuRo, type `$25`** (`autoplay/src/sor_autoplay
+/ai/tokens/enemy.py`'s `HakuRo(Grunt)` -- type `$2A` is a *different*
+object, its own table near `$103AE` right after Jack's `$28` helper table,
+not examined here; the live capture below is type `$25` on every row).
+
+`$E8F0 (haku_ro_type25_dispatcher)` indexes twenty words at `$0000E8F8`
+(states `$00`-`$13`; `org $0000E920` right after the table confirms its own
+length). State `$13`'s handler,
+`$E952 (haku_ro_type25_state13_rise_from_below_deck)`, is entered once
+per HakuRo of the wave and does two distinct things depending on whether it
+has already run:
+
+- **On first entry** (`bset #$00,+$31` -- Z set only the first time, so this
+  block runs exactly once): clears the SAT-hidden bit (`+$1` bits 0/4, so the
+  object becomes visible immediately, in the object table, with real
+  state/health/hitbox -- an entirely ordinary-looking enemy from every other
+  angle), zeroes lane `+$14`, and either adds `$34` (**52** decimal) to
+  elevation `+$18` with a small upward velocity seeded into `+$24` (the
+  common case, confirmed live -- see below), or, for the `object+$40` bit6
+  "ambush" variant, sets `+$18` to `$FFF0` and `+$24` to 0 and picks a
+  randomized `+$10` X near `$350` instead (not observed live; not exercised
+  by round 5's wave 3 as captured).
+- **Every update after that**, whether or not this is the first: it re-tests
+  `cam_x+$80` (`+$100` for the `object+$40` bit5 variant) against the
+  object's own `+$10`, and returns immediately (`rts`) while the camera has
+  not scrolled that far. `+$18`/`+$24` are **not touched again** on that
+  path -- the elevation integration
+  (`+$24 += $1.2000` 16.16 accel per update, `+$18 += +$24`, then
+  `sub_0000AD2A`'s floor probe -- the same "what floor is at this point"
+  primitive `hazards.py` documents at `sub_0000AD30`, called here with a
+  zero offset, i.e. exactly at the object's own position) only runs once
+  that camera test passes, and only then does the object land: `+$18` snaps
+  to the probed surface and the state advances to `$0E` the moment the
+  probe succeeds.
+
+**This is a genuine, ROM-native deadlock, not just a slow animation.**
+Nothing else in this handler ever advances the object while the camera gate
+is closed, and nothing in the ROM scrolls the camera except stage-forward
+player progress. An AI that stands in front of the (fully visible, fully
+"live"-looking) frozen HakuRo and keeps attacking it never advances the
+stage, so the camera never scrolls, so the gate never clears, so the enemy
+never actually rises -- a self-sustaining loop, exactly the reported bug.
+
+Live capture (`autoplay/tools/hakuro_emerge_diag.py`, round 5 jumped to
+directly with every other ordinary family swept, `--turbo 2`, wave 3, the
+real `AgentLoop` pipeline playing): five HakuRo activated in the wave. Two
+(the ones already close enough on X for the camera gate to be satisfied
+immediately, or nearly so) rose and landed within about a second, `+$18`
+measured going `212 -> ... -> 128 -> ... -> 160` before the state
+transitioned `$13 -> $0E` exactly as decoded, then straight into ordinary
+combat states. The other three -- further ahead on X, past the camera gate
+-- were captured **frozen at exactly `world_z=212` (bit-exact, zero jitter)
+for the entire 33+ second capture window**, while the AI (before the fix
+below) repeatedly issued `WalkToNearEnemy`/`MeleeWeaponAttack` at them: 212
+is precisely 160 (the round's own base street surface,
+`hazards.base_floor_z(4)`, `$19C04`'s rounds-1-to-5 table) + 52 (this
+handler's own `$34` offset), confirming the decode against the running game
+exactly.
+
+`phases.py` has no per-type table entry for HakuRo (`$25`/`$2A`) at all, so
+state `$13`'s word (`$1300`) does not match any of the generic hi-byte
+families and falls through to `CombatPhase.UNKNOWN` -- not one of
+`should_ignore_as_target`'s phases (`DEATH`/`SCRIPTED`), so nothing already
+in the pipeline excluded it from targeting. The fix
+(`autoplay/src/sor_autoplay/ai/reach.py`'s `enemy_still_emerging`, wired into
+`live_enemies`) does not touch `phases.py` at all: it reads `Enemy.world_z`
+(now threaded onto every ordinary enemy and boss, not only Jack, in
+`observe.py`) against `hazards.base_floor_z(level_index)`, the same round's-
+own-street-surface reference `hazards.is_wall_class` already uses for a
+raised collision class -- a **generic** geometry check, not a HakuRo- or
+round-5-specific one, since the ROM fact behind it (a body's `world_z` *is*
+its floor's surface once landed, per `hazards.py`'s own citation of `$3E78`)
+is generic to every ordinary enemy and every round, not particular to this
+one rise-from-below mechanic. Verified live after the fix: the same wave 3
+capture completed cleanly in ~27.5s with the AI issuing
+`WalkToAdvanceStage` while the frozen HakuRo sat outside `live_enemies`, the
+camera caught up, and every HakuRo landed and was fought normally in turn
+(no stuck loop, and the previously-frozen slots' later `JumpAttack`/
+`MeleeWeaponAttack` verbs in the log land only once their own `world_z`
+reads back at the floor -- confirming the gate does not over-suppress a
+HakuRo that has actually landed).
+
 ## Collision, reactions, grabs, and death
 
 `$991A (ordinary_enemy_begin_knockdown)` starts the knockdown/airborne fall after the enemy has taken sufficient damage; it is not the generic reaction to every hit. It clears attack damage, selects facing from the attacker, and dispatches by fall subtype `$4A`. `$99A2 (ordinary_enemy_update_airborne_reaction)` advances airborne physics and landing, using `$973E` for vertical motion and `$9F22` for obstacle response.
