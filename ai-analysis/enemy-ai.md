@@ -185,7 +185,7 @@ function ordinary_enemy_select_target(enemy):
     enemy.target_ptr = target
 ```
 
-There is no global threat table. Targeting is nearest-X and can be recalculated by behavior states. Boss selectors at `$129F8`, `$15946 (onihime_yasha_select_target)`, `$16294 (souther_select_target)`, `$16D40 (antonio_select_target)`, and `$1753A (bongo_select_target)` are separate. Souther/Antonio/Bongo often add pair-role, facing, or lane biases inside the selector itself; Onihime/Yasha's selector is availability + sticky nearest-X, while pair role instead seeds the grab-vs-approach path (see the twins section).
+There is no global threat table. Targeting is nearest-X and can be recalculated by behavior states. Boss selectors at `$129F8 (bespoke_boss_select_target)`, `$15946 (onihime_yasha_select_target)`, `$16294 (souther_select_target)`, `$16D40 (antonio_select_target)`, and `$1753A (bongo_select_target)` are separate. Souther/Antonio/Bongo often add pair-role, facing, or lane biases inside the selector itself; Onihime/Yasha's selector is availability + sticky nearest-X, while pair role instead seeds the grab-vs-approach path (see the twins section).
 
 ## Navigation and spacing
 
@@ -1530,7 +1530,7 @@ Initialization at `$144E0 (abadede_init)`:
 - conditionally creates type `$39` for a variant;
 - loads the `$34B94` animation set;
 - calls `$1456A (abadede_init_combat_stats)` for difficulty/variant health and damage;
-- selects a player through `$129F8`;
+- selects a player through `$129F8 (bespoke_boss_select_target)`;
 - seeds strong X/lane velocities and faces the target.
 
 The base `(health, damage)` pairs at `$145BC` are Easy `($20,$10)`, Normal
@@ -1546,7 +1546,7 @@ The canonical Round 3 Abadede therefore has 32 health and hands 32 damage
 `$143D0 (abadede_update)` dispatches the primary `+$30` through the word
 table at `$14466`; most handlers dispatch again on the substate `+$5B`
 (`$12B4C`), and every timer he runs is the word at `+$54`. His target is
-`+$5C` (`$129F8`: P1 in a one-player game, the player nearer on X with two).
+`+$5C` (`$129F8 (bespoke_boss_select_target)`: P1 in a one-player game, the player nearer on X with two).
 The linked type `$31` is a second sprite that follows him (`$1569C` copies
 his position with a per-pose offset) and has no collision of its own.
 `$13ED8 (bespoke_boss_collision_dispatch)` is Mr. X's; Abadede's own contact
@@ -1576,12 +1576,12 @@ players and the objects).
 
 - **State 1** re-aims both velocities at the target every update (`$1566E`:
   each turned toward it, 6 px an update) and, while the high-word lane gap is
-  `$10` or more, steps the lane -- and X, only while `|dx| >= $18` (`$12A78`
+  `$10` or more, steps the lane -- and X, only while `|dx| >= $18` (`$12A78 (bespoke_boss_range_test)`
   with `$00100018`; there is no clamp). Under `$10` it stops for the pause:
   `+$54` = 4.
 - **State 2** stands, re-aiming, for four updates, then decides: a lane gap
   of `$10` or more walks again (primary 1); `$50 < |dx| <= $70` with his
-  screen X `+$28` in `[$80, $1C0)` (`$97CE`) backs off first (primary 3);
+  screen X `+$28` in `[$80, $1C0)` (`$97CE (object_on_screen_test)`) backs off first (primary 3);
   anything else charges (primary 7).
 - **State 3** walks away from the target at 6 px an update, facing it, with
   no lane speed, for 20 updates or until `+$28` leaves `[$80, $1C0)`, then
@@ -2329,7 +2329,7 @@ controller itself. The new type-`$35` object enters the dispatcher below on its
 next object pass.
 
 The final boss uses the bespoke handler at `$1306A (mr_x_boss_update)` (dispatcher type `$35`).
-Its relative state table at `$130B8` reaches movement, charge, firing,
+Its relative state table at `$130B8 (mr_x_state_table)` reaches movement, charge, firing,
 hit-reaction, and death states through `$130D6-$13E3E`. It uses:
 
 - `+$5C` for the selected player;
@@ -2337,11 +2337,12 @@ hit-reaction, and death states through `$130D6-$13E3E`. It uses:
 - `$129F8/$12A4E/$12A78` for target selection and range tests;
 - `$1401E/$14048` for velocity steering and facing;
 - `$13ED8 (bespoke_boss_collision_dispatch)` for collision-result dispatch;
-- effect/projectile objects in the neighboring `$33-$38` type family for the
-  machine-gun/impact choreography.
+- the machine gun's bullets (type `$36`, `$140DC (mr_x_bullet_update)`) and
+  shell casings (type `$37`, `$14266 (mr_x_shell_update)`, which touch
+  nothing).
 
 `$13EBC (mr_x_init_combat_stats)` selects health and damage from a difficulty table. The common
-collision reaction at `$13F9A` subtracts the attacker's `+$34`; health at or
+collision reaction at `$13F9A (bespoke_boss_take_attacker_damage)` subtracts the attacker's `+$34`; health at or
 below zero selects the terminal state. Unlike the shared later-boss death
 path, Mr. X's terminal initialization `$13E4C (mr_x_final_encounter_init)` explicitly:
 
@@ -2363,6 +2364,138 @@ initialize difficulty stats and final animation
 This is why `$117FC (stage_clear_monitor)` has a special branch for `$FFFA77 (final_boss_presentation_active)`: final-stage
 completion is coupled to the registered Mr. X object and presentation state,
 not merely to the generic tracked-enemy count.
+
+#### Mr. X, state by state
+
+Decoded for the AI (`autoplay/ai/mr_x.py`) and checked in lockstep against the
+ROM (`autoplay/tools/mr_x_lab.py --check`: 2,016 of his updates over two runs,
+every field matching outside the held states, every bullet step, every grab
+and hit). Everything runs once per object update, 30 Hz. He keeps the older
+framework's layout: X, lane and height as 16.16 at `+$10`/`+$14`/`+$18`, their
+velocities at `+$1C`/`+$20`/`+$24`, the substate at `+$5B` (`$12B4C`), one word
+timer at `+$54`, the target at `+$5C` (`$129F8 (bespoke_boss_select_target)`).
+His walk is 8 px an update on both axes (`$14072 (mr_x_walk_setup)`), turned
+toward the target by `$1401E (mr_x_velocity_toward_target)` and faced at it by
+`$14048 (mr_x_face_target)`. Range tests are `$12A78 (bespoke_boss_range_test)`
+on the integer words. After his update the lane word is held at 0 or more with
+its fraction kept.
+
+| Primary | Handler | Behaviour |
+|---:|---|---|
+| `$00` | `$13E3E (mr_x_state0_entrance)` | registration, or after a knockdown the 5-update get-up (no body box), then 3 |
+| `$01` | `$130D6 (mr_x_state1_resume)` | walk set-up, `+$54` = 10, then 3 |
+| `$02` | `$13D86 (mr_x_state2_lunge)` | the lunge: set-up; four dash updates at 16/14/12/10 px, the contact test before each move; a switch update; six standing updates, tested on five; then 5, or one time in four on screen, 7 |
+| `$03` | `$130EE (mr_x_state3_decide)` | off screen (`$97CE (object_on_screen_test)`) a coin: 6 or 4; on screen `|dx| < $80` walks in (6), otherwise `+$54` runs out into the gun (7), testing contact and facing the target while it counts |
+| `$04` | `$1314C (mr_x_state4_reposition)` | 8 px an update in X toward the target and in lane by `$13FFC (mr_x_target_screen_test)`; out of the screen band `[$B8, $188)` back to 3; inside a `$10` lane gap and `$50` of X the lunge |
+| `$05` | `$13AFA (mr_x_state5_retreat)` | facing the target, 8 px an update away from it for 40 updates or until `+$28` leaves `[$B8, $188)`; then 1. Its set-up falls into its first update, whose contact test runs before the move |
+| `$06` | `$13B54 (mr_x_state6_walk_in)` | 8 px an update on the far axes (lane while `|dlane| >= $10`, X while `|dx| >= $40`), then the test; inside both the lunge, untested that update |
+| `$07` | `$13BD0 (mr_x_state7_gun)` | up the street at 8 px an update to lane 2.5 (tested after each move), 21 updates there, then turned to the target's side and 16 frames stepped every second update, a bullet on each even one (`$13CFA (mr_x_gun_fire)`); then 4 |
+| `$08` | `$1371C (mr_x_state8_hurt)` | a strike's shake: 10 updates of a 1 px shake, then 5 |
+| `$09` | `$13778 (mr_x_state9_knockdown)` | flight, fall and bounces to the floor (`$A8` in round 8), 6 updates down, then 0 |
+| `$0A` | `$1353A (mr_x_stateA_held)` | held in front (below) |
+| `$0B` | `$13218 (mr_x_stateB_held_back)` | held from behind: the holder's `+$7D` 6 is the suplex (`$0D`), 2 keeps him, anything else frees him |
+| `$0C` | `$132B2 (mr_x_stateC_thrown)` | thrown: the flight, a landing at `$A8` for 4 points, then 0 |
+| `$0D` | `$1344A (mr_x_stateD_suplexed)` | follows the holder's frame; on its frame 3 the slam, 10 updates later the knockdown and 5 points |
+| `$0E` | `$13808 (mr_x_stateE_dying)` | death: flight, bounces, the fade and the stopped clock |
+
+A respawn landing (`$9494` sets bit 0 of `$FFFA53 (boss_forced_reaction_flags)`)
+knocks him down through `$13FB4 (mr_x_knockdown_launch)` unless he is down,
+held or dead.
+
+#### His boxes, and the gun's bullets
+
+His animation set is `$3468A (mr_x_animation_set)`; its boxes index the object
+shape table `$1A68E`. The body (`$38`) is 16 px wide (X +-8), lane +-8, 80 px
+tall. **Only the lunge carries an attack box** (`$3A`/`$39`: 8 px behind to 64
+ahead, lane +-8, his whole height), for all 11 of its updates, and it lands his
+`+$34` (34 on Normal). The walk, the walk up to the gun, the wait and the fire
+carry none: walking into him there, `$AAA0` tests the player's box on his body
+first, and a walking box is a hold.
+
+A bullet (`$140EA (mr_x_bullet_setup)`) is placed from his origin by
+`$350FC (mr_x_bullet_table)`: index 0 straight down the street, 10 px ahead
+and 32 lanes down, at 24 lanes an update; index 7 level with his facing, 32 px
+ahead and 10 lanes down, at 24 px an update; between them the fan. Each is 48
+px up. Its flight (`$1417C (mr_x_bullet_flight)`): gone off screen or below
+lane 112.5, else the contact test (box `$3B`: X +-4, lane +-2, 8 px tall;
+inclusive, so it touches Blaze's 48-px body), then the move. A hit is 20 on
+Normal; a strike deflects it. A bullet fired into a slot below his is set up
+on the next pass, one update behind.
+
+#### Being held
+
+`$13ED8 (bespoke_boss_collision_dispatch)`'s code 3 puts him in the state
+`$13F5E (mr_x_grab_state_table)` names for the holder's `+$7D`: `$A` from the
+front, `$B` from behind. In `$A` substate 0 stands him 24 px in front of the
+holder, facing it, `+$54` = 40; substate 1 (`$13598 (mr_x_held_read_holder)`)
+reads the holder's `+$7D` through `$1362A (mr_x_held_read_table)`:
+
+| `+$7D` | Holder | Mr. X |
+|---:|---|---|
+| 0 | released | the retreat (5) |
+| 1, 2 | holding | nothing; `+$54` counts down, 40 updates free him |
+| 3 | a knee | the holder's `+$34` (2) through `$13F9A (bespoke_boss_take_attacker_damage)`, 10 updates of shake, substate 0 again |
+| 4 | the third knee | a knockdown in 6 updates, for the holder's `+$34` then |
+| 5, 7 | a throw | `$13658 (mr_x_held_thrown)`: state `$C` |
+| 6 | the suplex | state `$B`, then `$D` |
+| 9 | a crossover | `+$54` = 8 |
+
+Measured in lockstep (`--actor hold`): a knee pressed on substate 1 is read
+the same update; the next read is 12-13 updates later. A release pressed there
+drops the hold on its first frame; he reads it on the next pass and goes to
+the retreat, whose first update tests contact before he moves -- a walk
+straight back in re-grabs him 3 frames after the release. Knee, knee, release,
+re-grab: 4 points about every 30 updates, and he never acts. The scripted loop
+killed him from full health with nothing else changed.
+
+The throw path (`$13658 (mr_x_held_thrown)`, state `$C` and its five substates) was not in the
+recompiled code until the AI threw him and the host stopped on the indirect
+jump; `code-analysis/aux_addresses.txt` now carries its entry points.
+
+#### The office's helpers
+
+Round 8's last room is scripted in waves (lockstep census): after the offer's
+dialogue two type-`$22` Garcias (9 health each), then two more once they are
+dead; only then does `$12CE0 (mr_x_office_controller_spawn_boss)` hand off to
+Mr. X, and two more Garcias arrive with him. They are ordinary tracked enemies:
+a punch of theirs is 8 on Normal and reaches 16-51 px ahead.
+
+What their fight turns on (`$DD78 (garcia_type22_32_dispatcher)`, checked in
+lockstep):
+
+- The approach (state 9) walks at a point 32 px short of the target on its
+  lane, re-aimed every update, at 4.5 px an update; within 4 px of it he turns
+  to `$DBCC` without striking. His jab triggers when box `$12` (0-40 px ahead)
+  meets the target's cached body `+$70`.
+- **Off screen the punch is refused** (`$92AC`: screen X outside
+  `[$80, $1C0)` sends it to `$DBCC`). A target pressed against the camera's
+  right clamp (cam + `$120`) puts the point of a Garcia coming from the right
+  at screen X `$1C0`: from that side he never strikes. One step off the clamp,
+  and at the left clamp (point at `$80`), he does.
+- The punch has four live stages -- the jab on frames 0 and 3, `$3E` on 7-9,
+  four updates a frame -- and a player's hit reaction is shorter than the gap
+  between them: caught inside it, a player takes two to four in a row.
+- A thrown body goes on the list at `$FFFB24` (`$95CE`; `$95E8` takes it off
+  on landing), which every ordinary enemy tests first (`$AA34`): a thrown Mr.
+  X knocks a Garcia down, and a thrown Garcia knocks Mr. X down. A held Mr. X
+  struck that way (codes 2 and 5 in `$13598 (mr_x_held_read_holder)`) loses a
+  point and is knocked down out of the hold.
+
+The player side matters as much: after getting up from a knockdown, and on a
+respawn, `$4F62` sets `+$4B` bit 1 with 48 updates in `+$49` (`$4F4C` counts
+it down), and `$4140 (player_cache_boxes)` caches no body while it runs --
+nothing lands on the player then, and no Garcia's jab trigger fires on it.
+
+#### Derived player strategy
+
+`autoplay/ai/mr_x_plan.py`: the hold loop above, taken by a lookahead over his
+states, every bullet and every Garcia. Stand `$80` or more away on X when he
+decides, so he goes to the gun; walk into him while it has no box out; off his
+lunge step 17 or more lanes aside, and take him on the retreat's first update
+where the lunge left him; a punch (1 point) or a rear attack only where it
+lands under every update timing. Wait on the right clamp with the back to the
+room, so every Garcia that can strike comes into the rear attack; take no hold
+a Garcia's blow reaches before a knee and the release after it are spent.
 
 ### Round-by-round behavior
 

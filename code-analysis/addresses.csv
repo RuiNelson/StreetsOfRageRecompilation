@@ -58,6 +58,12 @@ C0001E, vdp_disable_, "100% - VDP Disable/Debug Register (Mirror)"
 00423C, player_attack_descriptor_table, "100% - Per-animation offsets to per-character frame bytes read by compute_player_attack_descriptor: low nibble the frame's damage (+$34), high nibble the hit property OR'd into +$42 (bit 0 knocks down)"
 01ABA8, player_shape_table, "100% - 5-byte collision shapes (x offset, width, lane-table index, z offset, height) for players, and for type $58 (Onihime/Yasha) too"
 02DD70, onihime_yasha_animation_set, "100% - Animation set of the twins (type $58); its box ids index player_shape_table"
+0130B8, mr_x_state_table, "100% - W[] - Relative jump table for Mr. X's primary +$30 ($00-$0E)"
+01362A, mr_x_held_read_table, "100% - W[] - Relative jump table for the holder's +$7D read by held Mr. X ($13598): 0 free, 3 knee, 4 third knee, 5/7 throw, 6 suplex, 9 crossover"
+013EFC, bespoke_boss_collision_code_table, "100% - W[] - Relative jump table for $AA22's d7 (1-5) in bespoke_boss_collision_dispatch"
+013F5E, mr_x_grab_state_table, "100% - B[] - The primary a grab puts Mr. X in, by the holder's +$7D: $A in front, $B from behind (2, 6), $FF none"
+03468A, mr_x_animation_set, "100% - Mr. X's animation set (+$04); boxes index the object shape table $1A68E: body $38 (X +-8, lane +-8, 80 px tall), lunge $3A/$39, bullet $3B/$63"
+0350FC, mr_x_bullet_table, "100% - 8-byte rows per bullet index 0-7: X and lane velocity (8.8), frame, X and lane offset; 24 px an update fanning from straight down the street to level with his facing"
 078000, z80_banked_pcm_directory, "100% - 8 five-byte PCM records visible to the Z80 at banked address $8000: little-endian sample offset and length plus playback-delay byte; commands $8A-$91"
 
 ; --- Buffers ---

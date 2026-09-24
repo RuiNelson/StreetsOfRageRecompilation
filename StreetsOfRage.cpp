@@ -66,6 +66,14 @@ constexpr bool isSharedFrameworkBoss(m_byte type) {
     return type >= 0x55u && type <= 0x58u;
 }
 
+// Round 8's last room: the type-$33 office controller and its linked $34
+// scene object, then the type-$35 Mr. X it hands off to
+// (`$12CE0 (mr_x_office_controller_spawn_boss)`).
+constexpr bool isMrXScene(m_byte type) {
+    return type >= 0x33u && type <= 0x35u;
+}
+
+static_assert(isMrXScene(0x33u) && isMrXScene(0x35u) && !isMrXScene(0x36u));
 static_assert(isOrdinaryEnemy(0x20u) && isOrdinaryEnemy(0x2Au));
 static_assert(!isOrdinaryEnemy(0x1Fu) && !isOrdinaryEnemy(0x2Bu));
 static_assert(isBespokeBoss(0x30u) && isBespokeBoss(0x35u));
@@ -224,6 +232,74 @@ int killInstantiatedEnemies(SystemMemory &memory) {
     return killed;
 }
 
+bool mrXSceneIsUp(SystemMemory &memory) {
+    for (int slot = 0; slot < kObjectSlotCount; ++slot) {
+        const m_long object = kObjectTable + static_cast<m_long>(slot) * kObjectSlotSize;
+        if (isMrXScene(memory.readByte(object)))
+            return true;
+    }
+    return false;
+}
+
+// Alt/Option+X: round 8's walk to Mr. X with nothing in the way. Every
+// ordinary enemy and every boss of the rush dies, the way it would to a real
+// lethal hit -- until Mr. X's scene is in the object table, and from then on
+// nothing at all: the Garcias the ELC sends into his fight are his helpers,
+// and they and he are the fight (user: the flag must not kill "esses
+// ajudantes nem o Mr X"). Returns -1 once the scene is up.
+int killEnemiesUntilMrX(SystemMemory &memory) {
+    if (mrXSceneIsUp(memory))
+        return -1;
+
+    const m_long activePlayer = activePlayerObject(memory);
+    const m_word attacker = static_cast<m_word>(activePlayer != 0u ? activePlayer : kP1Object);
+    int killed = 0;
+
+    for (int slot = 0; slot < kObjectSlotCount; ++slot) {
+        const m_long object = kObjectTable + static_cast<m_long>(slot) * kObjectSlotSize;
+        const m_byte type = memory.readByte(object);
+
+        if (isStillSpawning(memory, object))
+            continue;
+
+        if (isOrdinaryEnemy(type)) {
+            if (isAlreadyDying(memory, object))
+                continue;
+            killOrdinaryEnemy(memory, object, attacker);
+            ++killed;
+            continue;
+        }
+
+        if (type == 0x30u) {
+            // Abadede: his police latch (`$14410`), the ROM's own lethal path
+            // -- 10 off his health, and at 0 or below the knockdown
+            // (`$15604`) whose landing (`$14B98`) takes him to his death.
+            // Seeded with 1, so the latch always kills. Not in state 0 (the
+            // latch path skips it) nor once already down at 0.
+            const m_word health = memory.readWord(object + kObjectHealthOffset);
+            if (memory.readByte(object + kObjectPrimaryStateOffset) == 0u || health == 0u || health >= 0x8000u)
+                continue;
+            memory.writeWord(object + kObjectHealthOffset, 1u);
+            memory.writeByte(object + 0x67u, 1u);
+            ++killed;
+            continue;
+        }
+
+        if (isSharedFrameworkBoss(type)) {
+            // As Alt/Option+K: a lethal pending hit through `$17C36`.
+            if (memory.readWord(object + kObjectHealthOffset) == 0u)
+                continue;
+            memory.writeWord(object + kObjectHealthOffset, 0u);
+            memory.writeByte(object + 0x6Cu, 1u);
+            memory.writeByte(object + 0x6Du, 0u);
+            memory.writeWord(object + 0x70u, attacker);
+            ++killed;
+        }
+    }
+
+    return killed;
+}
+
 } // namespace
 
 StreetsOfRage::~StreetsOfRage() {
@@ -331,6 +407,10 @@ void StreetsOfRage::handleOptionHotkey(OptionHotkeyCode keyCode) {
         case SDLK_U:
             SoRCheats::requestCheats(SoRCheats::kCheatKillNora);
             return;
+        // X for Mr. X: everything up to him, and nothing of his.
+        case SDLK_X:
+            SoRCheats::requestCheats(SoRCheats::kCheatKillUntilMrX);
+            return;
         default:
             break;
     }
@@ -369,6 +449,11 @@ void applyPendingSoRCheats(SystemMemory &memory) {
             logFamilyKill("Jack", killOrdinaryEnemiesMatching(memory, isJack));
         if (pending & SoRCheats::kCheatKillNora)
             logFamilyKill("Nora", killOrdinaryEnemiesMatching(memory, isNora));
+        if (pending & SoRCheats::kCheatKillUntilMrX) {
+            const int killed = killEnemiesUntilMrX(memory);
+            if (killed > 0)
+                Logger::log("[cheat] killed %d on the way to Mr. X", killed);
+        }
     }
 
     const int level = SoRCheats::consumeLevelJump();

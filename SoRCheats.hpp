@@ -50,6 +50,9 @@ enum PendingCheat : unsigned {
     kCheatKillSignal = 1u << 5,
     kCheatKillJack   = 1u << 6,
     kCheatKillNora   = 1u << 7,
+    // Every ordinary enemy and every boss but Mr. X, and nothing at all once
+    // his scene is up: round 8's walk to him, without his helpers.
+    kCheatKillUntilMrX = 1u << 8,
 };
 
 /// Record one or more pending cheats (main thread).
