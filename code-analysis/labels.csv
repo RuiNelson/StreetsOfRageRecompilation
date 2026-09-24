@@ -435,6 +435,10 @@
 00006AF4, phone_booth_dispatcher, "100% - Type-$11 telephone-booth and booth-fragment dispatcher; the intact booth can coordinate with separately scripted contained rewards"
 00006B34, shatter_phone_booth, "100% - Handles a valid impact on a type-$11 telephone booth and spawns up to ten velocity/subtype glass/booth fragments"
 00006C84, breakable_type19_dispatcher, "100% - Type-$19 breakable prop dispatcher; impact launches it into bounce/despawn physics while any revealed reward is coordinated externally"
+00007534, round8_table_dispatcher, "100% - Type-$45 (round 8's thrown office table) primary-state dispatcher; jumps through the 3-entry table at $7540, then deletes the object once behind camera"
+00007546, round8_table_state0_wait_and_arm, "85% - Primary state 0: hidden at its spawn point, gated on the actor's proximity (cam_x-derived threshold); once tripped, sets +$1C X velocity from the per-variant (+$40) table at $75DC, copies the target player's current lane (+$14) into its own, and sets a fixed spawn height (+$18 = $A8) -- live-captured at ~5-6 px/tick (autoplay/CLAUDE.md, \"Round 8's thrown tables\"). The exact instruction that advances +$30 away from 0 was not pinned down in this pass; a live object table reliably shows the transition within a handful of frames of arming"
+000075E6, round8_table_state1_flight, "100% - Primary state 1: integrates +$1C/+$20/+$24 into position via sub_0000B20E, then checks for a player hit through the shared sub_00007392 (which special-cases type $45 for a stronger vertical recoil when punched)"
+000075EE, round8_table_state2_bounce, "100% - Primary state 2: accumulates a gravity delta (+-$E800/+-$6800 by sign) into the +$24 Z velocity every tick, then runs the same integrate-and-hit-check as state 1 -- the post-punch/post-apex falling arc"
 0000B3BA, object_type54_dispatcher, "100% - Object type $54 primary-state dispatcher; initializes and coordinates a multi-slot linked segmented effect object"
 
 # Ordinary enemy AI (object types $20-$2A)

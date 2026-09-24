@@ -763,6 +763,133 @@ FFB900, object_table, "100% - Start of 66-slot, $80-byte gameplay object table; 
 
 ---
 
+## Round 8's thrown office table (`$45`)
+
+User report: "No nivel 8, de vez em quando o jogo atira umas mesas contra o
+jogador, a IA deve detetar se estao em linha com ela, e se for o caso, fugir
+delas, ou se for estiver demasiado perto, dar-lhes um murro para que elas
+nao atinjam a IA" -- confirmed to happen right at the start of the level
+("as mesas sao atiradas logo de inicio"). Before this section the only lead
+was `object_catalog.py`'s `0x45` entry, tagged a `Breakable`-kind "Moving
+prop" for round 8 with no `labels.csv` backing at all; the user separately
+observed "as mesas do nivel 8 tambem sao um 'breakable'", which turns out to
+describe its *idle* state precisely (below) and its live-flight behavior not
+at all.
+
+### Confirming the type id and the dispatcher
+
+`$B236 (object_type_update_jt)` indexes type `$45`'s update routine at
+`$7534 (round8_table_dispatcher)`: it dispatches the object's own `+$30`
+primary state through a 3-entry table at `$7540` via the shared
+`$B186 (dispatch_object_primary_state_table)`, then always runs
+`$6A70 (delete_pickup_behind_camera)`. This matches the shape of every
+other prop dispatcher in this file (`$6AF4 (phone_booth_dispatcher)`,
+`$6C84 (breakable_type19_dispatcher)`), and is direct confirmation that `$45` is a
+real, single ROM object type, not two different things sharing a number.
+
+### The three states
+
+- **State 0 -- hidden and unarmed** (`$7546 (round8_table_state0_wait_and_arm)`).
+  The object sits at its spawn point with its "hidden" flag set
+  (`+$01` bit 0) until a camera-relative X threshold trips (two different
+  thresholds depending on the low nibble of its own spawn/variant byte
+  `+$40`, compared against 3). Once tripped it: clears the hidden bit;
+  reads a launch X velocity from a small per-variant table at `$75DC`
+  (variants 1-4 measured `+5`, `+6`, `-5`, `-6` -- variant 0 never reads
+  this table at all and never arms, so not every `$45` instance is a real
+  throw); copies whichever player object is the current target's `+$14`
+  lane straight into its own `+$14` (the aim: a straight shot down the
+  target's lane *at the instant it arms*, not a homing one); and sets a
+  fixed spawn height `+$18 = $00A8`. It also plays a queued sound
+  (`sub_00006ACA` is `jmp (queue_sound_id).l`) and sets outgoing damage
+  `+$34 = 3`. **Not fully pinned down:** no instruction in this state's own
+  disassembly writes `+$30` away from 0, so which exact ROM code advances
+  the state was not identified in this pass -- confirmed live instead (next
+  section): a hidden, unarmed table reliably becomes a visible, moving one
+  within a handful of frames of the actor closing in.
+- **State 1 -- flight** (`$75E6 (round8_table_state1_flight)`): two
+  instructions, `sub_0000B20E` (the generic mover: adds `+$1C/+$20/+$24`
+  into `+$10/+$14/+$18` every tick) then `sub_00007392`, a hit-check shared
+  by several breakable/prop types. That routine explicitly special-cases
+  type `$45` twice: once to gate its own alternate hit-reaction path behind
+  a nonzero `+$40` (only an *armed* table gets it -- a variant-0 static one
+  never does), and once to give it a stronger vertical recoil than every
+  other type sharing the routine (`-$A` vs. the generic `-$6`, written into
+  `+$24`) when a punch lands on it. This is the ROM's own "punch it away"
+  mechanic, confirmed in the disassembly independent of any live capture.
+- **State 2 -- gravity arc** (`$75EE (round8_table_state2_bounce)`):
+  accumulates a gravity delta into `+$24` every tick (`+$E800` while it is
+  still rising, i.e. `+$24 < 0`; `+$6800` once it turns over), then runs
+  the identical integrate-and-hit-check tail as state 1. Live capture below
+  shows a table reaching state 2 well before ever being punched, so this is
+  also the ordinary falling half of an unpunched throw's arc, not only the
+  post-punch knockback.
+
+### Live capture
+
+`autoplay/tools/table_throw_diag.py` (new; same shape as
+`hakuro_emerge_diag.py`) jumped straight to round 8
+(`DebugScenario(start_level=8)`, no family sweep needed -- the user's report
+that this happens right at the start held up: the very first live sample
+already had an armed table on the object table) and logged every type-`$45`
+slot's raw geometry each tick. One measured throw (`obj03`, variant `2`):
+
+| t (s) | state | x | y (lane) | z | vel_x | vel_z |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.04-4.02 | 0, hidden | 4712 | 80 | 168 | 0.0 | 0.0 |
+| 4.166 | 1 | 4712 | **64** | 168 | **6.0** | 0.0 |
+| 4.389 | 2 | 4790 | 64 | 168 | 5.0 | -10.0 |
+| 4.570 | 2 | 4845 | 64 | 117 | 5.0 | -0.03 |
+| 4.741 | 2 | 4895 | 64 | 144 | 5.0 | 4.53 |
+| 4.917 | 2 | 4950 | 64 | 166 | 5.0 | 1.16 |
+
+The player (Blaze) was standing at lane `y=64` the whole time -- exactly the
+lane the table's `y` snapped to at `t=4.166`, matching the state-0 aim copy
+read from the disassembly. Measured speed (~5-6 world px per sampled tick,
+matching the decoded `$75DC` table) and a rise-then-fall `z` arc (168 to a
+117 apex back through 166, matching the state-2 gravity accumulation) both
+confirm the static reading. With no answer for it, `p1_hp` dropped from 80
+to 77 (3 damage) at `t=4.407s`, while the object was 45 world px from the
+player and closing -- reproducing the user's report exactly, and pinpointing
+the exact live cause: `object_catalog.py` tagged
+this a `Breakable`, which starting this fix's `style_for_object` change
+(state-gated: `None` at state 0, a real `Projectile` at any other state)
+made it invisible to `reach.projectile_threatens`/`ProjectileSidestep` for
+its entire flight, and briefly *mis-classified an armed, moving one as an
+intact static prop* for the one tick its state read 1 (the same numeric
+value `_INTACT_BREAKABLE_STATE` uses for an unrelated reason).
+
+A second live run against the fixed AI (`autoplay/tools/table_throw_diag.py`
+again, unmodified) produced 36 `ProjectileSidestep`s and 13 `HitTable`s
+across the session with no hit attributable to an armed, in-lane table --
+the one health change recorded (80 -> 72) happened while both live tables on
+screen read `vel_x = 0.0` and were out of lane/range, i.e. ordinary street
+combat, not a missed table.
+
+### What autoplay changed
+
+- `object_catalog.py`: `TABLE_TYPE_ID = 0x45` classified by
+  `style_for_object` on the object's own `+$30` (`action_state`) rather than
+  by type alone -- `None` at state 0 (hidden/unarmed, unchanged from
+  before), a `"projectile"`-kind `EntityStyle` at any other state.
+- `world_map.py`: type `$45` added to the ordinary-object velocity-field
+  correction already needed by Jack's axe (`+$1C`/`+$20`, not the
+  projectile-kind default `+$20`/`+$24`) -- without it the table's real
+  speed reads back as 0 (lane velocity, always 0 for a straight throw).
+- `ai/reach.py`: `TABLE_TYPE_ID` and `table_in_punch_band` (mirrors
+  `decide._boomerang_in_punch_band`).
+- `ai/tokens/attack_verbs.py`, `ai/decide.py`, `ai/priority.py`,
+  `ai/execute.py`, `ai/kinematics.py`, `ai/partner.py`: `HitTable`, a new
+  verb with the same shape as `HitAntonioBoomerang` (token, producer,
+  priority, executor, kinematics/partner wiring) but no attach-phase filter
+  -- the table has none: by the time it is observed as a `Projectile` at
+  all it is already in real flight. `ProjectileSidestep` needed no changes
+  at all: once the table is a real `Projectile` with a real `vel_x`, its
+  existing `reach.projectile_threatens` gate already covers the flee half
+  on its own.
+
+---
+
 ## Boss Architecture and Round-by-Round Encounters
 
 ### Scope and method
