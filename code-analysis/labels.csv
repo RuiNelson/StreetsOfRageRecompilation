@@ -449,7 +449,7 @@
 00009604, ordinary_enemy_approach_point, "100% - Moves toward desired X/lane words at object +$60/+$62 using type speed and vector conversion"
 000096EC, ordinary_enemy_select_target, "100% - Selects the nearest active player by X in 2P and stores target object pointer at +$42; handles no-player state"
 0000982C, ordinary_enemy_vector_to_velocity, "100% - Converts target vector and speed d6 into fixed-point X/lane velocity using direction table $2705E; Easy reduces high speed"
-000098E8, ordinary_enemy_distance_metric, "100% - Computes approximate target distance as 3/8 of the major axis plus the minor axis"
+000098E8, ordinary_enemy_distance_metric, "100% - Computes approximate target distance as the major axis plus 3/8 of the minor axis"
 0000991A, ordinary_enemy_begin_knockdown, "100% - Starts the knockdown/airborne fall after sufficient damage, clears attack damage, and dispatches the fall subtype"
 000099A2, ordinary_enemy_update_airborne_reaction, "100% - Updates knockback/airborne physics, landing, obstacle response, and death transition"
 00009B36, ordinary_enemy_hit_reaction_dispatch, "100% - Shared state-$02 (ALT/hitstun) entry reused directly by many ordinary types' own primary-state tables (confirmed identical for Garcia $21/$22, Signal $24, and Haku-Ro $25, and reached a second way from Nora $26's own states $0B/$0F); routes through a small sub-index table at +$9B80 by object+$4A, sub-index 0 -> ordinary_enemy_apply_contact_damage"

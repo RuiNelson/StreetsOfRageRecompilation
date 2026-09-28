@@ -196,8 +196,14 @@ There is no global threat table. Targeting is nearest-X and can be recalculated 
 ```text
 major = max(abs(dx), abs(dlane))
 minor = min(abs(dx), abs(dlane))
-distance ~= 3/8 * major + minor
+distance ~= major + 3/8 * minor
 ```
+
+(`cmp.l d0,d1; bpl` keeps the larger in `d1`, and the `*3 >> 3` is applied
+to `d0`, the smaller. An earlier reading had the axes the other way round;
+Signal's `$E5EC` decision, which compares this against 128, only replays
+update for update in lockstep with the larger axis whole -- see "The street
+enemies, state by state".)
 
 Movement is constrained by collision and arena helpers:
 
@@ -665,6 +671,228 @@ camera caught up, and every HakuRo landed and was fought normally in turn
 reads back at the floor -- confirming the gate does not over-suppress a
 HakuRo that has actually landed).
 
+## The street enemies, state by state
+
+Decoded for the autoplay AI's lookahead (`autoplay/src/sor_autoplay/ai/grunt.py`)
+and checked in lockstep: `autoplay/tools/grunt_lab.py` records the raw object
+bytes of the player and every ordinary enemy frame by frame while a scripted
+actor wanders among them, and `--check` replays each update through the
+model. Over rounds 1-3: Garcia `$21`/`$22` 21,258 updates, Signal 5,164,
+HakuRo 4,727, Nora 3,790, every contact outcome (hit, grab, strike) predicted
+as the ROM resolved it; what still differs is terrain (a prop or a hole
+blocking `$9E68 (ordinary_enemy_move_with_collision)`, which the model does not carry) and `$DBCC`'s re-entry flip
+(`+$6C`/`+$6E` against the `$FFFB08` frame counter).
+
+### The state tables
+
+Each dispatcher's table is a list of **absolute** words, one per state byte
+(`$B186 (dispatch_object_primary_state_table)` loads the word into `d0`
+cleared by `moveq`, so it is an unsigned address). Personality tables
+(`loc_0000933C`) are indexed by `+$40 & $F` and hold the `+$30` word a reset
+lands in.
+
+| Type | Table | States | Personality (`+$40` low nibble -> state) |
+| --- | --- | --- | --- |
+| `$20` Garcia (knife) | `$D60E` | `$00`-`$0D` | `$D6BC`: 0 -> `$0D` walk, 1 -> `$0C` run |
+| `$21` Garcia | `$D9A2` | `$00`-`$0C` | none (state 1 is `$D9BC`) |
+| `$22` Garcia | the words after `$DD78 (garcia_type22_32_dispatcher)`'s `lea` | `$00`-`$13` | `$DDDA`: 0 -> `$09`, 1 -> `$0F`, 2 -> `$12`, 3 -> `$0E`, 4 -> `$13`, 5 -> `$12` |
+| `$23` Garcia (bat/pipe) | `$E32E` | `$00`-`$0C` | none (state 1 is `$E3A0`) |
+| `$24` Signal | `$E4DA` | `$00`-`$0D` | none (state 1 is `$E4F6`) |
+| `$25` HakuRo | `$E8F8` | `$00`-`$13` | `$E94A`: 0, 1 -> `$11`, 2 -> `$0E`, 3 -> `$13` |
+| `$26` Nora | `$10362` | `$00`-`$0C` | `$F0F6`: 0 -> `$09`, 1 -> `$0A`, 2 -> `$08` |
+
+States `$02`-`$07` are the shared `$9B36 (ordinary_enemy_hit_reaction_dispatch)` hitstun (Nora goes through `$F062 (nora_type26_hit_reaction_state)`
+first), `$991A (ordinary_enemy_begin_knockdown)` knockdown (`$D948` for `$20`/`$23`, `$EA5C` for HakuRo),
+`$A43E` pepper, `$A04A` held, `$9D16` death (`$D62A` for `$20`/`$23`) and
+`$DBCC` evade.
+
+### Contact, in the order the ROM tests it
+
+`$A9BA` calls `$AA22`, whose `$AA34` first walks the registered attackers at
+`$FFFB22` (up to five: thrown bodies, a swung or thrown weapon) through
+`$ABA4` -- the attacker's `+$02` box on this enemy's `+$03` body is code 5,
+this enemy's box on the attacker's body code 4 (both only with this enemy's
+screen X in `[$78, $1C8)`) -- and only then each player through `$AAA0`:
+
+1. the player's cached attack box (`+$64`) on the enemy's body: with the
+   player's `+$34` non-zero a strike (code 2, the hitstun, screen X in
+   `[$78, $1C8)`); with it zero -- a walking box -- the hold (code 3) when the
+   player holds nobody (`+$4C` 0, `+$7C` not 3) and the heights are within 8;
+   **if that box overlaps at all, nothing else is tested for that player**;
+2. otherwise the enemy's `+$02` box on the player's body (`+$70`): code 1, the
+   hit.
+
+The hold itself is the player's to accept: on its next update `$3266` reads
+`+$7C` = 3 and takes a front hold (`$60`) when the two face each other, a back
+hold (`$66`) when they face the same way with the enemy ahead of the player
+-- and nothing at all when they face the same way with the enemy's origin
+behind the player's (the walking box, 19 px ahead, still meets a body whose
+origin is a few px behind). The enemy was already put in state 5 by
+`$A9D4`, and `$A04A`, reading the holder's `+$7D` still 0, sends it to state 1
+on its next update -- a contact the player can repeat every other update
+without ever holding (the autoplay AI did, for 60 s, against a Nora 3 px
+behind it).
+
+`$A9BA`'s table sends 2 to state 2, 3 to state 5, and 4/5 to `$A9DC`: state 3
+(knockdown) less the attacker's `+$34` (2 for a slot below `$FFC900`), or
+state 4 for the pepper. So a swung weapon knocks an enemy down outright, and a
+walking box already on his body takes the hold even through his own attack.
+
+### Garcia `$22`: the jab
+
+- `$E124` (state 9, and `$21`'s `$0B`): toward 32 px short of the target on
+  its lane (`$9648`), 4.5 px an update (3 with `+$40` bit 5), 48 updates; after
+  each move `$E102` tests box `$12` (0-40 px ahead, lanes +-8, head height) on
+  the target's body -- the punch.
+- `$E190` (state `$0A`): animation `$14` from frame 0, whose box is already
+  `$12`: the jab lands on the update after its trigger. Frame 3 is the jab
+  again, frames 7-9 the punch `$3E` (16-51 px) if it still reaches on frame 6.
+- `$E07C` (8) and `$E2DC` (`$0C`) stand; within 48 px on X it is `$DBCC`, box
+  `$12` on the target the punch. `$E20A` (`$0B`) wanders toward a random offset
+  of the `$9654` point (`$1031A`) for one walk cycle, jab trigger included,
+  then the state `$10352` names for `$FB09 & 7`. State `$0E` stalks the `$9654` point at 2.5 for
+  80 updates. `$DEC6`/`$DF0A` (`$10`/`$11`) rush to 32 px at 5 and jab three
+  times at reload 3.
+- `$DE78` (`$12`) lies in wait (animation 4, frame 3, no box and no body) for
+  128 updates **or until the target is within 80 px on X**, then resets --
+  personality 0, so its first update of the approach is already the jab's
+  test. Walking up to a lying Garcia along his lane is his jab.
+- `$DDE6` (`$13`, also Nora's `$0A`) is the ride in: it spawns a type-`$54`
+  object, sits on it off screen, and waits on `+$31` bit 2, which that object
+  sets; nothing the player does moves it but the camera.
+
+### Garcia `$21`: the hold on the player
+
+`$D9BC` walks to the `$9654` point at 2 for 80 updates; `$DA10` (`$0C`) waits
+there 40 updates -- off the point (the target moved) it is `$DBCC` (`$0B` with
+`+$40` = 1). `$DA6C` returns 1 while **the target faces him**, and then
+`$DA98` (8) rushes the target's spot at 4.5 with `$02` forced to `$1E`
+(-13..+13, lanes +-10); its touch sets the player's `+$7D` to 3 -- his hold,
+`$DB18` (9) -- unless the player holds a body or is in `$7A`/`$7C`/`$7E`, when
+it is an ordinary hit and `$0C`. The moment the target turns away, `$DA98` gives
+up (state 1).
+
+### Garcia `$20`: the knife hurts by touching
+
+`$D64C` spawns the knife (type `$08`) in one of the eight slots from
+`$FFC900`, links it (`+$52` to him, his `+$6A` to it, `+$51` = 1) and sets his
+`+$48` bit 3. A held weapon never tests contact itself -- `$5E2E (update_held_weapon)`'s
+enemy-holder path only places it (`$60A0`, from animation `$1C` on, hidden
+below it) -- so everything that cuts is his own animation:
+
+- `$D6C0` (`$0C`, personality 1): the entry run, animation `$38`, whose four
+  frames all carry attack box `$01` -- his whole body, -9..+9 -- at 5 px an
+  update toward the target's spot (`$97FE`, set once). Past the target's X
+  he brakes 0.1875 an update, and under 1 px an update it is `$D7BE`. Any
+  touch on that line is a hit, unless the player's walking box meets his body
+  first (the hold).
+- `$D76A` (`$0D`, personality 0): armed walk (animation `$1C`, no box) to the
+  `$9654` point at 2.25.
+- `$D7BE` (8): 24 updates facing the target; then more than 16 lanes off it
+  `$DBCC`, within 96 px on X the stab `$D856` (9), beyond it the throw `$D8EC`
+  (`$0A`).
+- `$D856`: toward 32 px short at 3 until box `$14` (32-56 px ahead) meets the
+  target's body; then animation `$2C`, frame 0 box `$01` (his body again),
+  frames 1-2 the blade `$14`; on frame 2 again while `$14` still meets.
+- `$D8EC`: animation `$28`; on frame 1 the knife's `+$51` = 3, and on its
+  own next update `$5D84 (launch_released_weapon)` launches it 48 px on from where frame 0 held it
+  (`$60A0`: -8, -54) and 16 higher, 16 px an update (`+$30` = 3). Its flying
+  box is `$FA`/`$FB`: -5..+19 on X, **lanes -20..+20**, z -3..+9 -- 28 lanes
+  either side of its own against a body's 8, far more than a walk can clear
+  in its flight.
+- Hit or knocked down, `$D948` drops the knife (`+$51` = 2) and, alive, turns
+  him into a plain `$22` (`+$40` cleared).
+
+### Garcia `$23`: the bat and the pipe
+
+`$E3A0` spawns a bat (`$0A`, `+$40` = 0) or pipe (`$0B`) and walks to the
+`$9654` point at 2.5 (animation `$20`/`$24`); `$E404` (8) stands 16 updates,
+then within 32 lanes `$E348` (`$0C`): to 64 px from the target on its lane at
+3.5, 48 updates, and on screen the swing `$E47E` (9): animation `$30`/`$34`
+at reload 3, frames 0-2 wind-up, **box `$18` 24-72 px ahead** on frames 3-5 --
+out of reach of the player's punch (Blaze 18-68).
+
+### Signal `$24`: his touch is his hold
+
+`$E7B0` wraps every state's contact: the target in action `$5C` sends him to
+`$0D` (stand); his own box on the player -- `$3D` (-11..+11) on every frame he
+stands or walks -- is, with the player holding nobody and the heights within
+8, his hold on the player (`+$7D` = 2, state `$0C`, `$E6F2`: the player is
+placed 48 px in front and thrown on `+$0D` = 1). `$E4F6` walks to the `$9654`
+point at 2 for 96 updates, facing; there `$E54E` (`$0A`) dashes 2.5/2 at it,
+X until past it then the lane; `$E5EC` (8) stands 24 updates (`$DBCC` off
+screen or with the target in `$4A` or `$54`-`$5C`), then within 128 of
+`$98E8 (ordinary_enemy_distance_metric)` walks in (`$E684`, 9: at the target's own spot at 3.5, 48 updates) or,
+with `+$40` set and the target within 8 lanes, slides (`$E80A`, `$0B`):
+animation `$18`, from frame 1 at 7 px an update falling off 0.15625 for 26
+updates, box `$0F` (-24..+24, z -14..0: the feet) and **no body** -- nothing
+lands on him -- then 8 updates getting up.
+
+### HakuRo `$25`
+
+`$EB2A` (`$11`) walks to the `$9654` point at 2, facing; there `$EC88` (8)
+stalks it (with `+$40` set and the target within 64 px, the backflip `$0C`),
+counting changes of the target's X velocity word: five of them, or 48 moves,
+and `$ED44` (9) steps 4 lanes an update onto the target's lane, then `$0F`
+(1/8), within 96 px `$0E`, else `$0B`. `$EF0A` (`$0E`): 128 updates at 4.5
+(5.5 with `+$31` bit 1, 3 with `+$40` bit 5) toward 56 px short of the target
+(`$9800` with `d3` = `$38`); box `$06` (0-44 px ahead, the whole height) on
+the target's body is the strike `$EB6E` (`$0A`, animation `$14`, frames 1-3,
+then the backflip `$EE8A`), and level within 8 lanes and 72 px the jump kick
+`$EBAC` (`$0D`: the strike's animation in a hop, grounded within 48 px). The
+flying kick `$EDD8` (`$0B`) leaps 10 px an update with `$0C` (8-48 px ahead,
+knee height) out; a grab of him in the air is cancelled (`+$7C` 3 cleared).
+`$EFB6` (`$0F`) rushes at 5 and turns back 64 px short. Because `$EB2A`'s
+point is kept off the target's own spot, **an actor that chases him keeps
+him from arriving**: the round-1 stall of 43 s was the AI walking after a
+HakuRo in `$11` whose point lay beyond the camera clamp.
+
+### HakuRo `$2A`: the trio
+
+Table `$103AE` (`$00`-`$10`). `$F7D8` spawns two more of the type from the
+first and links the three (`+$70` the leader, `+$72`/`+$74` the others,
+`+$76` a bit per member); `$F876` (1), `$FA92` (`$0F`) and `$F9F0` (`$10`) keep
+them in a formation about the screen centre (cam + `$A0`) and hand off as a
+group. They share `$25`'s strike, flying kick, backflip, jump kick and dash
+(`$0A`-`$0E`). Their own attack is the charge, state 8 (the handler after `$F9F0`'s): 4 px an update at
+the target with the lane snapped to the target's every update, stopping by
+`+$40` (`$FBDE`) -- within 80 px the 16-update wait `$F9B6` (9) and then the
+dash, within 84 the flying kick (landing into the dash), within 80 the
+backflip.
+
+### Nora `$26`
+
+`$F0FC (nora_type26_chase_approach_state)` (9) walks to the `$9654` point at 1.5, facing; `+$52` is both its
+80-update timer and, in bit 1, a flag set while her animation word differs
+from the target's facing bit -- a match with it set clears it and counts one
+off `+$50` (2): twice, or 80 moves on the point, and the whip `$F1B0 (nora_type26_whip_engage_state)` (8).
+There, every update she has not committed, `$AD04` tests box `$22` (32-80 px
+ahead, lanes -12..+10, z -44..-20) on the target's body; a miss walks her to
+56 px from the target on its lane, a hit commits animation `$14`, whose frame
+2 (10 updates on) is the lash; frame 4 ends it (three times running after the
+feint `$F078 (nora_type26_feign_injury_recovery)`). With the target in `$54`-`$5C` she waits. Inside 32 px the
+whip cannot land at all.
+
+### The player's swung weapon
+
+B with a weapon runs `$3084 (player_held_object_attack_input)`: action `$48` (animation `$40`) for the bat and
+pipe, `$46` (animation `$3C`) for the knife's stab -- only with an object in
+front within 144 px and 12 lanes, else it is thrown -- and `$44` (animation
+`$38`) for the bottle. `$5E2E (update_held_weapon)`'s player-holder path places the weapon from
+`$5FC8` (per animation pair, per character, per frame: X, Z and a collision
+bit) and, on frames with the bit, registers it (`$95CE`) so every enemy's
+`$AA34` meets it first:
+
+| Weapon | Live frame's origin (Axel / Adam / Blaze) | Box | Damage |
+| --- | --- | --- | --- |
+| bat `$0A` | 36,-42 / 59,-38 / 53,-39 | `$FC`/`$FD`: -19..+33, lanes +-24 | 4 |
+| pipe `$0B` | same | `$FE`/`$FF`: -19..+35, lanes +-20 | 4 |
+| knife `$08` (stab) | 56,-29 / 67,-36 / 48,-36 | `$F8`/`$F9`: -13..+11, lanes +-8 | 5 |
+| bottle `$09` | 54,-31 / 68,-38 / 49,-38 | `$F8`/`$F9` | 3 |
+
+Blaze's timing, read off live recordings: frame 0 two updates, the live frame
+three (bat, pipe; then nine of recovery) or five (knife, bottle).
+
 ## Collision, reactions, grabs, and death
 
 `$991A (ordinary_enemy_begin_knockdown)` starts the knockdown/airborne fall after the enemy has taken sufficient damage; it is not the generic reaction to every hit. It clears attack damage, selects facing from the attacker, and dispatches by fall subtype `$4A`. `$99A2 (ordinary_enemy_update_airborne_reaction)` advances airborne physics and landing, using `$973E` for vertical motion and `$9F22` for obstacle response.
@@ -741,7 +969,7 @@ These duplicate-checked entries were integrated into the shared CSV files.
 00009604, ordinary_enemy_approach_point, "100% - Moves toward desired X/lane words at object+$60/+$62 using type speed and vector conversion"
 000096EC, ordinary_enemy_select_target, "100% - Selects nearest active player by X in 2P and stores target object pointer at +$42; handles no-player state"
 0000982C, ordinary_enemy_vector_to_velocity, "100% - Converts target vector and speed d6 into fixed-point X/lane velocity using direction table $2705E; Easy reduces high speed"
-000098E8, ordinary_enemy_distance_metric, "100% - Computes approximate target distance as 3/8 of the major axis plus the minor axis"
+000098E8, ordinary_enemy_distance_metric, "100% - Computes approximate target distance as the major axis plus 3/8 of the minor axis"
 0000991A, ordinary_enemy_begin_knockdown, "100% - Starts the knockdown/airborne fall after sufficient damage, clears attack damage and dispatches the fall subtype"
 000099A2, ordinary_enemy_update_airborne_reaction, "100% - Updates knockback/airborne physics, landing, obstacle response and death transition"
 00009B88, ordinary_enemy_apply_contact_damage, "100% - Applies attacker damage to ordinary-enemy health and selects stun, grab, lethal or scripted state"
