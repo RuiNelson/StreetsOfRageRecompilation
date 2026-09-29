@@ -1963,6 +1963,42 @@ because his leaning body walks into the player's box. The throw and the suplex
 both leave him 100-165px away on the player's lane, which is the re-approach
 every hold-and-finish plan pays for.
 
+#### The round-6 pair against one player
+
+In a 1P game `$16294 (souther_select_target)` hands both Southers P1 (the
+`player_mode < 2` branch), so the pair roles change only their bands and
+speeds (below), never the target. Read with autoplay's round-6 fights
+(`autoplay/CLAUDE.md`, "Round 6: the Souther pair"), which log both objects'
+raw slots with the game frame:
+
+- **A holder is a target.** `$179F8 (later_boss_target_unavailable)` rules the
+  player out only on `+$59` bit 1, `+$4B` bit 1 or an action in `$5A`-`$5F`;
+  the hold actions `$60`-`$6F` are none of them. While the player holds one
+  Souther, the other runs the whole of primary 1 on it, commit gate included.
+- **The band-restore's lane** (`$1609E` in `$15F98 (souther_state1_standoff)`):
+  `+$20` is the target's own `+$20` negated -- a mirror, the target walking up
+  sends him down -- or, with the target's lane velocity zero, `-1` when the
+  high word of its `+$1C` is non-zero (a level walk: 1px up an update), else
+  0. Pair role 2 then adds `$8000` to the *low word only* (`addi.w`), so the
+  carry is lost: +0.5 on a whole value, -0.5 on a half. A standing target
+  therefore sees role 1 hold his lane and role 2 sink half a pixel an update.
+- **The rush and the attack run end in a claw.** With the target facing away
+  (`$1601A`) and with tactical `$01` (`$160D0 (souther_state1_close_lane)`,
+  armed every `$78` updates of `+$7B` while the target's lane is `$10` or more)
+  he closes at 4px an update (`$48000`, 4.5, for role 2) and `$179AC` keeps the
+  target 18-21px below him, which is inside the `$1C` below-side gate; the
+  gate at the top of `$15EDA (souther_state1_active_combat)` fires as soon as
+  `+$50` enters the target's X window. A holder faces the body in its hands,
+  so the other Souther is rushed onto it whenever he stands behind.
+- **The claw's reach, frame by frame.** The attack box latched in `+$02`
+  against the frame shown in `+$0A` (the latch trails the step by an update):
+  `$6D` (0..48px) on frames 0-3, 8-12 and 17-18, `$6F` (46..86) on 4-7, `$71`
+  (40..80) on 13-16, none on 19; `+$0D` counts 2 updates a frame.
+- **Health 0 is dead.** `$17C36 (boss_apply_pending_damage)` branches `bgt` to
+  the living path, and the pair's first kill is usually a knee from 2: that
+  body sits in the lethal gate `$05` for about 1.7s at health 0 before its
+  slot clears, while the other fights on.
+
 ### Abadede (`$30`, `$143D0 (abadede_update)`)
 
 Abadede predates the `$55-$58` framework. His state byte still lives at `+$30`
