@@ -296,6 +296,30 @@ may require runtime active-disassembly evidence and confirmed additions to
 `code-analysis/aux_addresses.txt`. Keep speculative candidates separate from
 confirmed addresses and do not commit discovery stubs as production behavior.
 
+### Catching an unhandled dispatch from a live session
+
+`discover_aux_smart` only finds what an unattended run reaches. A target that
+needs a specific game situation shows up as a `SIGABRT` in
+`reportUnhandledDispatch` during some automated session instead, and the
+target address is printed only on `sor`'s **stderr**
+(`indirect dispatch to unknown address $XXXXXX (in fn $YYYYYY)`, then a CPU,
+RAM, and trace-history dump). The macOS crash report does not contain it: the
+Debug build keeps the address on the stack, and the registers it does show are
+unrelated. So when a session aborts intermittently, loop it with `sor`'s
+stderr redirected to a file until it aborts again, then:
+
+1. read the dispatching code in `output/sor.asm` (`in fn`, the trace history,
+   and the dumped registers name the path);
+2. decode the jump table in the ROM and add **every** target of it, not only
+   the one observed -- the others are the same path in a different situation;
+3. regenerate (`../scripts/generate_cpp`), review the generated diff, rebuild,
+   and drive the same situation again on purpose.
+
+Example: round 5's clock running out with two players aborted on `$0109DC`.
+The time-over (`$10976`) jumps through a `player_mode`-indexed table at
+`$109D4` -- P1 only `$109DE`, P2 only `$109EA`, both `$109DC` (`bsr.s $109EA`,
+then into `$109DE`) -- of which only `$109DE` had been seen before.
+
 ## Analysis manuscripts and symbol synchronization
 
 `code-analysis/labels.csv` and `code-analysis/addresses.csv` are authoritative
