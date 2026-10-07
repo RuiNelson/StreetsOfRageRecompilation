@@ -212,6 +212,15 @@ keeping the generated declaration, dispatcher, and call sites intact.
 - Add focused instrumentation/tests where feasible and compare behavior before
   removing a generated implementation.
 - Regenerate and compile after changing the manual-function list.
+- **Keep the original memory layout.** Every piece of game state stays in
+  68000 work RAM at its original address, width, and encoding (object slots,
+  globals, BCD fields, flag bits), written on the same frame as the ROM
+  writes it. Do not move state into C++ members, statics, or heap memory,
+  and keep reading data tables from the ROM. `autoplay` reads the game by
+  address (`../autoplay/src/sor_autoplay/memory_map.py`, `rom_data.py`) and
+  its enemy models are frame-exact, so a relocated or retimed field breaks
+  the AI. This is a project rule: reimplementation makes the code readable,
+  never a different data model.
 
 Do not turn unknown behavior into a host shortcut merely because it makes one
 scenario pass.
