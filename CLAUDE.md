@@ -70,9 +70,9 @@ library rebuilds.
 Use the centralized meta-repository scripts:
 
 ```bash
-../scripts/generate_cpp_and_build
-../scripts/build --clean
-../scripts/build --release
+../scripts/generate_cpp_and_build.py
+../scripts/build.py --clean
+../scripts/build.py --release
 ```
 
 `--full` is mandatory after a fresh clone because `generated/` is ignored by
@@ -80,7 +80,7 @@ Git. Once `generated/SoR.hpp`, `generated/SoR-common.hpp`, and the
 `generated/SoR-XXX.cpp` files exist locally,
 subsequent builds may omit it until their inputs change.
 
-`../scripts/build` reconfigures only when necessary. Use `--clean` when
+`../scripts/build.py` reconfigures only when necessary. Use `--clean` when
 changing an existing single-configuration build directory between Debug and
 Release.
 
@@ -109,7 +109,7 @@ so generate it after a fresh clone and regenerate whenever code-generation
 inputs change:
 
 ```bash
-../scripts/generate_cpp
+../scripts/generate_cpp.py
 ```
 
 `--full` runs the sibling `RageDecompiler` and rewrites `generated/SoR*`.
@@ -231,7 +231,7 @@ Boot defects can spin forever and SDL windows may outlive plain `SIGTERM`. On
 systems with GNU `timeout`, always use a kill grace period:
 
 ```bash
-timeout -k 3 20 ../scripts/run rom/SOR.bin --debug
+timeout -k 3 20 ../scripts/run.py rom/SOR.bin --debug
 ```
 
 MegaDriveEnvironment runtime diagnostics are owned by the sibling
@@ -290,8 +290,8 @@ fix the reset -- do not read it as the cure.
 Use the repository entry points:
 
 ```bash
-../scripts/disassemble_to_asm
-../scripts/discover_aux_smart
+../scripts/disassemble_to_asm.py
+../scripts/discover_aux_smart.py
 ```
 
 Equivalent direct tools require the sibling checkout:
@@ -321,7 +321,7 @@ stderr redirected to a file until it aborts again, then:
    and the dumped registers name the path);
 2. decode the jump table in the ROM and add **every** target of it, not only
    the one observed -- the others are the same path in a different situation;
-3. regenerate (`../scripts/generate_cpp`), review the generated diff, rebuild,
+3. regenerate (`../scripts/generate_cpp.py`), review the generated diff, rebuild,
    and drive the same situation again on purpose.
 
 Example: round 5's clock running out with two players aborted on `$0109DC`.
@@ -356,8 +356,8 @@ changes. Keep CSV changes and synchronized manuscripts in the same logical
 delivery. When a code label changes, also regenerate the derived views:
 
 ```bash
-../scripts/disassemble_to_asm
-../scripts/generate_cpp_and_build
+../scripts/disassemble_to_asm.py
+../scripts/generate_cpp_and_build.py
 ```
 
 Never rename symbols directly in `output/sor.asm` or generated `SoR-XXX.cpp`.
