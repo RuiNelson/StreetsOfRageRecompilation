@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cstdint>
+#include <memory>
 
 namespace {
 
@@ -60,8 +61,64 @@ constexpr int    kHudCells         = 40;
 constexpr m_word kHudFrameFirstTile = 0x06D4u;
 constexpr m_word kHudFrameLastTile  = 0x06D7u;
 
+// HUD tiles in VRAM (tile numbers) and the plate colour inside them (palette 0 colour 2). The glyph, digit and
+// bar tiles all paint the plate into their own background.
+// The two runs skip the sprite table and the horizontal scroll table that sit between them in VRAM ($F000-$F7FF).
+struct TileRange {
+    m_word first;
+    m_word last;
+};
+constexpr TileRange kHudArtRanges[] = {{0x06BEu, 0x06FFu}, {0x07C0u, 0x07F3u}};
+constexpr m_byte    kHudPlateColor  = 2;
+
+// The level-start HUD upload sets this; the first per-VBlank HUD upload after it, when all the level's HUD art
+// is in VRAM, clears the plate from that art.
+thread_local bool hudPlatePending = false;
+
+// Health-bar upload state ($110A8 holds the plate rows of a bar tile).
+constexpr m_long kHealthBarPlateRow       = 0x000110A8u;
+constexpr m_long kMrXOfferFlag            = 0xFFFFDE00u;
+constexpr m_long kFinalBossPresentation   = 0xFFFFFA77u;
+constexpr m_long kHudClearRequest         = 0xFFFFFA7Au;
+constexpr m_long kBossHealthSwitch        = 0xFFFFF500u;
+constexpr m_long kHealthBarPointers       = 0xFFFFFC0Cu;
+constexpr m_long kBossHealthPrimary       = 0xFFFFF502u;
+constexpr m_long kBossHealthSecondary     = 0xFFFFF508u;
+
 // Supervisor mode, interrupt mask 2 — allows VBlank (level 6) while waiting.
 constexpr m_word kStatusIrqEnabled = 0x2500u;
+
+// VDP command for a VRAM access at a byte address: bits 15-14 move to the low command word.
+m_long vramCommand(m_word byteAddress, bool write) {
+    return (write ? 0x40000000u : 0u) | (static_cast<m_long>(byteAddress & 0x3FFFu) << 16) |
+           static_cast<m_long>((byteAddress & 0xC000u) >> 14);
+}
+
+// Turns the HUD plate colour of every tile in the HUD art ranges into transparent colour 0. The art is read
+// from a VDP state snapshot (the data port's read path does not prefetch like the hardware) and written back
+// through the VDP ports, so this must run where the game itself may touch them (the VDP stalls the renderer
+// during the VBlank handler, which is where the HUD is uploaded).
+void removeHudPlate(VDP &vdp) {
+    const auto snapshot = std::make_unique<VDP::StateSnapshot>(vdp.stateSnapshot());
+
+    for (const TileRange &range : kHudArtRanges) {
+        const std::size_t firstByte = static_cast<std::size_t>(range.first) * 32u;
+        const std::size_t byteCount = (static_cast<std::size_t>(range.last) - range.first + 1u) * 32u;
+
+        const m_long writeCommand = vramCommand(static_cast<m_word>(firstByte), true);
+        vdp.writeControlPort(static_cast<m_word>(writeCommand >> 16));
+        vdp.writeControlPort(static_cast<m_word>(writeCommand));
+        for (std::size_t offset = 0; offset < byteCount; offset += 2) {
+            m_word word = static_cast<m_word>((snapshot->vram[firstByte + offset] << 8) |
+                                              snapshot->vram[firstByte + offset + 1]);
+            for (int shift = 0; shift < 16; shift += 4) {
+                if (((word >> shift) & 0x0Fu) == kHudPlateColor)
+                    word = static_cast<m_word>(word & ~(0x0Fu << shift));
+            }
+            vdp.writeDataPort(word);
+        }
+    }
+}
 
 } // namespace
 
@@ -329,7 +386,8 @@ void StreetsOfRage::wait_vblank_without_graphics_upload(m_long /*entry_*/) {
 // With --widescreen, the gameplay HUD block is reshaped on its way to the
 // window plane: the yellow frame and the plate between the elements are
 // dropped, and the two element rows move one tile down, out of the first
-// tile row that Mode 48 does not display. Work RAM still holds the original data.
+// tile row that Mode 48 does not display, and the plate colour is cleared from the HUD tiles once the level's
+// HUD art is in VRAM. Work RAM still holds the original data.
 // ---------------------------------------------------------------------------
 void StreetsOfRage::vdp_copy_stride(m_long /*entry_*/) {
     traceEnter(0x8064u);
@@ -351,9 +409,14 @@ void StreetsOfRage::vdp_copy_stride(m_long /*entry_*/) {
         // Every row but the last (the bottom edge) is an element row: it moves down one window row and loses
         // the frame. The static upload also blanks window row 0, which Mode 48 does not display.
         if (command == kHudStaticCommand) {
+            hudPlatePending = true;
             mem.writeLong(kVdpControl, command);
             for (int cell = 0; cell < kHudCells; ++cell)
                 mem.writeWord(kVdpData, 0);
+        }
+        if (hudPlatePending) {
+            hudPlatePending = false;
+            removeHudPlate(vdp());
         }
         for (m_word row = 0; row < rows; ++row) {
             mem.writeLong(kVdpControl, command + (static_cast<m_long>(row) + 1u) * kRowStride);
@@ -392,5 +455,113 @@ void StreetsOfRage::vdp_copy_stride(m_long /*entry_*/) {
     cpu().setDw(3, 0xFFFFu);
     cpu().d[4] = kRowStride;
     cpu().setNZVCX(rowCommand, 0x80000000u, overflow, carry, carry);
+    cpu().ssp += 4;
+}
+
+// ---------------------------------------------------------------------------
+// $010F80 — gameplay VBlank HUD update: tilemap bundles and health-bar tile rows
+//
+// The routine's own bar uploads ($11072 player, $1108E boss) are inlined; nothing
+// else calls them. A bar tile is eight longs of 4bpp rows: plate rows from $110A8
+// around five rows of the bar colour. With --widescreen the plate rows are
+// transparent, as the rest of the HUD plate is (see vdp_copy_stride).
+// ---------------------------------------------------------------------------
+void StreetsOfRage::vblank_update_gameplay_health_bars(m_long /*entry_*/) {
+    traceEnter(0x00010F80u);
+
+    auto &mem = memory();
+
+    const m_long plate = vdp().widescreen() ? 0u : mem.readLong(kHealthBarPlateRow);
+    const auto   push  = [&](m_long value) {
+        mem.writeLong(kVdpData, value);
+    };
+    const auto playerBar = [&](m_long pointerSlot, m_long source) {
+        mem.writeLong(pointerSlot, 0);
+        const m_long bar = mem.readLong(source);
+        push(plate);
+        for (int row = 0; row < 5; ++row)
+            push(bar);
+        push(plate);
+        push(plate);
+        cpu().d[1] = bar;
+    };
+    const auto bossBar = [&](m_long source) {
+        const m_long bar = mem.readLong(source);
+        push(plate);
+        push(plate);
+        push(plate);
+        for (int row = 0; row < 5; ++row)
+            push(bar);
+        cpu().d[1] = bar;
+    };
+    // Soft jsr into generated code, as in game_infinite_loop.
+    const auto call68k = [this](auto &&fn, m_long retPc, m_long target) {
+        logCallFromReturn(retPc, target);
+        cpu().ssp -= 4;
+        memory().writeLong(cpu().ssp, retPc);
+        fn();
+    };
+    const auto bundle = [&](m_byte id, m_long retPc) {
+        cpu().d[0] = id;
+        call68k([this] { load_vdp_tilemap_bundle(); }, retPc, 0x0000A5F4u);
+    };
+
+    const m_word state = mem.readWord(kGameState);
+    const bool   inGameplay = state == 0x28u || state == 0x2Au || (state >= 0x14u && state < 0x1Cu);
+    if (!inGameplay) {
+        cpu().ssp += 4;
+        return;
+    }
+
+    bundle(3, 0x00010FAAu);
+
+    // Request bit 0 of $FFFA7A: blank the boss bar tiles at VRAM $D240 (11 x 49 longs).
+    const m_byte clearRequest = mem.readByte(kHudClearRequest);
+    if ((clearRequest & 1u) != 0) {
+        mem.writeByte(kHudClearRequest, static_cast<m_byte>(clearRequest & ~1u));
+        mem.writeLong(kVdpControl, 0x52400003u);
+        for (int block = 0; block < 11; ++block) {
+            cpu().d[1] = 0;
+            cpu().a[1] = kVdpData;
+            call68k([this] { vdp_fill_long_49(); }, 0x00010FCCu, 0x00010412u);
+        }
+    }
+
+    const bool offer = mem.readByte(kMrXOfferFlag) != 0;
+    if (!offer)
+        mem.writeWord(kVdpControl, 0x9204u);
+
+    if (state != 0x18u && state != 0x1Au) {
+        if (mem.readByte(kFinalBossPresentation) != 0)
+            mem.writeWord(kVdpControl, 0x9205u);
+        if (mem.readByte(kBossHealthSwitch) != 0) {
+            if (!offer)
+                mem.writeWord(kVdpControl, 0x9205u);
+            bundle(9, 0x00011018u);
+        }
+    }
+
+    cpu().a[2] = kVdpData;
+    const m_long playerOne = mem.readLong(kHealthBarPointers);
+    if (playerOne != 0) {
+        mem.writeLong(kVdpControl, 0x5B400003u);
+        playerBar(kHealthBarPointers, playerOne);
+    }
+    const m_long playerTwo = mem.readLong(kHealthBarPointers + 4);
+    if (playerTwo != 0) {
+        mem.writeLong(kVdpControl, 0x5B600003u);
+        playerBar(kHealthBarPointers + 4, playerTwo);
+        cpu().ssp += 4;
+        return;
+    }
+
+    if (mem.readWord(kBossHealthPrimary) != 0) {
+        mem.writeLong(kVdpControl, 0x5F800003u);
+        bossBar(kBossHealthPrimary + 2);
+    }
+    if (mem.readWord(kBossHealthSecondary) != 0) {
+        mem.writeLong(kVdpControl, 0x5FA00003u);
+        bossBar(kBossHealthSecondary + 2);
+    }
     cpu().ssp += 4;
 }

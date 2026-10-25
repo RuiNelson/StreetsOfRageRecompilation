@@ -137,17 +137,29 @@ sprites keep their place relative to the screen centre. Remote snapshots
 
 The gameplay HUD is the window plane (rows 0-3 at VRAM `$D000`): the static
 upload `$FF8000` (40×4 at window row 0) and the per-VBlank `$FF6000` block (40×3
-at row 1), both written by `$8064 (vdp_copy_stride)`. With `--widescreen`
-the manual `vdp_copy_stride` (`SoRManualFunctions.cpp`) drops the bottom edge,
-turns the frame tiles `$6D4`-`$6D7` into blank tiles and writes the other rows
-one window row lower (window row 0 is the hidden first tile row). Work RAM
-keeps the original block, so digit/BCD writers and `autoplay` are unaffected.
-The plate also lives as palette 0 colour 2 inside every glyph and bar tile
-(including the health-bar rows `vblank_upload_player_health_bar` writes each
-frame), so `main.cpp` sets `VDP::setWidescreenWindowColorKey(0, 2)`: in Mode 48
-that colour, like colour 0, is transparent in the window and lets Plane A show.
-Without `--widescreen` the manual routine copies exactly like the ROM (checked:
-the plain gameplay frame is byte-identical).
+at row 1), both written by `$8064 (vdp_copy_stride)`. Everything below lives in
+the game (`SoRManualFunctions.cpp`) and only runs with `--widescreen`;
+`MegaDriveEnvironment` is not involved beyond Mode 48 itself.
+
+- The manual `vdp_copy_stride` drops the bottom edge, turns the frame tiles
+  `$6D4`-`$6D7` into blank tiles and writes the other rows one window row lower
+  (window row 0 is the hidden first tile row). Work RAM keeps the original
+  block, so digit/BCD writers and `autoplay` are unaffected.
+- The plate is also palette 0 colour 2 inside every glyph, digit and bar tile.
+  The first per-VBlank block upload after the level-start upload (when the
+  level's HUD art is in VRAM) rewrites those tiles through the VDP ports with
+  colour 2 as 0. It covers tiles `$6BE`-`$6FF` and `$7C0`-`$7F3` only: tiles
+  `$780`-`$7BF` are VRAM `$F000`-`$F7FF`, the sprite and horizontal-scroll
+  tables. The art is read from `VDP::stateSnapshot()` because the emulated data
+  port does not prefetch on an address set like the hardware.
+- `$10F80 (vblank_update_gameplay_health_bars)` is a manual port (it inlines the
+  `$11072`/`$1108E` bar uploads) so the bar tile rows, which the ROM rewrites
+  on every damage event around a `$110A8` plate row, use a transparent plate
+  row. Patching the ROM long instead fails the boot checksum and hangs the game.
+
+Without `--widescreen` both routines copy exactly like the ROM (checked: the
+plain gameplay frame is byte-identical, and a forced bar upload keeps the plate
+rows).
 
 ## Runtime call log and call map (game analysis)
 
