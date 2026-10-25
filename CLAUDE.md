@@ -124,6 +124,17 @@ The generated `StreetsOfRage` constructor (hardcoded in the decompiler's
 per scanline are drawn instead of clipped at the hardware 20 (H40) / 16 (H32)
 limit. SOVR is still set as on hardware, so game logic reading it is unaffected.
 
+## Widescreen (`--widescreen`)
+
+`sor --widescreen` calls `MegaDriveEnvironment::setWidescreen(true)` from
+`main.cpp`, switching the VDP from Mode 40 to the host-only Mode 48 (48×27
+tiles, 384×216; see `MegaDriveEnvironment/README.md`). Game logic, the work-RAM
+state and the 320×224 timing are untouched, so `autoplay` addresses and
+coordinates are unchanged; only the output grew. Sprites are shifted 32 px right
+of Mode 40 relative to the backgrounds (sprite origin 96, background unshifted):
+sprites keep their place relative to the screen centre. Remote snapshots
+(`read_framebuffer`) are 384×216 in this mode.
+
 ## Runtime call log and call map (game analysis)
 
 Use runtime call recording plus `tools/call_map.py` to **analyse game control
