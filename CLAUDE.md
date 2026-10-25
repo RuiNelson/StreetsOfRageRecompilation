@@ -220,8 +220,7 @@ keeping the generated declaration, dispatcher, and call sites intact.
   on the DAC-busy retry: voices pulse `$A01FFD (z80_dac_busy)` briefly, and
   a host sleep after release lets the Z80 thread start a long slice that
   stalls the next BUSREQ (frame hitch). Retry immediately, like the ROM's
-  three NOPs. Each retry's BUSREQ is acked by `Z80::setBusRequest` itself when
-  the Z80 is between slices (no thread wake); see `MegaDriveEnvironment/CLAUDE.md`.
+  three NOPs.
 - Preserve 68000-visible register, memory, flag, stack, and control-flow
   effects expected by callers.
 - Base behavior on `output/sor.asm`, analysis data, and bounded runtime
