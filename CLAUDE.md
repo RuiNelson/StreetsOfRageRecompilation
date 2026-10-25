@@ -119,6 +119,11 @@ include temporary candidates that do not belong in a normal build.
 Review regenerated output carefully. A large unexpected change is evidence to
 investigate, not a result to accept mechanically.
 
+The generated `StreetsOfRage` constructor (hardcoded in the decompiler's
+`generator.py`) runs the VDP with `VDP::QuasiUnlimitedSprites`: excess sprites
+per scanline are drawn instead of clipped at the hardware 20 (H40) / 16 (H32)
+limit. SOVR is still set as on hardware, so game logic reading it is unaffected.
+
 ## Runtime call log and call map (game analysis)
 
 Use runtime call recording plus `tools/call_map.py` to **analyse game control
