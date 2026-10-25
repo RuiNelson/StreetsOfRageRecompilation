@@ -133,7 +133,7 @@ without collapsing the remaining behavioural differences.
 
 The exact duplicate animation pointers prove that `$20-$23` share the Garcia
 animation resource, `$25/$2A` share Haku-Ro, and Jack's type `$27` plus its
-type-`$28` projectile share the Jack resource. `$FC1C` creates type `$28` from
+type-`$28` projectile share the Jack resource. `$00FC1C` creates type `$28` from
 Jack, copies its target and damage, and the `$FC66-$FE3E` path launches,
 collides, returns, or removes the axe/torch helper. Type `$29` is created by
 `$9566 (prepare_ordinary_enemies_for_police_special)` and dispatches directly
@@ -516,9 +516,9 @@ target until he is 80 px beyond it, and resets (`$01`). What matters in play:
 - it calls `$9E4C` -- face the target -- on every update, after its contact
   test: in this state he turns as the player walks past him.
 
-### The juggle (`$F544`, `$FC1C`, `$FCB6`)
+### The juggle (`$F544`, `$00FC1C`, `$FCB6`)
 
-`$F544` creates a type-`$28` spawner (helper state 5, `$FC1C`) that spawns two
+`$F544` creates a type-`$28` spawner (helper state 5, `$00FC1C`) that spawns two
 juggled axes 8 updates apart and removes itself. A juggled axe (state 1,
 `$FCB6`):
 
@@ -644,7 +644,7 @@ combat states. The other three -- further ahead on X, past the camera gate
 for the entire 33+ second capture window**, while the AI (before the fix
 below) repeatedly issued `WalkToNearEnemy`/`MeleeWeaponAttack` at them: 212
 is precisely 160 (the round's own base street surface,
-`hazards.base_floor_z(4)`, `$19C04`'s rounds-1-to-5 table) + 52 (this
+`hazards.base_floor_z(4)`, `$19C04 (level_collision_class_table_offsets)`'s rounds-1-to-5 table) + 52 (this
 handler's own `$34` offset), confirming the decode against the running game
 exactly.
 
@@ -742,7 +742,7 @@ walking box already on his body takes the hold even through his own attack.
 
 - `$E124` (state 9, and `$21`'s `$0B`): toward 32 px short of the target on
   its lane (`$9648`), 4.5 px an update (3 with `+$40` bit 5), 48 updates; after
-  each move `$E102` tests box `$12` (0-40 px ahead, lanes +-8, head height) on
+  each move `$00E102` tests box `$12` (0-40 px ahead, lanes +-8, head height) on
   the target's body -- the punch.
 - `$E190` (state `$0A`): animation `$14` from frame 0, whose box is already
   `$12`: the jab lands on the update after its trigger. Frame 3 is the jab

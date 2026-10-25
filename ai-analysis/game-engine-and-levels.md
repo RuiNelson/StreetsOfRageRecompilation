@@ -137,7 +137,7 @@ level indexes 0 and 1 both return immediately through `$11344
 (per_level_ambient_effect_noop_b)`. `$11346
 (update_level_index2_background_effect)` is called every gameplay frame, but it only
 updates frame/palette data after `$112C0 (init_level_index2_background_effect)` has
-armed `$FFFA0C` for level index 2.
+armed `$FFFA0C (round3_wave_tiles_enabled)` for level index 2.
 
 The final jump is `$436 (sub_state_dispatcher)`. This ordering matters. An
 entity may die or a camera/object routine may raise a flag during the frame, and
@@ -198,7 +198,7 @@ The important calls and their proven effects are:
 |---:|---|
 | `$19848 (load_level_graphics_maps_and_camera)` | clear camera RAM; load/decompress per-round plane data and tile maps; initialize both camera-plane objects |
 | `$110AC` | load round/HUD resources and construct HUD tile data |
-| `$1119E (init_animated_palette_sequences)` | build per-round animated-palette descriptors at `$FFEE00` |
+| `$1119E (init_animated_palette_sequences)` | build per-round animated-palette descriptors at `$FFEE00 (animated_palette_descriptors)` |
 | `$10E42` | load/remap HUD character art (skipped in demo mode) |
 | `$11564` | load additional HUD/display assets |
 | `$E5C (start_round_setup)` | unpack ELC data, select difficulty, seed the spawn stream and initial objects |
@@ -240,7 +240,7 @@ conceptually:
 | `$1B036 (level_elc_offset_table)` | eight relative words | pointers to Nemesis-compressed enemy-load-cue streams |
 | `$1C1C4 (level_wave_resource_table)` | eight relative words | roots of per-round wave/resource-descriptor sections |
 | `$1C378 (level_resource_table)` | eight 6-byte records | pointers and small parameters for a separate level resource load |
-| `$5F5B8` | per-round relative records | background/plane compressed resources and camera initialization data |
+| `$5F5B8 (level_graphics_package_table)` | per-round relative records | background/plane compressed resources and camera initialization data |
 | `$195D8 (wave_camera_boundary_table)` | words | X boundary reached by successive waves; forward and reverse halves |
 | `$11B44 (level_music_table)` | eight bytes | level BGM IDs |
 
@@ -574,21 +574,21 @@ Each begins with a dispatch state word and uses 16.16 positions and velocities:
 | `+$44...` | strip/parallax descriptors and previous positions |
 
 The former CSV names `scene_length` for `$FFE01A (camera_x_max)` and
-`scenario_x_position` for `$FFE01E (camera_x_min)` were imprecise. The clamp code at `$19074`
+`scenario_x_position` for `$FFE01E (camera_x_min)` were imprecise. The clamp code at `$19074 (integrate_camera_x_clamped)`
 proves that they are the primary camera's maximum and minimum X bounds;
 `addresses.csv` now records them as `$FFE01A (camera_x_max)` and `$FFE01E (camera_x_min)`.
 
 ### 6.2 Player-follow velocity
 
-`$18F5C` derives a horizontal velocity from player world positions:
+`$18F5C (compute_camera_follow_x_velocity)` derives a horizontal velocity from player world positions:
 
 - in one-player mode, the active player is kept within a horizontal dead zone;
 - in two-player mode, ordered player positions are used so the camera tries to
   contain both;
 - the result is clamped to approximately `-3..+3` pixels per frame.
 
-`$18FE8` performs the analogous depth/vertical calculation, clamped to
-approximately `-4..+4`. `$19074` and `$190AA` integrate those velocities and
+`$18FE8 (compute_camera_follow_y_velocity)` performs the analogous depth/vertical calculation, clamped to
+approximately `-4..+4`. `$19074 (integrate_camera_x_clamped)` and `$190AA (integrate_camera_y_bounded)` integrate those velocities and
 clamp the resulting 16.16 positions to the active min/max bounds.
 
 The global player-boundary routine at `$43AA (clamp_players_to_gameplay_bounds)` separately prevents players from
@@ -873,7 +873,7 @@ entirely by data. The engine is data-driven, but not data-only.
 | entity records are six bytes | `$C60..$CBE`, `$CC0..$D60` | 100% |
 | low two bits of record byte 5 gate difficulty | `$790..$7C0`, `$CCA..$CF0` | 100% |
 | type bit 7 means two-player-only | same paths, comparison with `player_mode_copy == 3` | 100% |
-| `$FFE01A/$FFE01E` are camera max/min X | clamp at `$19074`, phase update at `$19570 (advance_wave_camera_boundary)` | 100% |
+| `$FFE01A/$FFE01E` are camera max/min X | clamp at `$19074 (integrate_camera_x_clamped)`, phase update at `$19570 (advance_wave_camera_boundary)` | 100% |
 | round 8 reverses camera-boundary direction | `$1957E..$195D0`, second half of `$195D8 (wave_camera_boundary_table)` | 100% |
 | `$FFFF04 (wave)` is a camera/resource phase index | `$5F4 (init_level_state)`, `$E98`, `$18F32 (advance_round7_vertical_wave)`, `$19570 (advance_wave_camera_boundary)` | 100% |
 | `$FFFB1E (active_progression_entity_count)` counts progression-gating entities | increments `$C60/$CC0`, decrements `$92F0/$9D8C`, zero tests in pipeline | 99% |
@@ -900,7 +900,7 @@ their stated, bounded behavior:
 | `$B76 (load_deferred_spawn_art_and_spawn)` | Finish any required resource load, spawn the selected record, and compact the remainder over it. | It waits for `$FFDCD0 (art_array_cue)`, calls the resource loader/spawner, then shifts six-byte records through the `$99` terminator. |
 | `$8454 (queue_nemesis_art_cues)` | Resolve an art-set list and append six-byte source/destination records to the incremental Nemesis queue. | The producer and `$84BA/$8510` consumer agree on the exact longword-source/word-VRAM record layout. |
 | `$112F2 (dispatch_per_level_ambient_effects)` | Dispatch per-frame level-specific ambient effects without implying they run in every level. | `$11300 (per_level_ambient_effect_jt)` maps level indexes 0 and 1 to a no-op, level index 2 to `$11310 (round3_delayed_sfx_burst_update)`, and level index 4 to `$1132E (round5_periodic_sfx_update)`; the early-level `calls.csv` sample observes the dispatcher call, not an active effect body. |
-| `$11346 (update_level_index2_background_effect)` | Poll the level-index-2 background effect state during gameplay. | `$112C0 (init_level_index2_background_effect)` only arms `$FFFA0C` when `$FFFF02 (level) == 2`; otherwise `$11346 (update_level_index2_background_effect)` returns without changing the decoded frame/palette pointers. |
+| `$11346 (update_level_index2_background_effect)` | Poll the level-index-2 background effect state during gameplay. | `$112C0 (init_level_index2_background_effect)` only arms `$FFFA0C (round3_wave_tiles_enabled)` when `$FFFF02 (level) == 2`; otherwise `$11346 (update_level_index2_background_effect)` returns without changing the decoded frame/palette pointers. |
 | `$17FC2 (prepare_special_player_art_dma_step)` | Stage one chunk of special player-art DMA metadata for the VBlank-side uploader. | It runs only while `$FFFA5A` is set, advances `$FFFB54` by ten bytes, writes `$FFFB64..$FFFB6E`, and `$181BC (upload_special_player_art_dma_step)` emits those prepared VDP commands during VBlank. |
 | `$18F32 (advance_round7_vertical_wave)` | Consume the round-7 wave request and start its vertical-camera transition. | It clears the request, increments `$FFFF04 (wave)`, and writes the round-7 camera/transition flags and bounds. |
 | `$19848 (load_level_graphics_maps_and_camera)` | Load the per-level mixed-codec graphics/map package and initialize both camera-plane structures. | Its fixed table walk performs two Kosinski uploads, two Enigma RAM decodes, map construction, then two calls to `$19922 (init_camera_plane)`. |

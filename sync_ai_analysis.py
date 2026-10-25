@@ -95,23 +95,36 @@ class SymbolIndex:
             for label, addresses in label_addresses.items()
         }
 
-    def normalize_document_address(self, address: int) -> int:
-        """Expand the manuscripts' common 16-bit work-RAM shorthand."""
+    def normalize_document_address(self, address: int, explicit: bool = False) -> int:
+        """Expand the manuscripts' common 16-bit work-RAM shorthand.
+
+        An explicit zero-padded six-digit address such as ``$00FC1C`` is a
+        full address (normally a ROM offset in the shorthand range) and is
+        never expanded.
+        """
         expanded = 0xFF0000 + address
-        if 0xB000 <= address <= 0xFFFF and expanded in self.by_address:
+        if not explicit and 0xB000 <= address <= 0xFFFF and expanded in self.by_address:
             return expanded
         return address
 
-    def label_at(self, address: int) -> str | None:
-        return self.by_address.get(self.normalize_document_address(address))
+    def label_at(self, address: int, explicit: bool = False) -> str | None:
+        return self.by_address.get(self.normalize_document_address(address, explicit))
 
-    def canonical(self, address: int, fallback: str | None = None) -> str:
-        normalized = self.normalize_document_address(address)
+    def canonical(self, address: int, fallback: str | None = None,
+                  explicit: bool = False) -> str:
+        normalized = self.normalize_document_address(address, explicit)
         label = self.by_address.get(normalized, fallback)
-        shown_address = normalized if normalized != address else address
+        shown = f"{normalized:X}"
+        if explicit and 0xB000 <= normalized <= 0xFFFF:
+            shown = f"{normalized:06X}"
         if label is None:
-            return f"`${shown_address:X}`"
-        return f"`${shown_address:X} ({label})`"
+            return f"`${shown}`"
+        return f"`${shown} ({label})`"
+
+
+def is_explicit_address(digits: str) -> bool:
+    """True for a zero-padded six-digit address that opts out of the shorthand."""
+    return len(digits) >= 6 and digits.startswith("0")
 
 
 def split_table_row(line: str) -> list[str] | None:
@@ -220,11 +233,13 @@ def merge_address_symbol_tables(lines: list[str], index: SymbolIndex) -> list[st
 def synchronize_line(line: str, index: SymbolIndex) -> str:
     for pattern in PAIR_PATTERNS:
         def replace_pair(match: re.Match[str]) -> str:
-            address = int(match.group("address"), 16)
-            csv_label = index.label_at(address)
+            digits = match.group("address")
+            address = int(digits, 16)
+            explicit = is_explicit_address(digits)
+            csv_label = index.label_at(address, explicit)
             if csv_label is None:
                 return match.group(0)
-            return index.canonical(address, csv_label)
+            return index.canonical(address, csv_label, explicit)
 
         line = pattern.sub(replace_pair, line)
 
@@ -232,17 +247,21 @@ def synchronize_line(line: str, index: SymbolIndex) -> str:
         contents = match.group(1)
         canonical_match = CANONICAL_RE.fullmatch(contents)
         if canonical_match:
-            address = int(canonical_match.group("address"), 16)
-            label = index.label_at(address)
+            digits = canonical_match.group("address")
+            address = int(digits, 16)
+            explicit = is_explicit_address(digits)
+            label = index.label_at(address, explicit)
             if label is None:
                 return match.group(0)
-            return index.canonical(address, label)
+            return index.canonical(address, label, explicit)
         raw_address = ADDRESS_RE.fullmatch(contents)
         if raw_address:
-            address = int(raw_address.group("address"), 16)
-            label = index.label_at(address)
+            digits = raw_address.group("address")
+            address = int(digits, 16)
+            explicit = is_explicit_address(digits)
+            label = index.label_at(address, explicit)
             if label is not None:
-                return index.canonical(address, label)
+                return index.canonical(address, label, explicit)
         address = index.by_label.get(contents)
         if address is not None:
             return index.canonical(address, contents)

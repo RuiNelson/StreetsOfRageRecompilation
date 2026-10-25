@@ -329,12 +329,12 @@ Representative ROM-validated streams are:
 | `$07228E` | `$82D2 (enigmadec_with_plane_header)` | `$0001` | 20 | 52 | Headered UI/plane map |
 | `$06F51C` | `$82D2 (enigmadec_with_plane_header)` | `$06BF` | 54 | 160 | Headered UI/plane map |
 | `$01F596` | `$82D2 (enigmadec_with_plane_header)` | `$2001` | 64 | 154 | Headered ending map |
-| `$065976` | `$82D6 (enigmadec)` | `$0000` | 814 | 768 | Level-specific animated/map data |
+| `$65976 (round3_wave_tile_frames)` | `$82D6 (enigmadec)` | `$0000` | 814 | 768 | Level-specific animated/map data |
 | `$012842` | `$82D6 (enigmadec)` | `$0000` | 70 | 60 | Small RAM table |
 
 The compressed-byte count includes the six-byte Enigma header and, for `$82D2 (enigmadec_with_plane_header)`, the preceding eight-byte plane header; it is rounded to the even source cursor returned by the assembly.
 
-During `$19848 (load_level_graphics_maps_and_camera)` level setup, two Enigma streams selected from the per-level table at `$05F5B8` decode to `$FF4000 (primary_metatile_table)` and `$FF4800 (secondary_metatile_table)`. These are later referenced by the level-plane structures at `$FFE000 (primary_camera)` and `$FFE100 (secondary_camera)`, making Enigma central to level tilemap construction rather than merely a menu codec.
+During `$19848 (load_level_graphics_maps_and_camera)` level setup, two Enigma streams selected from the per-level table at `$5F5B8 (level_graphics_package_table)` decode to `$FF4000 (primary_metatile_table)` and `$FF4800 (secondary_metatile_table)`. These are later referenced by the level-plane structures at `$FFE000 (primary_camera)` and `$FFE100 (secondary_camera)`, making Enigma central to level tilemap construction rather than merely a menu codec.
 
 ## Kosinski
 
@@ -433,7 +433,7 @@ function kosinski_decode(src, dst):
 
 ### Level setup at `$19848 (load_level_graphics_maps_and_camera)`
 
-The per-level table at `$05F5B8` mixes codecs in a fixed sequence:
+The per-level table at `$5F5B8 (level_graphics_package_table)` mixes codecs in a fixed sequence:
 
 ```text
 two records:  VDP command long + Kosinski source long

@@ -370,6 +370,11 @@ Never rename symbols directly in `output/sor.asm` or generated `SoR-XXX.cpp`.
   their established fixed-width format.
 - Work RAM references use the full 24-bit form, such as
   `` `$FFFF00 (game_state)` `` and `` `$FFB800 (p1_object)` ``.
+- `sync_ai_analysis.py` reads a bare `` `$B000` ``-`` `$FFFF` `` value as
+  16-bit work-RAM shorthand whenever `$FFxxxx` has a symbol. Write a ROM
+  offset in that range zero-padded to six digits (`` `$00FC1C` ``) so it is
+  never linked to the RAM symbol, and write VRAM addresses that collide with
+  RAM symbols as plain `E000h` / `F400h`, as `graphics-engine.md` does.
 - Keep address spaces distinct. Z80 `$1FFF`, for example, maps to the separate
   68000-visible `` `$A01FFF (z80_dac_command)` `` address.
 - Object fields remain relative offsets such as `+$32`.

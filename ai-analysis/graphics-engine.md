@@ -286,7 +286,7 @@ dedicated initializer. `$19848 (load_level_graphics_maps_and_camera)` performs
 the playable-level version:
 
 1. clear both camera structures and `$FF0000-$FF3FFF`;
-2. choose the per-level package rooted at ROM `$5F5B8`;
+2. choose the per-level package rooted at ROM `$5F5B8 (level_graphics_package_table)`;
 3. write the level's R11 h-scroll mode;
 4. Kosinski-decode two large art streams through
    `$FF8000 (decompression_scratch_buffer)` and upload each to VRAM;
@@ -412,7 +412,7 @@ aliases at `$FFE12A (secondary_plane_blockmap_ptr)`,
 ### 5.3 Building plane maps
 
 `$199C6 (build_camera_plane_buffers)` selects a per-level/per-plane Kosinski
-stream through ROM `$5F788`. It decodes source block data to scratch RAM, reads
+stream through ROM `$5F788 (level_plane_layout_table)`. It decodes source block data to scratch RAM, reads
 the strip descriptor list, and populates the plane block map.
 
 For ordinary layouts it copies 16-byte slices from the decompressed block data
@@ -478,10 +478,12 @@ times:
 - primary output -> `$FF5A00 (primary_hscroll_line_buffer)`;
 - secondary output -> `$FF5800 (secondary_hscroll_line_buffer)`.
 
-`$191E0 (update_round3_line_scroll_effect)` builds an additional animated
-per-line distortion for level index 2. It shifts a workspace, advances a signed
-phase, combines the result with camera X, and writes the line buffers. This is
-the code path behind the round's non-rigid background motion.
+`$191E0 (update_round4_line_scroll_ripple)` builds an additional animated
+per-line distortion for level index 3 (Round 4); level index 2 only expands its
+strips to lines. It shifts a workspace, advances a signed phase, combines the
+result with camera X, and writes the line buffers. This is the code path behind
+the round's non-rigid background motion; see
+`backgrounds-scrolling-and-effects.md` §11.3.
 
 ### 6.4 VBlank h-scroll DMA
 
@@ -849,8 +851,8 @@ counter and request a CRAM upload.
 ### 9.3 Animated palettes
 
 `$1119E (init_animated_palette_sequences)` selects a per-level list rooted at
-ROM `$1C400`. It builds descriptors in RAM near `$FFEE00` and expands their
-colour/index frames near `$FFEE40`.
+ROM `$1C400 (animated_palette_table)`. It builds descriptors in RAM near `$FFEE00 (animated_palette_descriptors)` and expands their
+colour/index frames near `$FFEE40 (animated_palette_frames)`.
 
 `$11210 (update_animated_palettes)` runs once per gameplay frame. Each
 descriptor contains:
