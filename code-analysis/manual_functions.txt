@@ -25,6 +25,17 @@
 008064 # vdp_copy_stride
 010F80 # vblank_update_gameplay_health_bars (inlines the bar uploads)
 
+# Widescreen arena (SoRWidescreenArena.cpp): ports whose screen-edge constants widen with --widescreen.
+0043AA # clamp_players_to_gameplay_bounds
+000C60 # spawn_single_object
+0097CE # object_on_screen_test
+0097E6 # sub_0097e6 (on-screen test)
+0006A6 # update_camera_scroll_if_needed
+00AAA0 # sub_00aaa0 (attack hit window)
+00ABA4 # sub_00aba4 (attack hit window)
+014C38 # sub_014c38 (charging boss leaves the screen)
+00F4A6 # sub_00f4a6 (enemy walks to the screen side)
+
 # Mode-select, OPTIONS, and character-select flow.
 000FE8 # init_game_start_screen
 00108E # game_start_screen_update

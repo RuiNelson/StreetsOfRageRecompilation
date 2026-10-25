@@ -161,6 +161,16 @@ Without `--widescreen` both routines copy exactly like the ROM (checked: the
 plain gameplay frame is byte-identical, and a forced bar upload keeps the plate
 rows).
 
+### Widescreen arena (`SoRWidescreenArena.cpp`)
+
+The game's own screen edges are 320-pixel assumptions. Hand-written ports (listed under "Widescreen arena" in
+`code-analysis/manual_functions.txt`) widen each edge by `$20` per side under `--widescreen` and are the
+ROM routine unchanged otherwise: the player clamp (`$43AA`), `spawn_single_object` (`$C60`), the on-screen tests
+(`$97CE`, `$97E6`), the attack hit window (`$AAA0`, `$ABA4`), the locked-arena push-back (`$6A6`), the charging boss
+(`$14C38`) and an enemy's walk to the screen side (`$F4A6`). Never patch the ROM (the boot checksum hangs the game) and
+never edit `MegaDriveEnvironment` for game rules. The full table, the checks and what is left are in
+`../docs/WidescreenLogBook.md`.
+
 ## Runtime call log and call map (game analysis)
 
 Use runtime call recording plus `tools/call_map.py` to **analyse game control
