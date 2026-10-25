@@ -1,6 +1,7 @@
 #include "SoR.hpp"
 #include "SoRCheats.hpp"
 
+#include <array>
 #include <cstdint>
 
 namespace {
@@ -38,6 +39,26 @@ constexpr m_long kObjStrengthBias = 0x0A; // byte added into the per-move row
 constexpr m_long kObjDamage       = 0x34; // byte: low nibble = applied damage
 constexpr m_long kObjHitFlags     = 0x42; // byte: high nibble of raw strength → reaction
 constexpr m_long kObjMoveIndex    = 0x50; // byte: row selector inside the move table
+
+// VDP ports and the window-plane HUD block uploaded by vdp_copy_stride.
+constexpr m_long kVdpData    = 0x00C00000u;
+constexpr m_long kVdpControl = 0x00C00004u;
+constexpr m_long kRowStride  = 0x00800000u; // 64-cell plane row, in VDP command units
+
+// The gameplay HUD lives in window rows 0-3 (VRAM $D000, 40 columns). Level start uploads all four rows
+// once from $FF8000: the frame's top edge with the TIME label, the plate and side edges, the bottom edge.
+// Every VBlank then re-uploads rows 1-3 from the $FF6000 block (two rows of elements, then the bottom edge).
+constexpr m_long kHudStaticCommand = 0x50000003u;
+constexpr m_word kHudStaticRows    = 0x0003u;
+constexpr m_long kHudBlockCommand  = 0x50800003u;
+constexpr m_word kHudBlockRows     = 0x0002u;
+constexpr m_word kHudColumns       = 0x0027u;
+constexpr int    kHudCells         = 40;
+
+// Window tiles of the HUD frame: the yellow border (corners, edges) and the plate between elements.
+// Glyph and bar tiles carry the plate as palette 0 colour 2; main.cpp keys that colour out.
+constexpr m_word kHudFrameFirstTile = 0x06D4u;
+constexpr m_word kHudFrameLastTile  = 0x06D7u;
 
 // Supervisor mode, interrupt mask 2 — allows VBlank (level 6) while waiting.
 constexpr m_word kStatusIrqEnabled = 0x2500u;
@@ -294,5 +315,82 @@ void StreetsOfRage::wait_vblank_without_graphics_upload(m_long /*entry_*/) {
         return !shouldQuit();
     });
 
+    cpu().ssp += 4;
+}
+
+// ---------------------------------------------------------------------------
+// $008064 — copy a headered rectangle of tile words to the VDP
+//
+// a1 -> long VDP command, word columns-1, word rows-1, then the words. Each row
+// is written at the command plus a 64-cell row stride. Registers and flags are
+// left as the ROM leaves them: a1 past the data, d0 = command after the last row
+// stride, d1 = columns-1, d2/d3 low words $FFFF, d4 = stride, a2/a3 the VDP ports.
+//
+// With --widescreen, the gameplay HUD block is reshaped on its way to the
+// window plane: the yellow frame and the plate between the elements are
+// dropped, and the two element rows move one tile down, out of the first
+// tile row that Mode 48 does not display. Work RAM still holds the original data.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::vdp_copy_stride(m_long /*entry_*/) {
+    traceEnter(0x8064u);
+
+    auto &mem = memory();
+    m_long source = cpu().a[1];
+
+    const m_long command = mem.readLong(source);
+    const m_word columns = mem.readWord(source + 4);
+    const m_word rows    = mem.readWord(source + 6);
+    source += 8;
+
+    const bool widescreenHud = vdp().widescreen() && columns == kHudColumns &&
+                               ((command == kHudStaticCommand && rows == kHudStaticRows) ||
+                                (command == kHudBlockCommand && rows == kHudBlockRows));
+
+    m_long rowCommand = command;
+    if (widescreenHud) {
+        // Every row but the last (the bottom edge) is an element row: it moves down one window row and loses
+        // the frame. The static upload also blanks window row 0, which Mode 48 does not display.
+        if (command == kHudStaticCommand) {
+            mem.writeLong(kVdpControl, command);
+            for (int cell = 0; cell < kHudCells; ++cell)
+                mem.writeWord(kVdpData, 0);
+        }
+        for (m_word row = 0; row < rows; ++row) {
+            mem.writeLong(kVdpControl, command + (static_cast<m_long>(row) + 1u) * kRowStride);
+            for (int cell = 0; cell < kHudCells; ++cell) {
+                m_word word = mem.readWord(source);
+                source += 2;
+                const m_word tile = word & 0x07FFu;
+                if (tile >= kHudFrameFirstTile && tile <= kHudFrameLastTile)
+                    word = 0;
+                mem.writeWord(kVdpData, word);
+            }
+        }
+        source += kHudCells * 2; // bottom edge row
+        // Leave d0 where the ROM does: the command after the stride add of its last row.
+        rowCommand = command + (static_cast<m_long>(rows) + 1u) * kRowStride;
+    } else {
+        for (m_word row = 0; row <= rows; ++row) {
+            mem.writeLong(kVdpControl, rowCommand);
+            for (m_word column = 0; column <= columns; ++column) {
+                mem.writeWord(kVdpData, mem.readWord(source));
+                source += 2;
+            }
+            rowCommand += kRowStride;
+        }
+    }
+
+    const m_long previous = rowCommand - kRowStride;
+    const bool   carry    = rowCommand < previous;
+    const bool   overflow = (((previous ^ rowCommand) & (kRowStride ^ rowCommand)) & 0x80000000u) != 0;
+    cpu().a[1] = source;
+    cpu().a[2] = kVdpControl;
+    cpu().a[3] = kVdpData;
+    cpu().d[0] = rowCommand;
+    cpu().setDw(1, columns);
+    cpu().setDw(2, 0xFFFFu);
+    cpu().setDw(3, 0xFFFFu);
+    cpu().d[4] = kRowStride;
+    cpu().setNZVCX(rowCommand, 0x80000000u, overflow, carry, carry);
     cpu().ssp += 4;
 }

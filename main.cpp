@@ -75,6 +75,10 @@ int main(int argc, char *argv[]) {
                                              : MegaDriveEnvironment::VideoStandard::Hz60);
         env.setVDPTurboMultiplier(turboMultiplier);
         env.setWidescreen(widescreenFlag);
+        if (widescreenFlag) {
+            // The HUD plate: palette 0 colour 2 inside every glyph and bar tile of the window plane.
+            env.vdp().setWidescreenWindowColorKey(0, 2);
+        }
         if (silentFlag)
             env.sound().disable();
     };

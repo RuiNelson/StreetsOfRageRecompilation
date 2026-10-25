@@ -135,6 +135,20 @@ of Mode 40 relative to the backgrounds (sprite origin 96, background unshifted):
 sprites keep their place relative to the screen centre. Remote snapshots
 (`read_framebuffer`) are 384×216 in this mode.
 
+The gameplay HUD is the window plane (rows 0-3 at VRAM `$D000`): the static
+upload `$FF8000` (40×4 at window row 0) and the per-VBlank `$FF6000` block (40×3
+at row 1), both written by `$8064 (vdp_copy_stride)`. With `--widescreen`
+the manual `vdp_copy_stride` (`SoRManualFunctions.cpp`) drops the bottom edge,
+turns the frame tiles `$6D4`-`$6D7` into blank tiles and writes the other rows
+one window row lower (window row 0 is the hidden first tile row). Work RAM
+keeps the original block, so digit/BCD writers and `autoplay` are unaffected.
+The plate also lives as palette 0 colour 2 inside every glyph and bar tile
+(including the health-bar rows `vblank_upload_player_health_bar` writes each
+frame), so `main.cpp` sets `VDP::setWidescreenWindowColorKey(0, 2)`: in Mode 48
+that colour, like colour 0, is transparent in the window and lets Plane A show.
+Without `--widescreen` the manual routine copies exactly like the ROM (checked:
+the plain gameplay frame is byte-identical).
+
 ## Runtime call log and call map (game analysis)
 
 Use runtime call recording plus `tools/call_map.py` to **analyse game control
