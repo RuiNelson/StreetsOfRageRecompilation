@@ -38,6 +38,7 @@
 00A59C # sub_00a59c (scripted object activated by the screen)
 007546 # round8_table_state0_wait_and_arm
 0040A6 # sub_0040a6 (player carried off the right edge in a police special)
+00B0FE # cull_sprite_piece_x (sprite pieces at the far left edge)
 
 # Mode-select, OPTIONS, and character-select flow.
 000FE8 # init_game_start_screen

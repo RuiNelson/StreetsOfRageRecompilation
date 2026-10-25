@@ -31,6 +31,7 @@ constexpr m_long kEndOfLevelFlag      = 0xFFFFFA73u;
 constexpr m_long kLevelSpawnFlowFlags = 0xFFFFFA05u;
 constexpr m_long kStatusBitfield1     = 0xFFFFFB14u;
 constexpr m_long kActiveProgression   = 0xFFFFFB1Eu;
+constexpr m_long kSpriteLinkIndex     = 0xFFFFFA02u;
 constexpr m_long kP1Object            = 0xFFFFB800u;
 constexpr m_long kP2Object            = 0xFFFFB880u;
 constexpr m_long kObjectTable         = 0xFFFFB900u;
@@ -650,5 +651,33 @@ void StreetsOfRage::sub_0040a6(m_long /*entry_*/) {
     }
     cpu().d[7] = 0xFFFFFFFFu;
     cpu().setNZClearVC(cpu().d[7], 0x80000000u);
+    cpu().ssp += 4;
+}
+
+// ---------------------------------------------------------------------------
+// $00B0FE — cull_sprite_piece_x
+//
+// A mapped sprite piece (d0 = its biased hardware X) is kept only within [$60, $1E0); otherwise the SAT record
+// reserved for it is rolled back (link index - 1, a2 - 6) and d5 = -1 (Z clear). $60 is where a piece up to 32
+// pixels wide is wholly left of a 320-pixel screen (hardware left edge $80). Widescreen's screen starts at
+// $60, so a piece starting up to 32 pixels further left is still partly visible: the lower bound moves to $40,
+// or sprites vanish while still showing at the far left edge. The upper bound, $1E0, is already widescreen's
+// right edge.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::cull_sprite_piece_x(m_long /*entry_*/) {
+    traceEnter(0x0000B0FEu);
+
+    const m_word lower = vdp().widescreen() ? 0x0040u : 0x0060u;
+    const m_word x     = cpu().dw(0);
+
+    if (x >= lower && x < 0x01E0u) {
+        cpu().d[5] = 0;
+        cpu().setNZClearVC(0, 0x80000000u);
+    } else {
+        memory().writeByte(kSpriteLinkIndex, static_cast<m_byte>(memory().readByte(kSpriteLinkIndex) - 1u));
+        cpu().a[2] -= 6;
+        cpu().d[5] = 0xFFFFFFFFu;
+        cpu().setNZClearVC(0xFFFFFFFFu, 0x80000000u);
+    }
     cpu().ssp += 4;
 }
