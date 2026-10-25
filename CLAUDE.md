@@ -144,7 +144,10 @@ the game (`SoRManualFunctions.cpp`) and only runs with `--widescreen`;
 - The manual `vdp_copy_stride` drops the bottom edge, turns the frame tiles
   `$6D4`-`$6D7` into blank tiles and writes the other rows one window row lower
   (window row 0 is the hidden first tile row). Work RAM keeps the original
-  block, so digit/BCD writers and `autoplay` are unaffected.
+  block, so digit/BCD writers and `autoplay` are unaffected. It also reshapes
+  the boss-bar bundle 9 (`$FFF510`, 40×2 at `$51800003`, window rows 3-4, loaded
+  every VBlank while a boss is registered) the same way, so the boss bar lands
+  on row 4 instead of overwriting the shifted HUD's last element row.
 - The plate is also palette 0 colour 2 inside every glyph, digit and bar tile.
   The first per-VBlank block upload after the level-start upload (when the
   level's HUD art is in VRAM) rewrites those tiles through the VDP ports with

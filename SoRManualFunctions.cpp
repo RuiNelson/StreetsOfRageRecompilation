@@ -53,6 +53,10 @@ constexpr m_long kHudStaticCommand = 0x50000003u;
 constexpr m_word kHudStaticRows    = 0x0003u;
 constexpr m_long kHudBlockCommand  = 0x50800003u;
 constexpr m_word kHudBlockRows     = 0x0002u;
+// While a boss is registered, bundle 9 ($FFF510, every VBlank) puts the boss bar row at window row 3 and
+// the bottom edge under it at row 4 (the window is then 5 rows high).
+constexpr m_long kHudBossCommand   = 0x51800003u;
+constexpr m_word kHudBossRows      = 0x0001u;
 constexpr m_word kHudColumns       = 0x0027u;
 constexpr int    kHudCells         = 40;
 
@@ -402,7 +406,8 @@ void StreetsOfRage::vdp_copy_stride(m_long /*entry_*/) {
 
     const bool widescreenHud = vdp().widescreen() && columns == kHudColumns &&
                                ((command == kHudStaticCommand && rows == kHudStaticRows) ||
-                                (command == kHudBlockCommand && rows == kHudBlockRows));
+                                (command == kHudBlockCommand && rows == kHudBlockRows) ||
+                                (command == kHudBossCommand && rows == kHudBossRows));
 
     m_long rowCommand = command;
     if (widescreenHud) {
