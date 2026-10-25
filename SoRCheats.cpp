@@ -15,6 +15,8 @@ std::atomic_bool    altAttackHeld_[2]    = {false, false};
 std::atomic_bool    altAttackPressed_[2] = {false, false};
 std::atomic_bool    altPickupHeld_[2]    = {false, false};
 std::atomic_bool    altPickupPressed_[2] = {false, false};
+std::atomic_bool    altThrowHeld_[2]     = {false, false};
+std::atomic_bool    altThrowPressed_[2]  = {false, false};
 std::atomic<m_long> freePoliceCaller_{0};
 
 static_assert(adjustP1PunchDamage(kP1Object, 1u, true) == 12u);
@@ -74,8 +76,27 @@ bool altPickupButtonPressedForObject(m_long objectAddress) {
     return false;
 }
 
+void updateAltThrowButton(int playerIndex, bool held) {
+    if (playerIndex < 0 || playerIndex >= 2)
+        return;
+
+    const bool wasHeld = altThrowHeld_[playerIndex].exchange(held, std::memory_order_acq_rel);
+    altThrowPressed_[playerIndex].store(held && !wasHeld, std::memory_order_release);
+}
+
+bool altThrowButtonPressedForObject(m_long objectAddress) {
+    const m_long normalized = objectAddress & 0x00FFFFFFu;
+    if (normalized == kP1Object)
+        return altThrowPressed_[0].load(std::memory_order_acquire);
+    if (normalized == 0x00FFB880u)
+        return altThrowPressed_[1].load(std::memory_order_acquire);
+    return false;
+}
+
 void clearAltPickupButtons() {
     for (int i = 0; i < 2; ++i) {
+        altThrowHeld_[i].store(true, std::memory_order_release);
+        altThrowPressed_[i].store(false, std::memory_order_release);
         altAttackHeld_[i].store(true, std::memory_order_release);
         altAttackPressed_[i].store(false, std::memory_order_release);
         altPickupHeld_[i].store(true, std::memory_order_release);

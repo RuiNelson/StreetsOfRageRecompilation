@@ -483,7 +483,9 @@ default init anim from table `$6FD42`.
 
 ## Attack button routing (same B, two outcomes)
 
-There is **no second button** for knife throw vs stab. Logical **attack** is
+In the original layouts there is **no second button** for knife throw vs stab.
+(The native port's `--altControls` adds one: Z throws the knife and attack
+always stabs; see `controls-and-input.md`.) Logical **attack** is
 always remapped press bit 4 on player `+$55` (B under the default layout).
 
 ### Dispatch when armed

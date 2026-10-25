@@ -160,7 +160,7 @@ void sampleOneJoypadBody(CPU68K                   &cpu,
     // remote input, so the alternative path receives that logical snapshot
     // instead. It translates the host buttons directly into the active-high
     // ROM byte: B=attack, C=jump, A=attack+jump, X=police special, Y=pickup,
-    // plus directions and Start. The unchanged code below derives the pressed
+    // Z=knife throw (native edge, like Y), plus directions and Start. The unchanged code below derives the pressed
     // edge from this held byte, preserving the input format expected by the
     // original player routines.
     if (altControls != nullptr && memory.readByte(kDemoMode) == 0u) {
@@ -176,10 +176,12 @@ void sampleOneJoypadBody(CPU68K                   &cpu,
         setActiveHighButton(altHeld, altControls->start, kButtonStart);
         SoRCheats::updateAltAttackButton(altPickupPlayerIndex, altControls->b);
         SoRCheats::updateAltPickupButton(altPickupPlayerIndex, altControls->y);
+        SoRCheats::updateAltThrowButton(altPickupPlayerIndex, altControls->z);
         held = altHeld;
     } else {
         SoRCheats::updateAltAttackButton(altPickupPlayerIndex, false);
         SoRCheats::updateAltPickupButton(altPickupPlayerIndex, false);
+        SoRCheats::updateAltThrowButton(altPickupPlayerIndex, false);
     }
 
     cpu.setDb(0, held);

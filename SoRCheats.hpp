@@ -16,6 +16,8 @@ void updateAltAttackButton(int playerIndex, bool held);
 bool altAttackButtonPressedForObject(m_long objectAddress);
 void updateAltPickupButton(int playerIndex, bool held);
 bool altPickupButtonPressedForObject(m_long objectAddress);
+void updateAltThrowButton(int playerIndex, bool held);
+bool altThrowButtonPressedForObject(m_long objectAddress);
 void clearAltPickupButtons();
 void requestFreePoliceCall(m_long objectAddress);
 bool consumeFreePoliceCall(m_long objectAddress);

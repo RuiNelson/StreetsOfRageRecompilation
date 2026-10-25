@@ -45,6 +45,7 @@ constexpr m_long kWeaponUseCounter  = 0x50u;
 constexpr m_long kBottleBrokenFlag  = 0x54u;
 
 constexpr m_byte kButtonAttack = 0x10u;
+constexpr m_byte kKnifeType    = 0x08u;
 
 constexpr bool bit(m_byte value, unsigned index) {
     return (value & static_cast<m_byte>(1u << index)) != 0;
@@ -281,14 +282,15 @@ void StreetsOfRage::player_held_object_attack_input(m_long entry_) {
     const bool   attackPressed =
         (pressed & kButtonAttack) != 0u || (altControls && SoRCheats::altAttackButtonPressedForObject(player));
     const bool pickupPressed = altControls && SoRCheats::altPickupButtonPressedForObject(player);
+    const bool throwPressed  = altControls && SoRCheats::altThrowButtonPressedForObject(player);
 
-    if (!attackPressed && !pickupPressed) {
+    if (!attackPressed && !pickupPressed && !throwPressed) {
         cpu().setFlag(CPU68K::FlagZ, true);
         return68k(cpu());
         return;
     }
 
-    const bool tryPickup = altControls ? (pickupPressed && !attackPressed) : true;
+    const bool tryPickup = altControls ? (pickupPressed && !attackPressed && !throwPressed) : true;
     if (tryPickup) {
         logCallFromReturn(0x3092u, 0x003136u);
         if (!call68k(
@@ -306,13 +308,18 @@ void StreetsOfRage::player_held_object_attack_input(m_long entry_) {
         }
     }
 
-    if (!attackPressed) {
+    const m_byte heldType = memory().readByte(player + kObjHeldType);
+
+    // --altControls: Z is the dedicated knife throw. It does nothing for any
+    // other held object, and attack never throws the knife (below).
+    const bool knifeThrow = throwPressed && !attackPressed && heldType == kKnifeType;
+
+    if (!attackPressed && !knifeThrow) {
         setResultD7(cpu(), false);
         return68k(cpu());
         return;
     }
 
-    const m_byte heldType = memory().readByte(player + kObjHeldType);
     cpu().setDb(1, heldType);
     cpu().d[0] = 0x48u;
 
@@ -327,6 +334,10 @@ void StreetsOfRage::player_held_object_attack_input(m_long entry_) {
                 },
                 0x3122u))
             return;
+    } else if (knifeThrow) {
+        cpu().d[0] = 0x44u;
+    } else if (altControls && heldType == kKnifeType) {
+        cpu().d[0] = 0x46u;
     } else {
         cpu().d[0] = 0x44u;
         if (heldType == 0x09u) {

@@ -167,7 +167,7 @@ pre-translates it into the same logical bits before `$568A
 | C | Logical jump (`$20`). |
 | X | Logical police special (`$40`), replacing original physical A. |
 | Y | Pickup-only edge tracked outside the ROM input byte. |
-| Z | No gameplay action. |
+| Z | Knife throw only: while holding a knife, a Z edge starts the throw action `$44` regardless of nearby foes; no effect with any other held object. Attack (A/B) with a knife always stabs (`$46`) and never throws. |
 | Start | Start only; pause/demo-abort behavior is unchanged. |
 
 Y is not written into `$FFFC04/$FFFC08` because the original active-high button
