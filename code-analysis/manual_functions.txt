@@ -35,6 +35,9 @@
 00ABA4 # sub_00aba4 (attack hit window)
 014C38 # sub_014c38 (charging boss leaves the screen)
 00F4A6 # sub_00f4a6 (enemy walks to the screen side)
+00A59C # sub_00a59c (scripted object activated by the screen)
+007546 # round8_table_state0_wait_and_arm
+0040A6 # sub_0040a6 (player carried off the right edge in a police special)
 
 # Mode-select, OPTIONS, and character-select flow.
 000FE8 # init_game_start_screen

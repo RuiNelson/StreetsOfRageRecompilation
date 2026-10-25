@@ -35,7 +35,8 @@ constexpr m_long kP1Object            = 0xFFFFB800u;
 constexpr m_long kP2Object            = 0xFFFFB880u;
 constexpr m_long kObjectTable         = 0xFFFFB900u;
 
-constexpr m_long kClampStateTable = 0x000045D4u;
+constexpr m_long kClampStateTable  = 0x000045D4u;
+constexpr m_long kTableTargetToggle = 0xFFFFFA17u;
 
 m_long signExtendWord(m_long value) {
     return static_cast<m_long>(static_cast<std::int32_t>(static_cast<std::int16_t>(value & 0xFFFFu)));
@@ -492,4 +493,162 @@ void StreetsOfRage::sub_00f4a6(m_long /*entry_*/) {
         mem.writeByte(enemy + 0x31, static_cast<m_byte>(mem.readByte(enemy + 0x31) & ~0x08u));
     }
     ordinary_enemy_move_with_collision();
+}
+
+// ---------------------------------------------------------------------------
+// $00A59C — is this scripted object ready to be activated by the screen?
+//
+// d0 = 1, and the object stops waiting (+$01 bit 0 and +$40 bit 7 cleared), once it is on screen (`$97E6`,
+// widened above); an object with +$40 bit 7 set instead waits for the camera's left edge to pass it. Round 8
+// scrolls the other way: there the two are swapped, and the unforced test is the camera's right edge,
+// cam+$144, which widescreen moves out to cam+$164.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::sub_00a59c(m_long /*entry_*/) {
+    traceEnter(0x0000A59Cu);
+
+    auto &mem = memory();
+    const m_word grow   = vdp().widescreen() ? kArenaGrow : 0u;
+    const m_long object = cpu().a[0];
+
+    mem.writeByte(object + 1, static_cast<m_byte>(mem.readByte(object + 1) | 0x01u));
+    SOR_CALL(sub_00a56c, 0x0000A5A6u, 0x0000A56Cu);
+
+    const auto finish = [this](m_word result) {
+        cpu().d[0] = result;
+        cpu().setNZClearVC(result, 0x80000000u);
+        cpu().ssp += 4;
+    };
+    const auto activate = [&]() {
+        mem.writeByte(object + 1, static_cast<m_byte>(mem.readByte(object + 1) & ~0x01u));
+        mem.writeByte(object + 0x40, static_cast<m_byte>(mem.readByte(object + 0x40) & ~0x80u));
+        finish(1);
+    };
+
+    const m_word camX   = mem.readWord(kCamX);
+    const m_word x      = mem.readWord(object + 0x10);
+    const bool   round8 = mem.readWord(kLevel) == 7u;
+    const bool   forced = (mem.readByte(object + 0x40) & 0x80u) != 0;
+
+    if (round8 && !forced) {
+        if (static_cast<std::int16_t>(camX + 0x0144u + grow) < static_cast<std::int16_t>(x))
+            activate();
+        else
+            finish(0);
+        return;
+    }
+    if (!round8 && forced) {
+        if (camX < x)
+            finish(0);
+        else
+            activate();
+        return;
+    }
+
+    SOR_CALL(sub_0097e6, 0x0000A5BCu, 0x000097E6u);
+    if (cpu().flagZ())
+        finish(0);
+    else
+        activate();
+}
+
+// ---------------------------------------------------------------------------
+// $007546 — round 8's thrown office table, state 0: wait hidden, then arm
+//
+// The table sits at its spawn point until the camera edge passes it: cam-$20 for variants 0-2 (they come from
+// the left), cam+$160 for the others. Armed, it takes a launch speed from the per-variant table at $75DC and
+// the lane and height of the player it targets. Both edges are outside the screen, so widescreen moves them
+// out by $20.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::round8_table_state0_wait_and_arm(m_long /*entry_*/) {
+    traceEnter(0x00007546u);
+
+    auto &mem = memory();
+    const m_word grow   = vdp().widescreen() ? kArenaGrow : 0u;
+    const m_long object = cpu().a[0];
+
+    mem.writeByte(object + 1, static_cast<m_byte>(mem.readByte(object + 1) | 0x01u));
+    const m_word camX    = mem.readWord(kCamX);
+    const m_byte variant = mem.readByte(object + 0x40);
+    const m_word edge    = variant >= 3u ? static_cast<m_word>(camX + 0x0160u + grow)
+                                         : static_cast<m_word>(camX - 0x0020u - grow);
+    cpu().setDw(0, edge);
+    if (!(edge < mem.readWord(object + 0x10))) {
+        cpu().ssp += 4;
+        return;
+    }
+
+    mem.writeByte(object + 1, static_cast<m_byte>(mem.readByte(object + 1) & 0xFEu));
+    cpu().d[0] = mem.readByte(object + 0x40);
+    if (cpu().d[0] != 0u) {
+        mem.writeByte(object + 0x34, 0x03u);
+        cpu().d[7] = 0xFFFFFFCBu;
+        SOR_CALL(sub_006aca, 0x00007582u, 0x00006ACAu);
+        const m_long tableEntry = 0x000075DCu + 2u * (cpu().dw(0) & 0xFFFFu);
+        mem.writeWord(object + 0x1C, mem.readWord(tableEntry));
+
+        cpu().a[1] = kP1Object;
+        cpu().a[2] = kP2Object;
+        const m_byte previous = mem.readByte(kTableTargetToggle);
+        mem.writeByte(kTableTargetToggle, static_cast<m_byte>(previous ^ 0x01u));
+        if ((previous & 0x01u) != 0) {
+            cpu().a[2] = kP1Object;
+            cpu().a[1] = kP2Object;
+        }
+        if (mem.readByte(cpu().a[1]) == 0)
+            cpu().a[1] = signExtendWord(cpu().a[2]);
+        mem.writeWord(object + 0x14, mem.readWord(cpu().a[1] + 0x14));
+        mem.writeWord(object + 0x18, mem.readWord(cpu().a[1] + 0x18));
+    }
+
+    mem.writeByte(object + 0x3A, static_cast<m_byte>(mem.readByte(object + 0x3A) | 0x01u));
+    mem.writeWord(object + 0x18, 0x00A8u);
+    cpu().a[1] = 0x0006ED72u;
+    SOR_CALL(sub_006abc, 0x000075C8u, 0x00006ABCu);
+    if (mem.readWord(object + 0x1C) != 0) {
+        sub_0095ce();
+        return;
+    }
+    cpu().ssp += 4;
+}
+
+// ---------------------------------------------------------------------------
+// $0040A6 — a player carried off the right edge during a police special
+//
+// While the police special runs, a player who ends up beyond cam+$160 (thrown off the screen) is put back
+// down: the landing lane is looked up, the hold on the ground is cleared and the action restarts. The edge
+// is the screen's own, so widescreen moves it to cam+$180.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::sub_0040a6(m_long /*entry_*/) {
+    traceEnter(0x000040A6u);
+
+    auto &mem = memory();
+    const m_word grow   = vdp().widescreen() ? kArenaGrow : 0u;
+    const m_long player = cpu().a[0];
+
+    if (mem.readByte(kPoliceSpecialActive) == 0 || mem.readLong(player + 0x24) != 0 ||
+        (mem.readByte(player + 0x59) & 0x02u) != 0 ||
+        mem.readWord(player + 0x10) < static_cast<m_word>(mem.readWord(kCamX) + 0x0160u + grow)) {
+        cpu().ssp += 4;
+        return;
+    }
+
+    SOR_CALL(sub_00ad2a, 0x000040B2u, 0x0000AD2Au);
+    mem.writeWord(player + 0x18, cpu().dw(6));
+    SOR_CALL(sub_00b228, 0x000040BAu, 0x0000B228u);
+    mem.writeByte(player + 0x59, static_cast<m_byte>(mem.readByte(player + 0x59) & 0xFDu));
+
+    const m_byte action = static_cast<m_byte>(mem.readByte(player + 0x30) & 0xFEu);
+    if (action >= 4u) {
+        cpu().d[0] = 2;
+        if (mem.readByte(player + 0x60) == 0) {
+            SOR_CALL(sub_002ee8, 0x000040FCu, 0x00002EE8u);
+        } else {
+            cpu().d[0] = 0x30;
+            SOR_CALL(sub_002de6, 0x000040F8u, 0x00002DE6u);
+        }
+        SOR_CALL(sub_004104, 0x00004100u, 0x00004104u);
+    }
+    cpu().d[7] = 0xFFFFFFFFu;
+    cpu().setNZClearVC(cpu().d[7], 0x80000000u);
+    cpu().ssp += 4;
 }
