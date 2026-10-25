@@ -36,6 +36,10 @@ constexpr m_long kP1Object            = 0xFFFFB800u;
 constexpr m_long kP2Object            = 0xFFFFB880u;
 constexpr m_long kObjectTable         = 0xFFFFB900u;
 
+constexpr m_long kSpawnCursor        = 0xFFFFFC14u;
+constexpr m_long kSpawnXBase        = 0xFFFFFB12u;
+constexpr m_long kDifficultyCopy    = 0xFFFFFB5Bu;
+constexpr m_long kPlayerModeCopy    = 0xFFFFFF38u;
 constexpr m_long kClampStateTable  = 0x000045D4u;
 constexpr m_long kTableTargetToggle = 0xFFFFFA17u;
 
@@ -679,5 +683,92 @@ void StreetsOfRage::cull_sprite_piece_x(m_long /*entry_*/) {
         cpu().d[5] = 0xFFFFFFFFu;
         cpu().setNZClearVC(0xFFFFFFFFu, 0x80000000u);
     }
+    cpu().ssp += 4;
+}
+
+// ---------------------------------------------------------------------------
+// $000CC0 — spawn_object_batch
+//
+// Spawns one column of a wave from the ELC stream: a signed word count - 1, then six-byte records
+// (type, +$40, +$41, +$49, X low byte, +$15), the X high byte coming from spawn_x_base. X is a world
+// coordinate, so where the wave lands depends on the camera. An object is dormant until the screen test
+// ($97E6, widened) accepts it, so one created just past the screen's right edge waits, unseen, until the
+// camera brings it in. In widescreen that edge moved out by $20, and an object created within the new
+// visible band would be accepted at once and appear abruptly, with the enemy standing inside the screen. So
+// under --widescreen an object created beyond the original screen edge is placed $20 further out (the
+// same distance past the widened edge as it was past the original), and likewise on the left.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::spawn_object_batch(m_long /*entry_*/) {
+    traceEnter(0x00000CC0u);
+
+    auto &mem = memory();
+    const m_word grow = vdp().widescreen() ? kArenaGrow : 0u;
+
+    m_long record = mem.readLong(kSpawnCursor);
+    std::int16_t remaining = static_cast<std::int16_t>(mem.readWord(record));
+    record += 2;
+
+    if (remaining >= 0) {
+        for (;; --remaining) {
+            SOR_CALL(find_free_object_slot, 0x00000CCEu, 0x00000E46u);
+            if (!cpu().flagZ()) {
+                // No free slot: the ROM restarts the console here.
+                init();
+                return;
+            }
+
+            const m_long object = cpu().a[1];
+            m_byte       type   = mem.readByte(record);
+            record += 1;
+            const m_byte difficulty = static_cast<m_byte>(mem.readByte(record + 4) & 0x03u);
+
+            bool skip = difficulty > mem.readByte(kDifficultyCopy);
+            if (!skip && (type & 0x80u) != 0 && mem.readByte(kPlayerModeCopy) != 3u)
+                skip = true;
+            type = static_cast<m_byte>(type & 0x7Fu);
+
+            if (skip) {
+                record += 5;
+            } else {
+                mem.writeByte(object, type);
+                mem.writeByte(object + 0x40, mem.readByte(record++));
+                mem.writeByte(object + 0x41, mem.readByte(record++));
+                mem.writeByte(object + 0x49, mem.readByte(record++));
+                m_word x = static_cast<m_word>((mem.readWord(kSpawnXBase) & 0xFF00u) | mem.readByte(record++));
+                if (grow != 0) {
+                    const std::int16_t rel = static_cast<std::int16_t>(x - mem.readWord(kCamX));
+                    if (rel >= 0x0140)
+                        x = static_cast<m_word>(x + grow);
+                    else if (rel < 0)
+                        x = static_cast<m_word>(x - grow);
+                }
+                mem.writeWord(object + 0x10, x);
+                mem.writeByte(object + 0x15, mem.readByte(record++));
+                cpu().a[0] = signExtendWord(object);
+
+                const m_word level = mem.readWord(kLevel);
+                if (level == 4u)
+                    mem.writeByte(object + 1, static_cast<m_byte>(mem.readByte(object + 1) | 0x10u));
+                cpu().setDw(6, 0x0088u);
+                if (level != 6u) {
+                    const m_long saved = cpu().d[2];
+                    SOR_CALL(sub_00ad2a, 0x00000D36u, 0x0000AD2Au);
+                    cpu().d[2] = saved;
+                }
+                mem.writeWord(object + 0x18, cpu().dw(6));
+
+                const m_byte slotType = static_cast<m_byte>(mem.readByte(object) - 0x20u);
+                if (slotType < 0x0Bu && (slotType & 0x80u) == 0) {
+                    mem.writeByte(object + 1, static_cast<m_byte>(mem.readByte(object + 1) | 0x08u));
+                    mem.writeWord(kActiveProgression, static_cast<m_word>(mem.readWord(kActiveProgression) + 1u));
+                }
+            }
+            if (remaining == 0)
+                break;
+        }
+    }
+
+    mem.writeLong(kSpawnCursor, record);
+    cpu().a[2] = record;
     cpu().ssp += 4;
 }

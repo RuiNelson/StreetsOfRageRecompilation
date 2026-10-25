@@ -39,6 +39,7 @@
 007546 # round8_table_state0_wait_and_arm
 0040A6 # police_special_recover_player_off_screen_right (player carried off the right edge in a police special)
 00B0FE # cull_sprite_piece_x (sprite pieces at the far left edge)
+000CC0 # spawn_object_batch (wave columns created past the old screen edge)
 
 # Mode-select, OPTIONS, and character-select flow.
 000FE8 # init_game_start_screen

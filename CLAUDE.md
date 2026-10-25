@@ -168,7 +168,8 @@ The game's own screen edges are 320-pixel assumptions. Hand-written ports (liste
 ROM routine unchanged otherwise: the player clamp (`$43AA`), `spawn_single_object` (`$C60`), the on-screen tests
 (`$97CE`, `$97E6`), the attack hit window (`$AAA0`, `$ABA4`), the locked-arena push-back (`$6A6`), the charging boss
 (`$14C38`), an enemy's walk to the screen side (`$F4A6`), the scripted-object activation (`$A59C`), round 8's thrown table
-(`$7546`) the police-special recovery (`$40A6`) and the sprite-piece cull (`$B0FE`, whose left bound `$60` made sprites vanish
+(`$7546`) the police-special recovery (`$40A6`), the wave batch placement (`$CC0`: objects created beyond the old
+screen edge are placed `$20` further out, or they would activate at once and pop into the widened screen) and the sprite-piece cull (`$B0FE`, whose left bound `$60` made sprites vanish
 while still partly visible at the far left of the widescreen). `autoplay` is not touched until the user says the widescreen
 feature is complete. Never patch the ROM (the boot checksum hangs the game) and
 never edit `MegaDriveEnvironment` for game rules. The full table, the checks and what is left are in
