@@ -603,8 +603,8 @@ handled by shared routine `$A43E` with a **160-frame** (`$A0`) timer on enemy
 
 ## Collision, damage, and credit
 
-Weapon objects participate in the shared object collision routines at `$97E6`
-(on-screen gate) and `$AA22` / `$ABA4` (shape AABB via `$1A68E`). Damaging
+Weapon objects participate in the shared object collision routines at `$97E6 (object_on_screen_margin_test)`
+(on-screen gate) and `$AA22` / `$ABA4 (resolve_enemy_registered_attacker_contact)` (shape AABB via `$1A68E`). Damaging
 phases register the weapon in `$FFFB22` through `$95CE`. Their `+$34` field is
 the damage offered to a struck player/enemy, just as player attack frames expose
 damage in player `+$34`. The common handlers use collision result `+$7C` and the
@@ -735,7 +735,7 @@ void apply_pickup_effect(Player *p, unsigned effect) {
 | `$6312` / `$6328 (begin_pepper_smoke_emission)` / `$6372 (emit_pepper_smoke_sequence)` | Pepper flight gravity `+$A800`, smoke emission sequence. |
 | `$95CE` / `$95E8` | Register/unregister weapon in attacker list `$FFFB22`. |
 | `$9B88 (ordinary_enemy_apply_contact_damage)` | `health -= attacker[+$34]`; pepper branch `$9C1E` → state `$0400`. |
-| `$AA22` / `$ABA4` / `$1A68E` | Attacker-list collision and shape AABB table. |
+| `$AA22` / `$ABA4 (resolve_enemy_registered_attacker_contact)` / `$1A68E` | Attacker-list collision and shape AABB table. |
 | `$26FCE (ordinary_enemy_combat_value_table)` | Enemy HP/damage by type×variant for hits-to-kill. |
 | `$67A4 (wave_go_prompt_dispatcher)` | Type-$48 screen-space prompt flashed after a wave camera boundary opens. |
 | `$6862 (player_contact_effect_dispatcher)` | Type-$49 short-lived player/contact visual effect emitted by player attack/collision helpers. |

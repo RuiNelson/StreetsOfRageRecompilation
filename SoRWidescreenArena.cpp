@@ -179,7 +179,7 @@ void StreetsOfRage::object_on_screen_test(m_long /*entry_*/) {
     cpu().ssp += 4;
 }
 
-void StreetsOfRage::sub_0097e6(m_long /*entry_*/) {
+void StreetsOfRage::object_on_screen_margin_test(m_long /*entry_*/) {
     traceEnter(0x000097E6u);
 
     const m_word grow    = vdp().widescreen() ? kArenaGrow : 0u;
@@ -260,7 +260,7 @@ bool attackWindowContains(m_word screenX, m_word grow) {
 
 } // namespace
 
-void StreetsOfRage::sub_00aaa0(m_long /*entry_*/) {
+void StreetsOfRage::resolve_enemy_player_contact(m_long /*entry_*/) {
     traceEnter(0x0000AAA0u);
 
     auto &mem = memory();
@@ -335,7 +335,7 @@ secondary:
     }
 }
 
-void StreetsOfRage::sub_00aba4(m_long /*entry_*/) {
+void StreetsOfRage::resolve_enemy_registered_attacker_contact(m_long /*entry_*/) {
     traceEnter(0x0000ABA4u);
 
     auto &mem = memory();
@@ -384,7 +384,7 @@ void StreetsOfRage::sub_00aba4(m_long /*entry_*/) {
 // $1C0, left at $80. Widescreen moves both edges out by $20 so the charge ends at the edge of the wider
 // screen.
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_014c38(m_long /*entry_*/) {
+void StreetsOfRage::abadede_state7_run_update(m_long /*entry_*/) {
     traceEnter(0x00014C38u);
 
     auto &mem = memory();
@@ -440,7 +440,7 @@ void StreetsOfRage::sub_014c38(m_long /*entry_*/) {
 // +$9 bit 1). Widescreen uses the wider clamp, cam+$140 and cam, so the enemy stands at the margin of
 // the wider screen. The tests and the walk itself are the generated subroutines.
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_00f4a6(m_long /*entry_*/) {
+void StreetsOfRage::jack_retreat_to_screen_edge(m_long /*entry_*/) {
     traceEnter(0x0000F4A6u);
 
     auto &mem = memory();
@@ -504,7 +504,7 @@ void StreetsOfRage::sub_00f4a6(m_long /*entry_*/) {
 // scrolls the other way: there the two are swapped, and the unforced test is the camera's right edge,
 // cam+$144, which widescreen moves out to cam+$164.
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_00a59c(m_long /*entry_*/) {
+void StreetsOfRage::ordinary_enemy_wait_until_on_screen(m_long /*entry_*/) {
     traceEnter(0x0000A59Cu);
 
     auto &mem = memory();
@@ -545,7 +545,7 @@ void StreetsOfRage::sub_00a59c(m_long /*entry_*/) {
         return;
     }
 
-    SOR_CALL(sub_0097e6, 0x0000A5BCu, 0x000097E6u);
+    SOR_CALL(object_on_screen_margin_test, 0x0000A5BCu, 0x000097E6u);
     if (cpu().flagZ())
         finish(0);
     else
@@ -619,7 +619,7 @@ void StreetsOfRage::round8_table_state0_wait_and_arm(m_long /*entry_*/) {
 // down: the landing lane is looked up, the hold on the ground is cleared and the action restarts. The edge
 // is the screen's own, so widescreen moves it to cam+$180.
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_0040a6(m_long /*entry_*/) {
+void StreetsOfRage::police_special_recover_player_off_screen_right(m_long /*entry_*/) {
     traceEnter(0x000040A6u);
 
     auto &mem = memory();

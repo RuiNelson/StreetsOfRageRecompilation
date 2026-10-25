@@ -247,7 +247,7 @@ independent implementations.
 A small number of state handlers across the whole ROM (six, found by
 searching every `jsr $00AD04` call site) perform a **direct, explicit**
 collision test against the current target's cached body box, independent of
-the generic per-frame `$AAA0`/`$AB24` pipeline every object goes through
+the generic per-frame `$AAA0 (resolve_enemy_player_contact)`/`$AB24` pipeline every object goes through
 regardless of state:
 
 ```text
@@ -276,7 +276,7 @@ is the same shape id reached by two unrelated methods.
 not a real strike — most ordinary-enemy attacks are never gated by this
 manual `$AD04` shortcut at all and rely solely on the generic per-frame
 pipeline (whatever `+$02`/`+$03` the currently displayed animation frame
-sets, tested every object, every frame, by `$AAA0`). In particular:
+sets, tested every object, every frame, by `$AAA0 (resolve_enemy_player_contact)`). In particular:
 
 - type `$20`'s **other** state, `$0A` (`$D8EC`, also documented as
   `ATTACKING` from live testing), does not call `$AD04` at all — it toggles
@@ -316,7 +316,7 @@ sign chosen by comparing the enemy's own position against the target's
 the same state) — i.e. "move toward the target," not a fixed vector. This
 state never calls `$AD04` and its own animation carries no long-reach
 shape; the hit, when it lands, is decided by the generic per-frame
-`$AAA0`/`$AB24` pipeline testing Signal's *ordinary* body box once the
+`$AAA0 (resolve_enemy_player_contact)`/`$AB24` pipeline testing Signal's *ordinary* body box once the
 slide's own velocity has carried it into the player, not by an extended
 attack box being tested from a stationary origin.
 
@@ -455,7 +455,7 @@ twelve bytes are the relative table of his `$28` helper (`$103A2`, used by
 | `$0A` | `$F6BC (ordinary_enemy_special_lunge)` | Diagonal back-off onto the target's lane |
 | `$0B` | `$F728` | Aligned throw (both juggled axes) |
 | `$0C` | `$F55E` | Juggle approach |
-| `$0D` | `$F4A6` | Retreat to the screen edge |
+| `$0D` | `$F4A6 (jack_retreat_to_screen_edge)` | Retreat to the screen edge |
 | `$0E` | `$F410` | Ranged throw, three axes |
 | `$0F` | `$F2E6` | Jump |
 | `$10` | `$F3B6` | Look about: **no contact test at all** |
@@ -477,7 +477,7 @@ batch, several two-player only) and personality 3 in round 5.
   back-off `$0A`, 40-64 px a reset, closer a 40 px back-off at 3.5 px an
   update and the gate again. `$F6BC (ordinary_enemy_special_lunge)`'s diagonal ends within 8 lanes of the
   target (off screen, in `$07`), and `$F728` stands and throws.
-- **1, retreat and ranged throw.** `$F4A6` walks to the screen edge behind
+- **1, retreat and ranged throw.** `$F4A6 (jack_retreat_to_screen_edge)` walks to the screen edge behind
   him (`cam_x + $120` facing left, `cam_x + $20` facing right) over eight legs
   at random lanes (`$F53C`) and speeds (2.5-5 px an update, `$DD68`), then
   `$F410` throws. The target within 64 px on X (`$F482`) aborts either into
@@ -571,7 +571,7 @@ reflects it back along the street.
 ### Contact and the hold
 
 A player's walking box on his body with 8 px of height is the grab
-(`$AAA0`); only the states above that run a contact test can be grabbed (`$10`
+(`$AAA0 (resolve_enemy_player_contact)`); only the states above that run a contact test can be grabbed (`$10`
 and the knockdown cannot). A held ordinary enemy never breaks free. The hold
 places him 32 px in front of the holder (28 in a back hold) on the holder's
 lane, and his axes still in the air follow him, so a **front hold on a
@@ -710,9 +710,9 @@ first), `$991A (ordinary_enemy_begin_knockdown)` knockdown (`$D948` for `$20`/`$
 
 `$A9BA` calls `$AA22`, whose `$AA34` first walks the registered attackers at
 `$FFFB22` (up to five: thrown bodies, a swung or thrown weapon) through
-`$ABA4` -- the attacker's `+$02` box on this enemy's `+$03` body is code 5,
+`$ABA4 (resolve_enemy_registered_attacker_contact)` -- the attacker's `+$02` box on this enemy's `+$03` body is code 5,
 this enemy's box on the attacker's body code 4 (both only with this enemy's
-screen X in `[$78, $1C8)`) -- and only then each player through `$AAA0`:
+screen X in `[$78, $1C8)`) -- and only then each player through `$AAA0 (resolve_enemy_player_contact)`:
 
 1. the player's cached attack box (`+$64`) on the enemy's body: with the
    player's `+$34` non-zero a strike (code 2, the hitstun, screen X in
@@ -1484,7 +1484,7 @@ only then steps the frame (`$B0C8`), so the frame on screen is the one that
 collides on his next update, and the first kick box is live one update after
 the gate fires.
 
-**Contact order** (`$AAA0`, player side): the player's attack box `+$64` --
+**Contact order** (`$AAA0 (resolve_enemy_player_contact)`, player side): the player's attack box `+$64` --
 while walking, the walk animation's box, Axel 0..16, Adam 0..20, Blaze 0..19
 px ahead -- is tested against his body box *first*. On overlap with the
 player's `+$34` clear, `+$4C` clear and the two within 8 px of height it is
@@ -1525,7 +1525,7 @@ Live capture, round 1, one-player Blaze (autoplay's `tools/antonio_diag.py`
 plus raw object dumps):
 
 - A player who walks into Antonio without attacking takes a **real hold** —
-  the same `$AAA0` contact code path ordinary enemies use. Front hold
+  the same `$AAA0 (resolve_enemy_player_contact)` contact code path ordinary enemies use. Front hold
   `$60`/`$61` accepts B (knee, 2 damage) and C (crossover to back hold
   `$66`/`$67`); B there is the suplex `$68`/`$69`, 5 damage, and it drops him
   into primary `$07`.
@@ -1536,7 +1536,7 @@ plus raw object dumps):
   punch" from "in the player's hands".
 - The **player** side does carry the link: `+$4C` holds the low word of the
   held object's address (`$FFB900 (object_table)` for object-table slot 0). This is the same
-  field `$AAA0` requires to be zero before it will issue a fresh grab code,
+  field `$AAA0 (resolve_enemy_player_contact)` requires to be zero before it will issue a fresh grab code,
   so it is the ROM's own "what am I holding". The player's `+$60`
   (`OBJ_HELD_TYPE`) is **not** it: that is the weapon/pickup link written by
   `$3136 (find_close_interaction_target)`, and during an Antonio hold it reads `$00`, or the type of a weapon
@@ -1928,7 +1928,7 @@ path moves him 1px per update on X and either mirrors the target's lane or
 drifts up 1px per update. The 4px-per-update rush, with its lane homing to
 18-21px above the target (`$179AC`), runs when the target faces away from him.
 
-**Grab beats hit.** `$AAA0` tests the player's attack box `+$64` against the
+**Grab beats hit.** `$AAA0 (resolve_enemy_player_contact)` tests the player's attack box `+$64` against the
 enemy's body box first, and when they overlap it returns without testing the
 enemy's own attack box that frame. The overlap is a grab (code 3) when the
 player's `+$34` is clear (no strike live), `+$4C` is clear (nothing already
@@ -2070,7 +2070,7 @@ players and the objects).
   pauses again.
 - **State 7**: the set-up (`$14BEC`) turns a 12 px/update X velocity toward
   the target and zeroes the lane speed -- **the lane he starts on is the lane
-  he keeps**, and nothing re-aims the run. Each run update (`$14C38`) tests
+  he keeps**, and nothing re-aims the run. Each run update (`$14C38 (abadede_state7_run_update)`) tests
   contact, then, while `|dx| >= $10`, steps and stops at a screen edge
   (`+$28` as the last render left it: `<= $80` running left, `>= $1C0`
   running right) into the pause with `+$54` = 1. Under `$10` the brake: 2
@@ -2082,7 +2082,7 @@ players and the objects).
 His update is the only place his contact is tested (`$154E0` calls `$AA22`),
 in states 1, 2, 3 and the charge's run and punch. The shake, the brake, the
 hold states, the knockdown and the getting-up test nothing: he can be
-neither hit nor grabbed there, and hurts no one. `$AAA0` tests the player's
+neither hit nor grabbed there, and hurts no one. `$AAA0 (resolve_enemy_player_contact)` tests the player's
 attack box against his body first, and his attack box against the player's
 body only when that misses. The boxes (set `$34B94`; shapes `$1A68E`, lanes
 `$1AB8E`) are the same on every frame of the animations he fights in:
@@ -2246,7 +2246,7 @@ not). Its update:
 `$A3` spans x -16..+56 about the flame -- **+4..+76 ahead of him** -- and
 lane -10..+24 about its own lane: **-6..+28 of his**. Against a player body
 (lane -8..+8, inclusive compares) that is every lane from 14 above him to 36
-below. It has **no body box**, so in `$AAA0` it always takes the "object's
+below. It has **no body box**, so in `$AAA0 (resolve_enemy_player_contact)` it always takes the "object's
 attack box on the player's body" path: nothing a player does touches it, and
 the grab path that shields a holding player from, say, Antonio's kick is
 never entered -- a holder is hit like anyone else.
@@ -2507,7 +2507,7 @@ function approach_path(boss):
     dispatch +$67 via $17A5C       ; table $15A5E
 ```
 
-`d7 == 1` is `$AAA0`'s "its attack box on the target's body" -- and the
+`d7 == 1` is `$AAA0 (resolve_enemy_player_contact)`'s "its attack box on the target's body" -- and the
 approach path clears the code the same update, so **in state 1 the approach
 twin never damages anyone** (its idle and walk carry the `$8F` box for the
 grab path's sake).
@@ -2649,7 +2649,7 @@ listed player updates.
 Adam's chord is a hop: `+$24` = -6.25, gravity 0.90625, his feet 24 px up at
 the top. With a weapon in hand the chord is action `$4A` (`$4C` for Adam) --
 the same animation, box and damage. Every live frame's descriptor carries hit
-property 1, which `$AAA0` ORs into the twin's `+$37`: the strike is a
+property 1, which `$AAA0 (resolve_enemy_player_contact)` ORs into the twin's `+$37`: the strike is a
 **knockdown**. `$17C36 (boss_apply_pending_damage)` applies it on the twin's *next*
 update: 5 px an update away from the attacker with `+$24` = -5, `$163D0`'s
 gravity of 1.0 and one bounce (`+$24` = -3): **90 px in 18 updates**, 30
@@ -2658,7 +2658,7 @@ none of it with a box. Blaze's body box moves *behind* her for the chord
 (`$75`/`$77`, -13..-5 / -7..-2): a grab twin already inside ~32 px takes her
 during the startup.
 
-`$AAA0` tests the player's attack box against the twin's body **before** the
+`$AAA0 (resolve_enemy_player_contact)` tests the player's attack box against the twin's body **before** the
 twin's box against the player: a strike on the update a kick or a grab box
 would land wins, and hides the actor from the twin's box for that update. A
 strike registers only with the twin's `+$28` in [`$78`, `$1C8`).
@@ -2891,7 +2891,7 @@ shape table `$1A68E`. The body (`$38`) is 16 px wide (X +-8), lane +-8, 80 px
 tall. **Only the lunge carries an attack box** (`$3A`/`$39`: 8 px behind to 64
 ahead, lane +-8, his whole height), for all 11 of its updates, and it lands his
 `+$34` (34 on Normal). The walk, the walk up to the gun, the wait and the fire
-carry none: walking into him there, `$AAA0` tests the player's box on his body
+carry none: walking into him there, `$AAA0 (resolve_enemy_player_contact)` tests the player's box on his body
 first, and a walking box is a hold.
 
 A bullet (`$140EA (mr_x_bullet_setup)`) is placed from his origin by
