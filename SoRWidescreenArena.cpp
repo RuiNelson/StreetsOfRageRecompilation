@@ -621,18 +621,42 @@ void StreetsOfRage::round8_table_state0_wait_and_arm(m_long /*entry_*/) {
 //
 // While the police special runs, a player who ends up beyond cam+$160 (thrown off the screen) is put back
 // down: the landing lane is looked up, the hold on the ground is cleared and the action restarts. The edge
-// is the screen's own, so widescreen moves it to cam+$180.
+// is the screen's own, so widescreen moves it to cam+$180. The flags it returns matter more than its effect: see the
+// comment on the exits below.
 // ---------------------------------------------------------------------------
-void StreetsOfRage::police_special_recover_player_off_screen_right(m_long /*entry_*/) {
+void StreetsOfRage::police_special_player_update_gate(m_long /*entry_*/) {
     traceEnter(0x000040A6u);
 
     auto &mem = memory();
     const m_word grow   = vdp().widescreen() ? kArenaGrow : 0u;
     const m_long player = cpu().a[0];
 
-    if (mem.readByte(kPoliceSpecialActive) == 0 || mem.readLong(player + 0x24) != 0 ||
-        (mem.readByte(player + 0x59) & 0x02u) != 0 ||
-        mem.readWord(player + 0x10) < static_cast<m_word>(mem.readWord(kCamX) + 0x0160u + grow)) {
+    // The caller (update_player_object) skips the rest of the player's update on `bne` after this routine, so
+    // the Z flag at each exit is part of its result: while a police special runs, every exit but the last
+    // leaves Z clear and the player's input is ignored; with no special running, Z is set.
+    if (mem.readByte(kPoliceSpecialActive) == 0) {
+        cpu().setNZClearVC(0, 0x80u);
+        cpu().ssp += 4;
+        return;
+    }
+    const m_long verticalVelocity = mem.readLong(player + 0x24);
+    if (verticalVelocity != 0) {
+        cpu().setNZClearVC(verticalVelocity, 0x80000000u);
+        cpu().ssp += 4;
+        return;
+    }
+    if ((mem.readByte(player + 0x59) & 0x02u) != 0) {
+        cpu().setFlagZ(false);
+        cpu().ssp += 4;
+        return;
+    }
+    const m_word x    = mem.readWord(player + 0x10);
+    const m_word edge = static_cast<m_word>(mem.readWord(kCamX) + 0x0160u + grow);
+    const m_word diff = static_cast<m_word>(x - edge);
+    const bool   carry    = x < edge;
+    const bool   overflow = (((x ^ edge) & (x ^ diff)) & 0x8000u) != 0;
+    cpu().setNZVC(diff, 0x8000u, overflow, carry);
+    if (carry) {
         cpu().ssp += 4;
         return;
     }

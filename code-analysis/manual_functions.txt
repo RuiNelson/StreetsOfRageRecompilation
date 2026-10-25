@@ -37,7 +37,7 @@
 00F4A6 # jack_retreat_to_screen_edge (enemy walks to the screen side)
 00A59C # ordinary_enemy_wait_until_on_screen (scripted object activated by the screen)
 007546 # round8_table_state0_wait_and_arm
-0040A6 # police_special_recover_player_off_screen_right (player carried off the right edge in a police special)
+0040A6 # police_special_player_update_gate (freezes the players during a police special)
 00B0FE # cull_sprite_piece_x (sprite pieces at the far left edge)
 000CC0 # spawn_object_batch (wave columns created past the old screen edge)
 
