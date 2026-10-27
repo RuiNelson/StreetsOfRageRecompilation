@@ -124,6 +124,12 @@ The generated `StreetsOfRage` constructor (hardcoded in the decompiler's
 per scanline are drawn instead of clipped at the hardware 20 (H40) / 16 (H32)
 limit. SOVR is still set as on hardware, so game logic reading it is unaffected.
 
+## Host flags (`GET_FLAGS`)
+
+`main.cpp` publishes the launch options through `RemoteAccess::setFlag`: flag 0
+is `--widescreen`, flag 1 is `--altControls` (6-button). `autoplay`'s
+`host_flags.py` mirrors the indices; change both together.
+
 ## Widescreen (`--widescreen`)
 
 `sor --widescreen` calls `MegaDriveEnvironment::setWidescreen(true)` from

@@ -89,6 +89,11 @@ int main(int argc, char *argv[]) {
                           debugUtilsFlag ? static_cast<std::uint16_t>(remoteAccessPort) : 0);
         configureEnvironment(sor);
         SoRCheats::setAltControlsEnabled(altControlsFlag);
+        // Host mode flags for GET_FLAGS; the indices are mirrored by autoplay/src/sor_autoplay/host_flags.py.
+        constexpr std::size_t kFlagWidescreen = 0;
+        constexpr std::size_t kFlagSixButton  = 1;
+        sor.remoteAccess().setFlag(kFlagWidescreen, widescreenFlag);
+        sor.remoteAccess().setFlag(kFlagSixButton, altControlsFlag);
         sor.setDebugLog(sorDebugFlag);
         sor.setDebugUtilities(debugUtilsFlag);
         sor.setStartFullscreen(fullScreenFlag);
