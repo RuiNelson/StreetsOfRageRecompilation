@@ -179,8 +179,7 @@ ROM routine unchanged otherwise: the player clamp (`$43AA`), `spawn_single_objec
 (`$14C38`), an enemy's walk to the screen side (`$F4A6`), the scripted-object activation (`$A59C`), round 8's thrown table
 (`$7546`) the police-special recovery (`$40A6`), the wave batch placement (`$CC0`: objects created beyond the old
 screen edge are placed `$20` further out, or they would activate at once and pop into the widened screen) and the sprite-piece cull (`$B0FE`, whose left bound `$60` made sprites vanish
-while still partly visible at the far left of the widescreen). `autoplay` is not touched until the user says the widescreen
-feature is complete. Never patch the ROM (the boot checksum hangs the game) and
+while still partly visible at the far left of the widescreen). `autoplay` follows it (`GET_FLAGS` flag 0, `autoplay/CLAUDE.md` **Widescreen**). Never patch the ROM (the boot checksum hangs the game) and
 never edit `MegaDriveEnvironment` for game rules. A port must also leave the CCR flags the caller branches on
 exactly as the ROM does at every exit: `update_player_object` skips the player's update on `bne` after
 `$40A6 (police_special_player_update_gate)`, and that Z flag is the whole of the police special's freeze. The full table, the checks and what is left are in
