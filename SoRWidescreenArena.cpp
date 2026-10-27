@@ -849,3 +849,184 @@ void StreetsOfRage::spawn_object_batch(m_long /*entry_*/) {
     cpu().a[2] = record;
     cpu().ssp += 4;
 }
+
+// ---------------------------------------------------------------------------
+// The "ROUND n" banner (level intro substates 0, 2 and 6)
+//
+// The banner is eleven hardware sprites at the head of the sprite buffer $FFDA10, copied there at round start
+// from the ROM template $1079A: five on the left ("ROUND"), the round number in the middle, five on the right.
+// Substate 2 ($11A76) slides the halves in by 4 pixels a frame and drops the number by 4, until the last right
+// sprite is below $178 (35 frames); substate 6 ($11AC4) slides them out by 6 and lifts the number by 6, until
+// that sprite reaches $200 (24 frames). The template's halves sit just outside the 320-pixel sprite window
+// ([$80, $1C0) in raw X), and so do the positions they slide out to, but inside widescreen's [$60, $1E0): the
+// letters showed in the side margins during the fade-in, and again after sliding out. Under --widescreen the
+// halves start and end kArenaGrow further out and cover the extra distance in the same number of frames; the
+// number's Y, the frame counts and the substate changes are the ROM's, so the intro's timing is unchanged. The
+// step is read from the number sprite's Y, which moves the same in both modes.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+constexpr m_long kBannerSprites  = 0xFFFFDA10u;
+constexpr m_long kBannerTemplate = 0x0001079Au;
+constexpr m_long kIntroSubstate  = 0xFFFFFB48u;
+constexpr m_long kIntroTimer     = 0xFFFFFB4Au;
+constexpr int    kBannerHalf     = 5; // sprites 0-4 left, 5 the number, 6-10 right
+
+m_long bannerSprite(int index) { return kBannerSprites + static_cast<m_long>(index) * 8u; }
+m_long bannerTemplate(int index) { return kBannerTemplate + static_cast<m_long>(index) * 8u; }
+
+// Frames the ROM takes to slide the banner in ($11A76's stop test) and out ($11AC4's).
+int bannerSlideInFrames(SystemMemory &mem) {
+    int    frames = 0;
+    m_word x      = mem.readWord(bannerTemplate(2 * kBannerHalf) + 6);
+    do {
+        x = static_cast<m_word>(x - 4u);
+        ++frames;
+    } while (x >= 0x0178u);
+    return frames;
+}
+
+int bannerSlideOutFrames(SystemMemory &mem) {
+    int    frames = 0;
+    m_word x      = static_cast<m_word>(mem.readWord(bannerTemplate(2 * kBannerHalf) + 6) - 4u * bannerSlideInFrames(mem));
+    do {
+        x = static_cast<m_word>(x + 6u);
+        ++frames;
+    } while (x < 0x0200u);
+    return frames;
+}
+
+// A sprite whose 9-bit X is 0 is not drawn but masks the sprites after it on its lines: the template's last right
+// sprite ($200) is one. It keeps the ROM's X so the mask stays.
+m_word widenBannerX(m_word x, int extra) {
+    return (x & 0x01FFu) == 0 ? x : static_cast<m_word>(x + extra);
+}
+
+// Writes the halves' X for a banner `travel` pixels in from the template, each half `extra` further out.
+void placeBannerHalves(SystemMemory &mem, int travel, int extra) {
+    for (int i = 0; i < kBannerHalf; ++i) {
+        const m_word left  = static_cast<m_word>(mem.readWord(bannerTemplate(i) + 6) + travel);
+        const m_word right = static_cast<m_word>(mem.readWord(bannerTemplate(kBannerHalf + 1 + i) + 6) - travel);
+        mem.writeWord(bannerSprite(i) + 6, widenBannerX(left, -extra));
+        mem.writeWord(bannerSprite(kBannerHalf + 1 + i) + 6, widenBannerX(right, extra));
+    }
+}
+
+} // namespace
+
+// ---------------------------------------------------------------------------
+// $011A68 — level_intro_wait_fade_in
+//
+// Intro substate 0: fades palette colours 0-16 in ($105CE) and advances when the fade counter runs out. The
+// banner waits at its template position meanwhile; widescreen moves its halves out of the side margins.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::level_intro_wait_fade_in(m_long /*entry_*/) {
+    traceEnter(0x00011A68u);
+
+    if (vdp().widescreen())
+        placeBannerHalves(memory(), 0, kArenaGrow);
+
+    cpu().d[6] = 0x10u;
+    SOR_CALL(sub_0105ce, 0x00011A6Eu, 0x000105CEu);
+    if (cpu().eq()) {
+        const m_word substate = memory().readWord(kIntroSubstate);
+        const m_word next     = static_cast<m_word>(substate + 2u);
+        memory().writeWord(kIntroSubstate, next);
+        const bool carry = next < substate;
+        cpu().setNZVCX(next, 0x8000u, ((~(substate ^ 2u) & (substate ^ next)) & 0x8000u) != 0, carry, carry);
+    }
+    cpu().ssp += 4;
+}
+
+// ---------------------------------------------------------------------------
+// $011A76 — level_intro_banner_slide_in
+//
+// Intro substate 2: left half +4, number Y +4, right half -4; once the last right sprite is below $178, waits
+// $60 frames (substate 4) and jumps to play_level_music.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::level_intro_banner_slide_in(m_long /*entry_*/) {
+    traceEnter(0x00011A76u);
+
+    auto      &mem = memory();
+    const bool wide = vdp().widescreen();
+
+    const m_long number = bannerSprite(kBannerHalf);
+    mem.writeWord(number, static_cast<m_word>(mem.readWord(number) + 4u));
+    m_word last = 0;
+    if (wide) {
+        const int frames = bannerSlideInFrames(mem);
+        const int step   = (mem.readWord(number) - mem.readWord(bannerTemplate(kBannerHalf))) / 4;
+        placeBannerHalves(mem, 4 * step, kArenaGrow * (frames - step) / frames);
+        last = static_cast<m_word>(mem.readWord(bannerTemplate(2 * kBannerHalf) + 6) - 4 * step);
+    } else {
+        for (int i = 0; i < kBannerHalf; ++i) {
+            const m_long left  = bannerSprite(i) + 6;
+            const m_long right = bannerSprite(kBannerHalf + 1 + i) + 6;
+            mem.writeWord(left, static_cast<m_word>(mem.readWord(left) + 4u));
+            mem.writeWord(right, static_cast<m_word>(mem.readWord(right) - 4u));
+        }
+        last = mem.readWord(bannerSprite(2 * kBannerHalf) + 6);
+    }
+    cpu().a[1] = bannerSprite(2 * kBannerHalf + 1);
+    cpu().setDw(7, 0xFFFFu);
+    cpu().setFlag(CPU68K::FlagX, static_cast<m_word>(last + 4u) >= 4u);
+
+    const m_word diff = static_cast<m_word>(last - 0x0178u);
+    cpu().setNZVC(diff, 0x8000u, (((last ^ 0x0178u) & (last ^ diff)) & 0x8000u) != 0, last < 0x0178u);
+    if (last >= 0x0178u) {
+        cpu().ssp += 4;
+        return;
+    }
+    mem.writeWord(kIntroSubstate, static_cast<m_word>(mem.readWord(kIntroSubstate) + 2u));
+    cpu().setFlag(CPU68K::FlagX, false);
+    mem.writeWord(kIntroTimer, 0x0060u);
+    cpu().setNZClearVC(0x60u, 0x8000u);
+    play_level_music(0x00011B12u);
+}
+
+// ---------------------------------------------------------------------------
+// $011AC4 — level_intro_banner_slide_out
+//
+// Intro substate 6: left half -6, number Y -6, right half +6; once the last right sprite reaches $200, waits
+// $30 frames (substate 8) before level_intro_finish.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::level_intro_banner_slide_out(m_long /*entry_*/) {
+    traceEnter(0x00011AC4u);
+
+    auto      &mem = memory();
+    const bool wide = vdp().widescreen();
+
+    const m_long number = bannerSprite(kBannerHalf);
+    mem.writeWord(number, static_cast<m_word>(mem.readWord(number) - 6u));
+    m_word last = 0;
+    if (wide) {
+        const int in     = bannerSlideInFrames(mem);
+        const int frames = bannerSlideOutFrames(mem);
+        const int top    = mem.readWord(bannerTemplate(kBannerHalf)) + 4 * in;
+        const int step   = (top - mem.readWord(number)) / 6;
+        placeBannerHalves(mem, 4 * in - 6 * step, kArenaGrow * step / frames);
+        last = static_cast<m_word>(mem.readWord(bannerTemplate(2 * kBannerHalf) + 6) - 4 * in + 6 * step);
+    } else {
+        for (int i = 0; i < kBannerHalf; ++i) {
+            const m_long left  = bannerSprite(i) + 6;
+            const m_long right = bannerSprite(kBannerHalf + 1 + i) + 6;
+            mem.writeWord(left, static_cast<m_word>(mem.readWord(left) - 6u));
+            mem.writeWord(right, static_cast<m_word>(mem.readWord(right) + 6u));
+        }
+        last = mem.readWord(bannerSprite(2 * kBannerHalf) + 6);
+    }
+    cpu().a[1] = bannerSprite(2 * kBannerHalf + 1);
+    cpu().setDw(7, 0xFFFFu);
+    cpu().setFlag(CPU68K::FlagX, last < 6u);
+
+    const m_word diff = static_cast<m_word>(last - 0x0200u);
+    cpu().setNZVC(diff, 0x8000u, (((last ^ 0x0200u) & (last ^ diff)) & 0x8000u) != 0, last < 0x0200u);
+    if (last >= 0x0200u) {
+        mem.writeWord(kIntroSubstate, static_cast<m_word>(mem.readWord(kIntroSubstate) + 2u));
+        cpu().setFlag(CPU68K::FlagX, false);
+        mem.writeWord(kIntroTimer, 0x0030u);
+        cpu().setNZClearVC(0x30u, 0x8000u);
+    }
+    cpu().ssp += 4;
+}

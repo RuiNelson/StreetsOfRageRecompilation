@@ -40,6 +40,9 @@
 0040A6 # police_special_player_update_gate (freezes the players during a police special)
 00B0FE # cull_sprite_piece_x (sprite pieces at the far left edge)
 000CC0 # spawn_object_batch (wave columns created past the old screen edge)
+011A68 # level_intro_wait_fade_in (ROUND banner kept out of the side margins)
+011A76 # level_intro_banner_slide_in
+011AC4 # level_intro_banner_slide_out
 
 # Mode-select, OPTIONS, and character-select flow.
 000FE8 # init_game_start_screen
