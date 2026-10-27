@@ -762,8 +762,9 @@ void StreetsOfRage::cull_sprite_piece_x(m_long /*entry_*/) {
 // and props keep their X (walksIntoView), and so does an enemy waiting behind a shop front
 // (waitsBehindShutter), whose shutter is created at its X: they belong to the background, and moving them
 // showed round 1's shutters and round 2's posters and pipes 32 pixels off their place in it. Objects
-// gated by the camera (+$40 bit 7) keep their X: they wake when cam_x passes it, and the camera's lock
-// at the wave gate is the same in both modes.
+// gated by the camera keep their X: they wake when the camera passes it, and the camera's lock at the
+// wave gate is the same in both modes. Which objects those are depends on the round ($A59C): +$40 bit 7
+// set in rounds 1-7, bit 7 clear in round 8, which scrolls left.
 // ---------------------------------------------------------------------------
 void StreetsOfRage::spawn_object_batch(m_long /*entry_*/) {
     traceEnter(0x00000CC0u);
@@ -802,11 +803,15 @@ void StreetsOfRage::spawn_object_batch(m_long /*entry_*/) {
                 mem.writeByte(object + 0x41, mem.readByte(record++));
                 mem.writeByte(object + 0x49, mem.readByte(record++));
                 m_word x = static_cast<m_word>((mem.readWord(kSpawnXBase) & 0xFF00u) | mem.readByte(record++));
-                // An object with +$40 bit 7 set waits for the camera to pass its X ($A59C), not for the screen
-                // test, and the camera stops at the wave's lock. Moving it out by $20 can put it beyond the lock,
+                // A camera-gated object waits for the camera to pass its X ($A59C), not for the screen test,
+                // and the camera stops at the wave's lock. Moving it out by $20 can put it beyond the lock,
                 // where it never wakes (and the next section's art check, $884, resets the console on it).
+                // That is +$40 bit 7 set (cam_x passing it), except in round 8, where it is bit 7 clear
+                // (cam_x+$144 passing it): round 8's last wave left a HakuRo asleep at the lock that way.
                 const m_byte personality = mem.readByte(object + 0x40);
-                if (grow != 0 && walksIntoView(type) && (personality & 0x80u) == 0
+                const bool   forced      = (personality & 0x80u) != 0;
+                const bool   cameraGated = mem.readWord(kLevel) == 7u ? !forced : forced;
+                if (grow != 0 && walksIntoView(type) && !cameraGated
                     && !waitsBehindShutter(mem, type, personality)) {
                     const std::int16_t rel = static_cast<std::int16_t>(x - mem.readWord(kCamX));
                     if (rel >= 0x0140)
