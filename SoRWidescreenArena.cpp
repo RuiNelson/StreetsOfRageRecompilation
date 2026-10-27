@@ -47,6 +47,44 @@ m_long signExtendWord(m_long value) {
     return static_cast<m_long>(static_cast<std::int32_t>(static_cast<std::int16_t>(value & 0xFFFFu)));
 }
 
+// The wave objects that walk into the screen: the ordinary enemies ($20-$2A) and the bosses. Everything else a
+// wave column creates is scenery or a prop placed on the background (round 1's shutters $54, round 2's
+// posters and pipes $13/$14, the breakables), which must stay where the ROM puts it.
+bool walksIntoView(m_byte type) {
+    if (type >= 0x20u && type <= 0x2Au)
+        return true;
+    return type == 0x30u || (type >= 0x55u && type <= 0x58u);
+}
+
+// An enemy that waits behind a shop front. Its personality (+$40 low nibble) picks its first state through the
+// type's own table, and the state handler $DDE6 creates the shutter ($54) at the enemy's X: round 1's green
+// shutters. Moving such an enemy moves its shutter off the background's doorway. Two types reach $DDE6:
+// Garcia $22/$32 (personality table $DDDA, six entries, state table $DD80) and Nora $26 (personality table
+// $F0F6, three entries, state table $10362).
+constexpr m_long kShutterStateHandler = 0x0000DDE6u;
+
+bool waitsBehindShutter(SystemMemory &mem, m_byte type, m_byte personality) {
+    m_long personalities = 0;
+    m_long states        = 0;
+    m_byte count         = 0;
+    if (type == 0x22u || type == 0x32u) {
+        personalities = 0x0000DDDAu;
+        states        = 0x0000DD80u;
+        count         = 6;
+    } else if (type == 0x26u) {
+        personalities = 0x0000F0F6u;
+        states        = 0x00010362u;
+        count         = 3;
+    } else {
+        return false;
+    }
+    const m_byte index = static_cast<m_byte>(personality & 0x0Fu);
+    if (index >= count)
+        return false;
+    const m_byte state = mem.readByte(personalities + index * 2u);
+    return mem.readWord(states + state * 2u) == kShutterStateHandler;
+}
+
 } // namespace
 
 // Soft 68000 jsr into generated code: push the return PC, call, and leave this routine if the callee
@@ -719,8 +757,11 @@ void StreetsOfRage::cull_sprite_piece_x(m_long /*entry_*/) {
 // ($97E6, widened) accepts it, so one created just past the screen's right edge waits, unseen, until the
 // camera brings it in. In widescreen that edge moved out by $20, and an object created within the new
 // visible band would be accepted at once and appear abruptly, with the enemy standing inside the screen. So
-// under --widescreen an object created beyond the original screen edge is placed $20 further out (the
-// same distance past the widened edge as it was past the original), and likewise on the left. Objects
+// under --widescreen an enemy or boss created beyond the original screen edge is placed $20 further out
+// (the same distance past the widened edge as it was past the original), and likewise on the left. Scenery
+// and props keep their X (walksIntoView), and so does an enemy waiting behind a shop front
+// (waitsBehindShutter), whose shutter is created at its X: they belong to the background, and moving them
+// showed round 1's shutters and round 2's posters and pipes 32 pixels off their place in it. Objects
 // gated by the camera (+$40 bit 7) keep their X: they wake when cam_x passes it, and the camera's lock
 // at the wave gate is the same in both modes.
 // ---------------------------------------------------------------------------
@@ -764,7 +805,9 @@ void StreetsOfRage::spawn_object_batch(m_long /*entry_*/) {
                 // An object with +$40 bit 7 set waits for the camera to pass its X ($A59C), not for the screen
                 // test, and the camera stops at the wave's lock. Moving it out by $20 can put it beyond the lock,
                 // where it never wakes (and the next section's art check, $884, resets the console on it).
-                if (grow != 0 && (mem.readByte(object + 0x40) & 0x80u) == 0) {
+                const m_byte personality = mem.readByte(object + 0x40);
+                if (grow != 0 && walksIntoView(type) && (personality & 0x80u) == 0
+                    && !waitsBehindShutter(mem, type, personality)) {
                     const std::int16_t rel = static_cast<std::int16_t>(x - mem.readWord(kCamX));
                     if (rel >= 0x0140)
                         x = static_cast<m_word>(x + grow);

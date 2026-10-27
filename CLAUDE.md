@@ -136,9 +136,9 @@ is `--widescreen`, flag 1 is `--altControls` (6-button). `autoplay`'s
 `main.cpp`, switching the VDP from Mode 40 to the host-only Mode 48 (48×27
 tiles, 384×216; see `MegaDriveEnvironment/README.md`). Game logic, the work-RAM
 state and the 320×224 timing are untouched, so `autoplay` addresses and
-coordinates are unchanged; only the output grew. Sprites are shifted 32 px right
-of Mode 40 relative to the backgrounds (sprite origin 96, background unshifted):
-sprites keep their place relative to the screen centre. Remote snapshots
+coordinates are unchanged; only the output grew. Every layer is centred: planes
+(from plane pixel -32), sprites (origin 96) and the window all sit 32 px right of
+Mode 40, so sprites stay aligned with the backgrounds. Remote snapshots
 (`read_framebuffer`) are 384×216 in this mode.
 
 The gameplay HUD is the window plane (rows 0-3 at VRAM `$D000`): the static
@@ -177,8 +177,10 @@ The game's own screen edges are 320-pixel assumptions. Hand-written ports (liste
 ROM routine unchanged otherwise: the player clamp (`$43AA`), `spawn_single_object` (`$C60`), the on-screen tests
 (`$97CE`, `$97E6`), the attack hit window (`$AAA0`, `$ABA4`), the locked-arena push-back (`$6A6`), the charging boss
 (`$14C38`), an enemy's walk to the screen side (`$F4A6`), the scripted-object activation (`$A59C`), round 8's thrown table
-(`$7546`) the police-special recovery (`$40A6`), the wave batch placement (`$CC0`: objects created beyond the old
-screen edge are placed `$20` further out, or they would activate at once and pop into the widened screen) and the sprite-piece cull (`$B0FE`, whose left bound `$60` made sprites vanish
+(`$7546`) the police-special recovery (`$40A6`), the wave batch placement (`$CC0`: enemies and bosses created beyond the old
+screen edge are placed `$20` further out, or they would activate at once and pop into the widened screen; scenery, props
+and an enemy waiting behind a shop front -- whose first state `$DDE6` creates the shutter `$54` at its X -- keep their X,
+or they leave their place in the background) and the sprite-piece cull (`$B0FE`, whose left bound `$60` made sprites vanish
 while still partly visible at the far left of the widescreen). `autoplay` follows it (`GET_FLAGS` flag 0, `autoplay/CLAUDE.md` **Widescreen**). Never patch the ROM (the boot checksum hangs the game) and
 never edit `MegaDriveEnvironment` for game rules. A port must also leave the CCR flags the caller branches on
 exactly as the ROM does at every exit: `update_player_object` skips the player's update on `bne` after
