@@ -185,6 +185,19 @@ exactly as the ROM does at every exit: `update_player_object` skips the player's
 `$40A6 (police_special_player_update_gate)`, and that Z flag is the whole of the police special's freeze. The full table, the checks and what is left are in
 `../docs/WidescreenLogBook.md`.
 
+**Round 2 reset in widescreen (fixed).** The console restarted ~110 s into round 2 (4 of 4 runs; plain never).
+Found with `--callLog` (a second `entry,000200`), a backtrace at the second `init()` and dumps of the object
+table. The ROM itself resets: `prepare_next_spawn_section` (`$810`) scans the first 32 object slots and
+`jmp init`s (`$884`) when an ordinary enemy's `+$0E` tile word has no palette line 1 or 2, i.e. when it has
+never run its first animation. Round 2's wave 3 spawns a Jack with `+$40` bit 7 set -- `$A59C` activates such an
+object only once `cam_x` passes its X, and the camera locks at `$0DC0` -- and the `$CC0` port had moved him from
+`$0DA8` to `$0DC8` (the `+$20` for a column beyond the screen edge): past the lock, never awake, caught by the next
+section's check. `spawn_object_batch` now leaves a camera-gated object (`+$40` bit 7) where the ROM puts it.
+Checked: widescreen round 2 reaches Souther (2 of 2, 0 of 6 before), plain round 2 and widescreen round 1
+unchanged. `spawn_object_batch`'s other `init()` (no free slot) is the ROM's `$D66`. The plain-host reset
+described above may be the same `$884` check (a sweep or a timing that leaves a just-spawned enemy at the
+prepare); not verified.
+
 ## Runtime call log and call map (game analysis)
 
 Use runtime call recording plus `tools/call_map.py` to **analyse game control

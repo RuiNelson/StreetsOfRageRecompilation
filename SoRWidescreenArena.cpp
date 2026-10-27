@@ -720,7 +720,9 @@ void StreetsOfRage::cull_sprite_piece_x(m_long /*entry_*/) {
 // camera brings it in. In widescreen that edge moved out by $20, and an object created within the new
 // visible band would be accepted at once and appear abruptly, with the enemy standing inside the screen. So
 // under --widescreen an object created beyond the original screen edge is placed $20 further out (the
-// same distance past the widened edge as it was past the original), and likewise on the left.
+// same distance past the widened edge as it was past the original), and likewise on the left. Objects
+// gated by the camera (+$40 bit 7) keep their X: they wake when cam_x passes it, and the camera's lock
+// at the wave gate is the same in both modes.
 // ---------------------------------------------------------------------------
 void StreetsOfRage::spawn_object_batch(m_long /*entry_*/) {
     traceEnter(0x00000CC0u);
@@ -759,7 +761,10 @@ void StreetsOfRage::spawn_object_batch(m_long /*entry_*/) {
                 mem.writeByte(object + 0x41, mem.readByte(record++));
                 mem.writeByte(object + 0x49, mem.readByte(record++));
                 m_word x = static_cast<m_word>((mem.readWord(kSpawnXBase) & 0xFF00u) | mem.readByte(record++));
-                if (grow != 0) {
+                // An object with +$40 bit 7 set waits for the camera to pass its X ($A59C), not for the screen
+                // test, and the camera stops at the wave's lock. Moving it out by $20 can put it beyond the lock,
+                // where it never wakes (and the next section's art check, $884, resets the console on it).
+                if (grow != 0 && (mem.readByte(object + 0x40) & 0x80u) == 0) {
                     const std::int16_t rel = static_cast<std::int16_t>(x - mem.readWord(kCamX));
                     if (rel >= 0x0140)
                         x = static_cast<m_word>(x + grow);
