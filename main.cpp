@@ -20,6 +20,7 @@ int main(int argc, char *argv[]) {
     bool          silentFlag         = false;
     bool          altControlsFlag    = false;
     bool          widescreenFlag     = false;
+    bool          integerScalingFlag = false;
     int           sorVSyncMode       = 0; // 0 = internal timer (default); 1/2/3 = VSync/VSync2/VSync3
     int           remoteAccessPort   = 6969;
     std::uint32_t turboMultiplier    = 0;
@@ -57,6 +58,9 @@ int main(int argc, char *argv[]) {
     app.add_flag("--widescreen",
                  widescreenFlag,
                  "Use VDP Mode 48 (48x27 tiles, 384x216) instead of Mode 40; a host-only mode the hardware lacks");
+    app.add_flag("--integerScaling",
+                 integerScalingFlag,
+                 "Scale the picture by whole multiples only (320x224 in 1920x1080 is drawn 4x at 1280x896)");
     app.add_option("--vsync",
                    sorVSyncMode,
                    "Frame sync — 0=internal timer from --hz (default), "
@@ -87,6 +91,7 @@ int main(int argc, char *argv[]) {
                                              : MegaDriveEnvironment::VideoStandard::Hz60);
         env.setVDPTurboMultiplier(turboMultiplier);
         env.setWidescreen(widescreenFlag);
+        env.setIntegerScaling(integerScalingFlag);
         if (silentFlag) {
             env.sound().disable();
         } else if (soundMode == "prerendered") {
