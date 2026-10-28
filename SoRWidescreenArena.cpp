@@ -573,7 +573,13 @@ void StreetsOfRage::ordinary_enemy_wait_until_on_screen(m_long /*entry_*/) {
     const bool   forced = (mem.readByte(object + 0x40) & 0x80u) != 0;
 
     if (round8 && !forced) {
-        if (static_cast<std::int16_t>(camX + 0x0144u + grow) < static_cast<std::int16_t>(x))
+        // At a wave's lock (max - min < 4, as $6A6 tests it) the camera scrolls no further, so the widened edge
+        // would leave an object between it and the ROM's edge asleep for good, and the next section's art check
+        // ($884) resets the console on it: round 8's lock at cam_x $1100 with a Garcia at $1260 (cam+$160) in 2P.
+        // There the ROM's edge is used.
+        const bool   locked = static_cast<m_word>(mem.readWord(kCameraXMax) - mem.readWord(kCameraXMin)) < 4u;
+        const m_word edge   = static_cast<m_word>(camX + 0x0144u + (locked ? 0u : grow));
+        if (static_cast<std::int16_t>(edge) < static_cast<std::int16_t>(x))
             activate();
         else
             finish(0);

@@ -309,7 +309,10 @@ object only once `cam_x` passes its X, and the camera locks at `$0DC0` -- and th
 `$0DA8` to `$0DC8` (the `+$20` for a column beyond the screen edge): past the lock, never awake, caught by the next
 section's check. `spawn_object_batch` now leaves a camera-gated object (`+$40` bit 7) where the ROM puts it.
 Checked: widescreen round 2 reaches Souther (2 of 2, 0 of 6 before), plain round 2 and widescreen round 1
-unchanged. `spawn_object_batch`'s other `init()` (no free slot) is the ROM's `$D66`. The plain-host reset
+unchanged. `spawn_object_batch`'s other `init()` (no free slot) is the ROM's `$D66`.
+Round 8 reset the same way in 2P: its gate is the camera's right edge (`cam+$144`, widened to `+$164`), and a Garcia
+(probably a 2P-only spawn) at `cam+$160` of the lock never woke; at a lock (`max - min < 4`) `$A59C` now uses the ROM's edge
+(`../docs/WidescreenLogBook.md`). Any widened gate that can only *delay* a wake must fall back to the ROM's at a lock. The plain-host reset
 described above may be the same `$884` check (a sweep or a timing that leaves a just-spawned enemy at the
 prepare); not verified.
 
