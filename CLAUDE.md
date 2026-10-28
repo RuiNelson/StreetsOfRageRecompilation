@@ -133,6 +133,17 @@ limit. SOVR is still set as on hardware, so game logic reading it is unaffected.
 is `--widescreen`, flag 1 is `--altControls` (6-button). `autoplay`'s
 `host_flags.py` mirrors the indices; change both together.
 
+## 6-button pickup reach (`--altControls`)
+
+User request: picking items up with Y was frustrating for people, because a
+missed Y shows nothing (in 3-button mode the same press punched, which was the
+feedback). `findPickupTarget` (`SoRInteractions.cpp`, the `$3136` port) widens
+the box under `--altControls` from X ±`$14` / lane ±`$10` to ±`$1C` / ±`$18`;
+the height test, the slot scan, eligibility and the work-RAM writes are the
+ROM's, and without `--altControls` the box is the ROM's. The user chose only
+this: no press buffer, no miss sound. `autoplay` presses Y inside the ROM box,
+which the wider one contains, so it needs no change.
+
 ## Pre-rendered soundtrack (`--sound`)
 
 User decision: the host's real-time YM2612/PSG/Z80 emulation is not good

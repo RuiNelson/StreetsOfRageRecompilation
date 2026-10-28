@@ -201,6 +201,13 @@ converted into pickup, while Y alone requests
 `$3136 (find_close_interaction_target)`. Start is no longer overloaded for
 pickup and always reaches the normal Start path.
 
+The search box is the player's X ±`$14` and lane Y ±`$10`, with the object's
+Z between the player's Z - 8 and the player's Z. With `--altControls` the
+native port widens X to ±`$1C` and Y to ±`$18` (Z unchanged): a Y press that
+misses shows nothing, whereas the original attack button gave a punch, so the
+6-button layout forgives a few pixels. Without `--altControls` the box is the
+ROM's.
+
 ### Measured normal punch
 
 Same method as the chord below: one B edge from grounded idle `$02`, attack

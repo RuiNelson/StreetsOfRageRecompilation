@@ -47,6 +47,14 @@ constexpr m_long kBottleBrokenFlag  = 0x54u;
 constexpr m_byte kButtonAttack = 0x10u;
 constexpr m_byte kKnifeType    = 0x08u;
 
+// $3136's pickup box half-extents (X, lane Y). --altControls widens them: a
+// missed Y press shows nothing, where the original attack button punched, so
+// the 6-button layout forgives a few pixels. The height (Z) test is unchanged.
+constexpr m_word kPickupHalfX     = 0x0014u;
+constexpr m_word kPickupHalfY     = 0x0010u;
+constexpr m_word kAltPickupHalfX  = 0x001Cu;
+constexpr m_word kAltPickupHalfY  = 0x0018u;
+
 constexpr bool bit(m_byte value, unsigned index) {
     return (value & static_cast<m_byte>(1u << index)) != 0;
 }
@@ -92,15 +100,15 @@ bool isEligibleWeapon(SystemMemory &memory, m_long object) {
            memory.readByte(object + kWeaponUseCounter) < 3u;
 }
 
-bool objectInsidePickupBox(SystemMemory &memory, m_long player, m_long object) {
+bool objectInsidePickupBox(SystemMemory &memory, m_long player, m_long object, m_word halfX, m_word halfY) {
     const auto sx = [](m_word value) {
         return static_cast<std::int16_t>(value);
     };
 
-    const m_word minX = addWord(memory.readWord(player + kObjX), 0xFFECu);
-    const m_word maxX = addWord(minX, 0x0028u);
-    const m_word minY = addWord(memory.readWord(player + kObjY), 0xFFF0u);
-    const m_word maxY = addWord(minY, 0x0020u);
+    const m_word minX = static_cast<m_word>(memory.readWord(player + kObjX) - halfX);
+    const m_word maxX = addWord(minX, static_cast<m_word>(halfX * 2u));
+    const m_word minY = static_cast<m_word>(memory.readWord(player + kObjY) - halfY);
+    const m_word maxY = addWord(minY, static_cast<m_word>(halfY * 2u));
     const m_word minZ = addWord(memory.readWord(player + kObjZ), 0xFFF8u);
     const m_word maxZ = addWord(minZ, 0x0008u);
 
@@ -116,9 +124,13 @@ m_long findPickupTarget(SystemMemory &memory, m_long player) {
     if ((memory.readByte(player + kObjState) & 0xFEu) == 0x28u)
         return 0u;
 
+    const bool   altControls = SoRCheats::altControlsEnabled();
+    const m_word halfX       = altControls ? kAltPickupHalfX : kPickupHalfX;
+    const m_word halfY       = altControls ? kAltPickupHalfY : kPickupHalfY;
+
     for (int slot = 0; slot < kInteractionScanSlots; ++slot) {
         const m_long object = kObjectTable + static_cast<m_long>(slot) * kObjectSlotSize;
-        if (!objectInsidePickupBox(memory, player, object))
+        if (!objectInsidePickupBox(memory, player, object, halfX, halfY))
             continue;
 
         if (isEligibleWeapon(memory, object) || isConsumablePickup(memory.readByte(object + kObjType)))
