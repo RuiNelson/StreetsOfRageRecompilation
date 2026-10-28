@@ -161,8 +161,9 @@ build tree and compiles core + libretro glue **unmodified** (statically, no
 CHD/Tremor/zlib), plus libFLAC 1.5.0. `gpgx_glue.c` reaches RAM, Z80 RAM, the
 cartridge ROM and `audio_set_rate`, which libretro does not expose (libretro
 pins 44.1 kHz). The script builds it, renders into `rom/soundtrack.rendering/`
-and swaps it in (~2 minutes, ~180 MB, 77 files: `$81`-`$91`, `$A0`-`$CF`,
-`$D0`-`$DB`). `--chip ym2612` selects Nuked's Model 1 mode.
+and swaps it in (`$81`-`$91` as two stems each, `$A0`-`$CF`, `$D0`-`$DB`).
+`--chip ym2612` selects Nuked's Model 1 mode. Diagnostics: `--verify-stems`
+and `--measure-fade SECONDS` (with `--ids` to pick tracks).
 
 How a render works (`render_soundtrack.cpp`):
 
@@ -180,15 +181,31 @@ How a render works (`render_soundtrack.cpp`):
    counters, LFO) do not, so the raw seam jumped by ~1200; the last 25 ms
    before `loop_end` are cross-faded into the samples before `loop_start`, which
    makes the jump continuous.
-4. A non-looping sound ends when its channel blocks are idle (and, for PCM,
+4. Music is split into two stems that sum exactly to the full render (user
+   request, so the `$E0` fade can be played as the ROM does it): `_fm`, the
+   same frames rendered again with the PSG preamp at 0 and the DAC disabled,
+   and `_dacpsg` = full - FM. The DAC is disabled by setting the operand of
+   both DAC-enable writes to `$00` (Z80 `$004E`, the driver's `ld
+   (hl),$80` after `ld (hl),$2B`; ROM `$72F91`, `$72F8A (sound_reset_all)`'s
+   immediate), which keeps every instruction and its timing. Silencing the
+   sample bytes does **not** work: the driver is 4-bit DPCM (delta table at
+   Z80 `$01C8`, so `$80` fill is not silence and breaking the table is worse)
+   and writes each delta into its own code, so the sample bytes change the
+   Z80's timing, the 68000's DAC-busy waits and every FM write after them
+   (measured: thousands of differing samples, peak ~13000). `--verify-stems`
+   checks the split: full minus the DAC-off pass is the DAC alone, exactly
+   flat for long runs between drum hits only if the FM did not move.
+5. A non-looping sound ends when its channel blocks are idle (and, for PCM,
    `$A01FFD (z80_dac_busy)` is clear), plus up to 4 s of release; the settled
    tail is trimmed. Every render starts at its first non-zero sample (the base
    state is digital zero; the first chip write lands 20-400 samples into
    frame 1).
 
-`manifest.tsv` columns: `id kind file frames loop_start loop_end name` (hex ID,
-`-1` for no loop, names decoded from the sound test's `$1C684` rows). The FLAC
-files also carry `LOOPSTART`/`LOOPLENGTH` tags.
+`manifest.tsv` is `# format 2` (the host refuses older ones and asks for a
+re-render): `id kind file cut_file frames loop_start loop_end name` (hex ID;
+`cut_file` is the DAC+PSG stem, `-` for effects and voices; `-1` for no loop;
+names decoded from the sound test's `$1C684` rows). The FLAC files also carry
+`LOOPSTART`/`LOOPLENGTH` tags.
 
 Render facts: `$83` (title) does not loop; `$8D` (name entry) and `$8E` (round
 clear) are the same data; `$BD`, `$CF`, `$D1` and `$DA` are not in the sound
@@ -202,16 +219,23 @@ test. Loop starts range from 6 s (`$8A`) to 147 s (`$84`).
 | --- | --- |
 | `$72D08 (sound_process_queue)` | Replicate the ROM's pick: each `play_se` slot with bit 7 and priority (`$72824 (sound_priority_table)`, ID - `$81`) at least the running one replaces `$FFF009 (sound_pending_id)` |
 | `$72F8A (sound_reset_all)` | Stop music and effects; a PCM voice keeps playing, as the Z80 keeps streaming it. Reached by every music start, `$E1`, `$E3`, `$E4`+, and the end of a fade |
-| `$73066 (sound_fade_music)` | Right after the queue each tick: start the pick (music streamed from disk with its loop; effect predecoded on one track per SFX channel block, header byte 3 through `$72E74`; voice on one PCM track), `$E2` stops the effects on `$FFF1F0`/`$FFF220`; set the music gain from `stop_music` (15 steps of 0.75 dB, then the reset); pause the music while `$FFF007 (sound_engine_gate)` is positive |
+| `$73066 (sound_fade_music)` | Right after the queue each tick: start the pick (music: both stems streamed from disk and started under one mixer lock, sharing the loop; effect predecoded on one track per SFX channel block, header byte 3 through `$72E74`; voice on one PCM track), `$E2` stops the effects on `$FFF1F0`/`$FFF220`; when `stop_music` leaves 0 (`$7302E` armed the fade) stop the DAC+PSG stem at once; set the FM stem's gain from `stop_music` (15 steps of 0.75 dB, then the reset); pause both stems while `$FFF007 (sound_engine_gate)` is positive |
 
 `$BD` is the pause jingle (`handle_pause_start_input`): its sequence starts with
 `$F9`, which sets the gate to `$01` (music keyed off and frozen) or, when set,
 to `$80` (released on the next tick), so pausing and unpausing both post `$BD`.
-The fade's immediate cut of the music DAC/PSG channels is not reproduced (one
-stem per track).
+Left as a known difference: at the fade start the hardware lets a DPCM drum
+sample that is already streaming play out (at most ~0.2 s); the DAC+PSG stem
+stops at once.
 
 Validated on macOS (arm64): `SDL_AUDIO_DRIVER=disk` capture of the attract
-mode is sample-identical to `music_83.flac`; a 2-minute autoplay session plays
+mode is sample-identical to `music_83_fm.flac` + `music_83_dacpsg.flac`; with
+`$81` then `$E0` posted, the capture is exactly the stem sum until the fade and
+then exactly the FM stem times a gain stepping 0.75 dB every 5 frames (fit
+error ~1e-15), the DAC and PSG gone; `--verify-stems` finds the DAC alone
+exactly flat for 2.6%-70% of every track (longest runs 0.1-41 s);
+`--measure-fade 30` gives -11 to -13 dB at step 15 on every looping track.
+Earlier, the single-file build: a 2-minute autoplay session plays
 title, select, round 1, effects and voices with no clipping; `$BD` x2, `$E0`,
 `$E1`, `$E2` posted through remote access behave as above; CPU 21% vs 29%
 emulated over the same 45 s. Not tested: Windows and Linux builds, `--hz 50`.

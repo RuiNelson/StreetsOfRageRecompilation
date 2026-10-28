@@ -16,6 +16,10 @@ unsigned sor_gpgx_read_zram8(unsigned addr) {
     return zram[addr & 0x1FFFu];
 }
 
+void sor_gpgx_write_zram8(unsigned addr, unsigned value) {
+    zram[addr & 0x1FFFu] = (uint8)value;
+}
+
 unsigned sor_gpgx_read_rom8(unsigned addr) {
     return READ_BYTE(cart.rom, addr);
 }
@@ -33,4 +37,10 @@ void sor_gpgx_set_audio_rate(int samplerate, double framerate) {
 
 void sor_gpgx_clear_audio(void) {
     audio_reset();
+}
+
+/* PSG output gain in percent (0 mutes it; the libretro default is 150). */
+void sor_gpgx_set_psg_preamp(unsigned preamp) {
+    config.psg_preamp = preamp;
+    psg_config(0, preamp, 0xff);
 }

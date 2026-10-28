@@ -30,10 +30,12 @@ extern "C" {
 unsigned sor_gpgx_read_ram8(unsigned addr);
 void     sor_gpgx_write_ram8(unsigned addr, unsigned value);
 unsigned sor_gpgx_read_zram8(unsigned addr);
+void     sor_gpgx_write_zram8(unsigned addr, unsigned value);
 unsigned sor_gpgx_read_rom8(unsigned addr);
 void     sor_gpgx_write_rom8(unsigned addr, unsigned value);
 void     sor_gpgx_set_audio_rate(int samplerate, double framerate);
 void     sor_gpgx_clear_audio(void);
+void     sor_gpgx_set_psg_preamp(unsigned preamp);
 }
 
 namespace fs = std::filesystem;
@@ -58,6 +60,17 @@ constexpr unsigned kSfxEnd          = 0xF370;
 constexpr unsigned kChannelSize     = 0x30;
 // Z80 RAM: bit 7 while the DAC driver streams a sample (z80_dac_busy).
 constexpr unsigned kZ80DacBusy      = 0x1FFD;
+// The two writes that enable the YM2612 DAC (register $2B = $80): the Z80
+// driver's `ld (hl),$80` at each sample start, and the immediate of
+// sound_reset_all's `move.b #$80,d1`. Their operand set to $00 leaves the DAC
+// off while every instruction, and so all the timing, stays the same. The
+// sample bytes cannot be touched instead: the driver decodes 4-bit DPCM and
+// stores each delta into its own code (`ld ($002E),a`), so its timing, the
+// 68000's DAC-busy waits and with them every FM write would move.
+constexpr unsigned kZ80DacEnableOperand  = 0x004E;
+constexpr unsigned k68kDacEnableOperand  = 0x072F91;
+constexpr unsigned kDacEnable            = 0x80;
+constexpr unsigned kPsgPreamp        = 150;
 // ROM: game_infinite_loop, sound test name rows.
 constexpr unsigned kMainLoop        = 0x0003A2;
 constexpr unsigned kSoundTestIds    = 0x00128A;
@@ -193,7 +206,11 @@ std::string soundTestName(unsigned id) {
 struct Render {
     unsigned             id   = 0;
     Kind                 kind = Kind::Music;
-    std::vector<int16_t> samples; // interleaved stereo
+    // Interleaved stereo. A music track is two stems that sum to the full mix:
+    // `samples` holds the FM channels, which the $E0 fade attenuates, and
+    // `cutSamples` the DAC and PSG channels, which the fade cuts at once.
+    std::vector<int16_t> samples;
+    std::vector<int16_t> cutSamples;
     std::optional<size_t> loopStart;
     std::optional<size_t> loopEnd;
     int                  framesRun   = 0;
@@ -201,7 +218,8 @@ struct Render {
     bool                 truncated   = false;
 };
 
-bool writeFlac(const fs::path &path, const Render &render, const std::string &name) {
+bool writeFlac(const fs::path &path, const Render &render, const std::vector<int16_t> &samples,
+               const std::string &name, const std::string &stem) {
     FLAC__StreamEncoder *encoder = FLAC__stream_encoder_new();
     if (encoder == nullptr)
         return false;
@@ -209,7 +227,7 @@ bool writeFlac(const fs::path &path, const Render &render, const std::string &na
     FLAC__stream_encoder_set_bits_per_sample(encoder, 16);
     FLAC__stream_encoder_set_sample_rate(encoder, kSampleRate);
     FLAC__stream_encoder_set_compression_level(encoder, 8);
-    FLAC__stream_encoder_set_total_samples_estimate(encoder, render.samples.size() / 2);
+    FLAC__stream_encoder_set_total_samples_estimate(encoder, samples.size() / 2);
 
     FLAC__StreamMetadata *tags = FLAC__metadata_object_new(FLAC__METADATA_TYPE_VORBIS_COMMENT);
     auto addTag = [tags](const std::string &key, const std::string &value) {
@@ -219,7 +237,7 @@ bool writeFlac(const fs::path &path, const Render &render, const std::string &na
     };
     char idText[8];
     std::snprintf(idText, sizeof idText, "$%02X", render.id);
-    addTag("TITLE", name.empty() ? std::string(idText) : name + " (" + idText + ")");
+    addTag("TITLE", (name.empty() ? std::string(idText) : name + " (" + idText + ")") + stem);
     addTag("ALBUM", "Streets of Rage (pre-rendered)");
     addTag("SOR_SOUND_ID", idText + 1);
     addTag("ENCODER_SETTINGS", "Genesis Plus GX " SOR_GPGX_COMMIT ", " + g_chipOption + ", no filter, 48 kHz, 60 Hz");
@@ -233,7 +251,7 @@ bool writeFlac(const fs::path &path, const Render &render, const std::string &na
     bool ok = FLAC__stream_encoder_init_file(encoder, path.string().c_str(), nullptr, nullptr) ==
               FLAC__STREAM_ENCODER_INIT_STATUS_OK;
     if (ok) {
-        std::vector<FLAC__int32> wide(render.samples.begin(), render.samples.end());
+        std::vector<FLAC__int32> wide(samples.begin(), samples.end());
         ok = FLAC__stream_encoder_process_interleaved(encoder, wide.data(), static_cast<unsigned>(wide.size() / 2));
     }
     ok = FLAC__stream_encoder_finish(encoder) && ok;
@@ -250,6 +268,8 @@ struct Options {
     std::vector<unsigned> ids;
     int                   bootFrames = 600;
     int                   maxMinutes = 10;
+    bool                  verifyStems = false;
+    int                   fadeSeconds = 0; // >0: measure the $E0 fade that many seconds into each track
 };
 
 constexpr size_t kSamplesPerFrame = static_cast<size_t>(kSampleRate / kFrameRate);
@@ -297,6 +317,51 @@ bool quietTail(size_t window, int tolerance) {
             return false;
     }
     return true;
+}
+
+// Keeps the DAC disabled (or restores the enabling operands). Channel 6 then
+// outputs its FM operators, which the music never keys on.
+void disableDac(bool disable) {
+    sor_gpgx_write_zram8(kZ80DacEnableOperand, disable ? 0 : kDacEnable);
+    sor_gpgx_write_rom8(k68kDacEnableOperand, disable ? 0 : kDacEnable);
+}
+
+struct Pass {
+    bool                                    dac = true;
+    bool                                    psg = true;
+    std::vector<std::pair<int, unsigned>>   posts; // (frame, ID) written to play_se before that frame
+};
+
+// Runs `frames` frames from the base state with `id` posted, and returns the
+// raw interleaved audio.
+std::vector<int16_t> renderFrames(unsigned id, const std::vector<uint8_t> &baseState, int frames, const Pass &pass) {
+    retro_unserialize(baseState.data(), baseState.size());
+    sor_gpgx_clear_audio();
+    g_audio.clear();
+    if (!pass.dac)
+        disableDac(true);
+    if (!pass.psg)
+        sor_gpgx_set_psg_preamp(0);
+    sor_gpgx_write_ram8(kPlaySe, id);
+    for (int frame = 1; frame <= frames; ++frame) {
+        for (const auto &[at, post] : pass.posts) {
+            if (at == frame)
+                sor_gpgx_write_ram8(kPlaySe, post);
+        }
+        retro_run();
+    }
+    if (!pass.dac)
+        disableDac(false);
+    if (!pass.psg)
+        sor_gpgx_set_psg_preamp(kPsgPreamp);
+    return g_audio;
+}
+
+std::vector<int16_t> difference(const std::vector<int16_t> &full, const std::vector<int16_t> &part) {
+    std::vector<int16_t> rest(full.size());
+    for (size_t i = 0; i < full.size(); ++i)
+        rest[i] = static_cast<int16_t>(std::clamp(full[i] - part[i], -32768, 32767));
+    return rest;
 }
 
 Render renderSound(unsigned id, const std::vector<uint8_t> &baseState, const Options &options) {
@@ -386,10 +451,29 @@ Render renderSound(unsigned id, const std::vector<uint8_t> &baseState, const Opt
             --end;
         length = std::min(stereoFrames(), end + 1);
     }
-    render.samples.assign(g_audio.begin() + static_cast<std::ptrdiff_t>(start * 2),
-                          g_audio.begin() + static_cast<std::ptrdiff_t>(length * 2));
-    if (render.loopStart)
-        blendLoopSeam(render.samples, *render.loopStart, *render.loopEnd);
+    std::vector<int16_t> full = g_audio;
+    std::vector<int16_t> cut;
+    if (render.kind == Kind::Music) {
+        // Same frames again with the DAC disabled and the PSG muted: the FM stem.
+        std::vector<int16_t> fm = renderFrames(id, baseState, render.framesRun, Pass{.dac = false, .psg = false});
+        if (fm.size() != full.size()) {
+            std::fprintf(stderr, "    $%02X: the FM pass rendered %zu samples, the full pass %zu\n", id, fm.size(),
+                         full.size());
+            std::exit(1);
+        }
+        cut  = difference(full, fm);
+        full = std::move(fm);
+    }
+    const auto slice = [&](const std::vector<int16_t> &raw) {
+        std::vector<int16_t> samples(raw.begin() + static_cast<std::ptrdiff_t>(start * 2),
+                                     raw.begin() + static_cast<std::ptrdiff_t>(length * 2));
+        if (render.loopStart)
+            blendLoopSeam(samples, *render.loopStart, *render.loopEnd);
+        return samples;
+    };
+    render.samples = slice(full);
+    if (!cut.empty())
+        render.cutSamples = slice(cut);
     return render;
 }
 
@@ -415,10 +499,54 @@ bool parseIds(const std::string &text, std::vector<unsigned> &ids) {
     return true;
 }
 
+// Sanity check of the split: full minus the DAC-off pass (PSG on in both) is
+// the DAC channel alone, which between drum hits holds one value and so must
+// be exactly flat for long runs. FM that moved by one sample between the
+// passes would never be flat.
+void verifyStems(unsigned id, const std::vector<uint8_t> &baseState, int frames) {
+    const std::vector<int16_t> full   = renderFrames(id, baseState, frames, Pass{});
+    const std::vector<int16_t> noDac  = renderFrames(id, baseState, frames, Pass{.dac = false});
+    const std::vector<int16_t> dac    = difference(full, noDac);
+    size_t                     flat = 0, run = 0, longest = 0;
+    for (size_t i = 2; i < dac.size(); i += 2) {
+        run     = dac[i] == dac[i - 2] && dac[i + 1] == dac[i - 1] ? run + 1 : 0;
+        longest = std::max(longest, run);
+        if (run == kSamplesPerFrame) // count each sample of a run once it is a frame long
+            flat += run;
+        else if (run > kSamplesPerFrame)
+            ++flat;
+    }
+    std::printf("    stems: the DAC alone is exactly flat for %.1f%% of the track in runs of a frame or more"
+                " (longest %.2f s)\n",
+                100.0 * flat / (dac.size() / 2), static_cast<double>(longest) / kSampleRate);
+}
+
+// Measures the $E0 fade on the FM stem: the same render with and without $E0
+// posted after `seconds`, compared in 5-frame steps (the engine's fade step).
+void measureFade(unsigned id, const std::vector<uint8_t> &baseState, int seconds) {
+    const int                  at     = seconds * kFramesPerSecond;
+    const int                  frames = at + 100;
+    const std::vector<int16_t> plain  = renderFrames(id, baseState, frames, Pass{.dac = false, .psg = false});
+    const std::vector<int16_t> faded =
+        renderFrames(id, baseState, frames, Pass{.dac = false, .psg = false, .posts = {{at, 0xE0}}});
+    std::printf("    fade from frame %d, dB per 5 frames:", at);
+    for (int block = 0; block < 18; ++block) {
+        double       plainEnergy = 0, fadedEnergy = 0;
+        const size_t first       = static_cast<size_t>(at - 1 + block * 5) * kSamplesPerFrame * 2;
+        for (size_t i = first; i < first + 5 * kSamplesPerFrame * 2; ++i) {
+            plainEnergy += static_cast<double>(plain[i]) * plain[i];
+            fadedEnergy += static_cast<double>(faded[i]) * faded[i];
+        }
+        if (plainEnergy > 0)
+            std::printf(" %.2f", fadedEnergy > 0 ? 10.0 * std::log10(fadedEnergy / plainEnergy) : -99.0);
+    }
+    std::printf("\n");
+}
+
 void usage(const char *program) {
     std::fprintf(stderr,
                  "Usage: %s --rom SOR.bin --out DIR [--ids 81-91,A0-CF,D0-DB] [--chip ym3438|ym2612]\n"
-                 "          [--boot-frames N] [--max-minutes N]\n",
+                 "          [--boot-frames N] [--max-minutes N] [--verify-stems] [--measure-fade SECONDS]\n",
                  program);
 }
 
@@ -453,6 +581,10 @@ int main(int argc, char **argv) {
             options.bootFrames = std::stoi(next());
         else if (arg == "--max-minutes")
             options.maxMinutes = std::stoi(next());
+        else if (arg == "--verify-stems")
+            options.verifyStems = true;
+        else if (arg == "--measure-fade")
+            options.fadeSeconds = std::stoi(next());
         else {
             usage(argv[0]);
             return 2;
@@ -518,7 +650,8 @@ int main(int argc, char **argv) {
     manifest << "# Streets of Rage pre-rendered soundtrack. Generated by sor_soundtrack; do not edit.\n"
              << "# sample_rate=" << kSampleRate << " frame_rate=" << kFramesPerSecond
              << " chip=" << g_chipOption << " gpgx=" << SOR_GPGX_COMMIT << "\n"
-             << "# id\tkind\tfile\tframes\tloop_start\tloop_end\tname\n";
+             << "# format 2: music is two stems, the FM file (faded by $E0) and the DAC+PSG file (cut by $E0)\n"
+             << "# id\tkind\tfile\tcut_file\tframes\tloop_start\tloop_end\tname\n";
 
     int failures = 0;
     for (const unsigned id : options.ids) {
@@ -528,8 +661,13 @@ int main(int argc, char **argv) {
         for (const int16_t sample : render.samples)
             peak = std::max(peak, std::abs(static_cast<int>(sample)));
 
-        char file[32];
-        std::snprintf(file, sizeof file, "%s_%02X.flac", kindName(render.kind), id);
+        for (const int16_t sample : render.cutSamples)
+            peak = std::max(peak, std::abs(static_cast<int>(sample)));
+
+        const bool music = render.kind == Kind::Music;
+        char       file[32], cutFile[32];
+        std::snprintf(file, sizeof file, music ? "%s_%02X_fm.flac" : "%s_%02X.flac", kindName(render.kind), id);
+        std::snprintf(cutFile, sizeof cutFile, music ? "%s_%02X_dacpsg.flac" : "-", kindName(render.kind), id);
         const size_t frames = render.samples.size() / 2;
         std::printf("$%02X %-5s %-12s %7.2f s", id, kindName(render.kind), name.c_str(),
                     static_cast<double>(frames) / kSampleRate);
@@ -543,13 +681,18 @@ int main(int argc, char **argv) {
             std::printf("    silent: no file written\n");
             continue;
         }
-        if (!writeFlac(options.out / file, render, name)) {
+        if (music && options.verifyStems)
+            verifyStems(id, baseState, render.framesRun);
+        if (music && options.fadeSeconds > 0)
+            measureFade(id, baseState, options.fadeSeconds);
+        if (!writeFlac(options.out / file, render, render.samples, name, music ? " [FM]" : "") ||
+            (music && !writeFlac(options.out / cutFile, render, render.cutSamples, name, " [DAC+PSG]"))) {
             std::fprintf(stderr, "    cannot write %s\n", file);
             ++failures;
             continue;
         }
         manifest << std::hex << std::uppercase << id << std::dec << '\t' << kindName(render.kind) << '\t' << file
-                 << '\t' << frames << '\t' << (render.loopStart ? static_cast<long long>(*render.loopStart) : -1)
+                 << '\t' << cutFile << '\t' << frames << '\t' << (render.loopStart ? static_cast<long long>(*render.loopStart) : -1)
                  << '\t' << (render.loopEnd ? static_cast<long long>(*render.loopEnd) : -1) << '\t' << name << '\n';
         if (render.truncated)
             ++failures;

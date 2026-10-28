@@ -153,6 +153,19 @@ Compact PCM player, not a multi-channel sequencer:
 
 Typical start: clear busy, program bank register `$6000` from `$1FF8`–`$1FFB`, loop on `$1FFF` — commands **`≥ $81`** enable DAC (YM reg `$2B = $80`), index sample with `SUB $81`, and stream from either resident Z80 RAM or the banked ROM window.
 
+The samples are **4-bit DPCM**, not raw 8-bit PCM. Each byte holds two
+nibbles; each nibble indexes the 16-entry delta table at Z80 `$01C8`
+(`00 01 02 06 0C 18 30 60 A0 D0 E8 F4 FA FE FF ..`), and the delta is added to
+an accumulator that starts at `$80` and is written to YM register `$2A`. The
+decoder also stores each delta into its own code (`ld ($002E),a`), so the
+driver's timing depends on the sample bytes, and through the 68000's waits on
+`$A01FFD (z80_dac_busy)` so does the timing of every FM register write. The
+DAC is enabled by exactly two writes of `$2B = $80`: the driver's
+`ld (hl),$2B / ld (hl),$80` at Z80 `$004A` on each sample start, and
+`$72F8A (sound_reset_all)`'s `move.b #$80,d1` (immediate at `$72F90`). The
+soundtrack renderer sets both operands to `$00` to render the music without
+the DAC while keeping every instruction and its timing.
+
 The upper bound is also explicit: the Z80 accepts `$81-$91` and rejects
 commands `>=$92`. Each directory record is five bytes: little-endian sample
 offset, little-endian byte length, and a delay-loop byte that controls playback
@@ -286,7 +299,7 @@ Decoded from the four `bra.w` entries at `$72D90`:
 
 | ID | Target | Effect |
 |----|--------|--------|
-| `$E0` | `$7302E (sound_start_music_fade)` | Fade: `$FFF002 (stop_music)` = `$10`, music DAC/PSG cut at once, FM attenuation +1 every 5 frames for 15 steps, then `$72F8A (sound_reset_all)` |
+| `$E0` | `$7302E (sound_start_music_fade)` | Fade, only from `$FFF002 (stop_music)` = 0: `$FFF002 (stop_music)` = `$10`, timer 4; clears the active bit of the music DAC (`$FFF130 (sound_music_dac)`) and PSG blocks and branches into the PSG silence, so drums and PSG stop at once (a DPCM sample already streaming plays out); FM carriers' attenuation +1 (0.75 dB) every 5 frames for 15 steps, then `$72F8A (sound_reset_all)`. Measured on Genesis Plus GX 30 s into each looping track: -11 to -13 dB at step 15 for all of them, in even steps for most; tracks whose sequences rewrite channel volume step unevenly (`$84`, `$85`, `$8F`), and 20 s into `$8A` the fade only reaches about -6 dB |
 | `$E1` | `$72F8A (sound_reset_all)` | Immediate stop of music and effects (a PCM sample already streaming on the Z80 is not stopped) |
 | `$E2` | `$72FE4` | Clears and keys off the two FM effect channels `$FFF1F0 (sound_sfx_fm0)` and `$FFF220 (sound_sfx_fm1)`, restores their music channels, resets `$FFF000 (sound_active_priority)`; music keeps playing |
 | `$E3` | `$72F8A (sound_reset_all)` | Same as `$E1` |

@@ -40,7 +40,8 @@ constexpr int    kSampleRate  = 48000;
 
 struct Sound {
     bool                  present   = false;
-    std::filesystem::path file;
+    std::filesystem::path file;    // music: the FM stem
+    std::filesystem::path cutFile; // music: the DAC+PSG stem
     long long             loopStart = -1;
     MIX_Audio            *audio     = nullptr; // effects and voices: predecoded
 };
@@ -48,7 +49,11 @@ struct Sound {
 bool                         initialized = false; // SDL audio + MIX_Init held by open()
 MIX_Mixer                   *mixer      = nullptr;
 std::array<Sound, 0x100>     sounds;
+// A music track plays as its two stems, started together and looping
+// together: the FM channels, which the $E0 fade attenuates, and the DAC and
+// PSG channels, which $7302E (sound_start_music_fade) cuts at once.
 MIX_Track                   *musicTrack = nullptr;
+MIX_Track                   *cutTrack   = nullptr;
 MIX_Track                   *pcmTrack   = nullptr;
 std::map<m_long, MIX_Track *> sfxTracks; // keyed by the SFX channel block it arms
 
@@ -57,6 +62,7 @@ m_byte picked      = 0;
 bool   musicPaused = false;
 bool   trace       = false; // SOR_SOUNDTRACK_TRACE=1: log every engine event
 float  musicGain   = 1.0f;
+m_byte lastStop    = 0; // stop_music at the previous tick
 
 bool play(MIX_Track *track, const Sound &sound) {
     const SDL_PropertiesID options = SDL_CreateProperties();
@@ -69,20 +75,37 @@ bool play(MIX_Track *track, const Sound &sound) {
     return ok;
 }
 
+void stopMusic() {
+    MIX_StopTrack(musicTrack, 0);
+    MIX_StopTrack(cutTrack, 0);
+    musicPaused = false;
+}
+
+bool streamFrom(MIX_Track *track, const std::filesystem::path &file) {
+    SDL_IOStream *io = SDL_IOFromFile(file.string().c_str(), "rb");
+    return io != nullptr && MIX_SetTrackIOStream(track, io, true);
+}
+
 void playMusic(m_byte id) {
     const Sound &sound = sounds[id];
-    MIX_StopTrack(musicTrack, 0);
-    musicPaused = false;
-    musicGain   = 1.0f;
+    stopMusic();
+    musicGain = 1.0f;
     MIX_SetTrackGain(musicTrack, musicGain);
     if (!sound.present)
         return;
-    // Music is streamed from disk: the renders hold minutes of audio each.
-    SDL_IOStream *io = SDL_IOFromFile(sound.file.string().c_str(), "rb");
-    if (io == nullptr || !MIX_SetTrackIOStream(musicTrack, io, true) || !play(musicTrack, sound))
-        Logger::log("[soundtrack] cannot play music $%02X: %s", static_cast<unsigned>(id), SDL_GetError());
-    else
+    // Music is streamed from disk (the renders hold minutes of audio each).
+    // Both stems start under one mixer lock, so they begin on the same output
+    // frame and, sharing their loop points, stay sample-aligned.
+    bool ok = streamFrom(musicTrack, sound.file) && streamFrom(cutTrack, sound.cutFile);
+    MIX_LockMixer(mixer);
+    ok = ok && play(musicTrack, sound) && play(cutTrack, sound);
+    MIX_UnlockMixer(mixer);
+    if (ok) {
         Logger::log("[soundtrack] music $%02X", static_cast<unsigned>(id));
+    } else {
+        Logger::log("[soundtrack] cannot play music $%02X: %s", static_cast<unsigned>(id), SDL_GetError());
+        stopMusic();
+    }
 }
 
 // The engine arms one channel block per effect, chosen by header byte 3; a new
@@ -160,6 +183,14 @@ void startPicked(SystemMemory &memory) {
 
 void followEngine(SystemMemory &memory) {
     const m_byte stop = memory.readByte(kStopMusic);
+    // $7302E arms the fade only from stop_music 0 and, in the same tick,
+    // deactivates the music DAC and PSG channels and silences the PSG.
+    if (stop != 0 && lastStop == 0) {
+        MIX_StopTrack(cutTrack, 0);
+        if (trace)
+            Logger::log("[soundtrack] fade: DAC and PSG cut");
+    }
+    lastStop = stop;
     const int    step = stop == 0 ? 0 : kFadeSteps - std::min(stop, kFadeSteps);
     const float  gain = static_cast<float>(std::pow(10.0, -kFadeStepDb * step / 20.0));
     if (gain != musicGain) {
@@ -176,10 +207,15 @@ void followEngine(SystemMemory &memory) {
         musicPaused = paused;
         if (trace)
             Logger::log("[soundtrack] music %s", paused ? "paused" : "resumed");
-        if (paused)
+        MIX_LockMixer(mixer);
+        if (paused) {
             MIX_PauseTrack(musicTrack);
-        else
+            MIX_PauseTrack(cutTrack);
+        } else {
             MIX_ResumeTrack(musicTrack);
+            MIX_ResumeTrack(cutTrack);
+        }
+        MIX_UnlockMixer(mixer);
     }
 }
 
@@ -188,20 +224,30 @@ bool loadManifest(const std::filesystem::path &directory) {
     if (!manifest)
         return false;
     std::string line;
-    int         count = 0;
+    int         count  = 0;
+    bool        format = false;
     while (std::getline(manifest, line)) {
+        if (line.rfind("# format 2", 0) == 0)
+            format = true;
         if (line.empty() || line[0] == '#')
             continue;
+        if (!format) {
+            Logger::log("[soundtrack] %s is from an older renderer: run scripts/render_soundtrack.py again",
+                        (directory / "manifest.tsv").string().c_str());
+            return false;
+        }
+        // id kind file cut_file frames loop_start loop_end name
         std::istringstream fields(line);
-        std::string        idText, kind, file;
+        std::string        idText, kind, file, cutFile;
         long long          frames = 0, loopStart = -1, loopEnd = -1;
-        if (!(fields >> idText >> kind >> file >> frames >> loopStart >> loopEnd))
+        if (!(fields >> idText >> kind >> file >> cutFile >> frames >> loopStart >> loopEnd))
             continue;
         const unsigned long id = std::stoul(idText, nullptr, 16);
         if (id < 0x81 || id > 0xFF)
             continue;
         Sound &sound    = sounds[id];
         sound.file      = directory / file;
+        sound.cutFile   = directory / cutFile;
         sound.loopStart = loopStart;
         if (kind != "music") {
             sound.audio = MIX_LoadAudio(mixer, sound.file.string().c_str(), true);
@@ -238,9 +284,11 @@ bool open(const std::filesystem::path &directory) {
     mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec);
     if (mixer != nullptr) {
         musicTrack = MIX_CreateTrack(mixer);
+        cutTrack   = MIX_CreateTrack(mixer);
         pcmTrack   = MIX_CreateTrack(mixer);
     }
-    if (mixer == nullptr || musicTrack == nullptr || pcmTrack == nullptr || !loadManifest(directory)) {
+    if (mixer == nullptr || musicTrack == nullptr || cutTrack == nullptr || pcmTrack == nullptr ||
+        !loadManifest(directory)) {
         Logger::log("[soundtrack] unavailable: %s", SDL_GetError());
         close();
         return false;
@@ -258,6 +306,7 @@ void close() {
         MIX_DestroyMixer(mixer); // also destroys its tracks
     mixer      = nullptr;
     musicTrack = nullptr;
+    cutTrack   = nullptr;
     pcmTrack   = nullptr;
     sfxTracks.clear();
     if (initialized) {
@@ -279,9 +328,8 @@ void onEntry(m_long entry, SystemMemory &memory) {
         case kResetAllEntry:
             if (trace)
                 Logger::log("[soundtrack] reset");
-            MIX_StopTrack(musicTrack, 0);
+            stopMusic();
             stopEffects(false);
-            musicPaused = false;
             break;
         case kFadeMusicEntry:
             startPicked(memory);

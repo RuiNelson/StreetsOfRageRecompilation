@@ -19,7 +19,8 @@ class SystemMemory;
 // - $72F8A sound_reset_all: stop the music and the sound effects (not a PCM
 //   voice, which the Z80 keeps streaming);
 // - $73066 sound_fade_music, called right after the queue every engine tick:
-//   start what was picked, follow the $E0 fade and the engine gate.
+//   start what was picked, follow the $E0 fade (the music's DAC+PSG stem stops
+//   at once, its FM stem steps down) and the engine gate.
 namespace SoRSoundtrack {
 
 /// Opens the audio device and loads `directory/manifest.tsv`. Returns false
