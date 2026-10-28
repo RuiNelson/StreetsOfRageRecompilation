@@ -59,7 +59,7 @@ Requirements:
 
 - CMake 3.24 or newer;
 - a C++23 compiler;
-- SDL3 development files;
+- SDL3 (optional: CMake fetches `release-3.4.8` when `find_package(SDL3)` fails);
 - sibling `MegaDriveEnvironment`;
 - Git/network access for CMake `FetchContent`;
 - Python 3 and sibling `RageDecompiler` for regeneration and analysis.
