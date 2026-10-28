@@ -449,7 +449,7 @@ min_x < 4` and treats the corridor as a locked arena (`game-engine-and-levels.md
 
 `$FFFA56 (camera_scripted_left_pan)` overrides the follow velocity in state 0
 with a constant −4 px/frame. Pipeline state `$14` (`$4CA`) and the Mr. X offer
-logic at `$11E72` set it. It is cleared when the players reach their marks
+logic at `$11E72 (mr_x_offer_wait_duel_end)` set it. It is cleared when the players reach their marks
 (`$50A6`, which then raises `$FFDE00 (mr_x_offer_flag)`) and by `$13E4C
 (mr_x_final_encounter_init)`. Round 8 is the only state-0 round that scrolls
 left, so this is the camera half of the scripted walk toward Mr. X. The

@@ -350,54 +350,83 @@ The observable phases include:
 - enabling `$FFFA43 (duel_damage_modifier)` during a P1-versus-P2 duel;
 - returning to normal combat or marking the narrative outcome.
 
-The choices themselves are stored in player-object state, particularly bits in `object+$59`. `$FFDE0E (mr_x_dialogue_clear_flags)` does not store the answers. During gameplay VBlank, `$12576 (vblank_update_mr_x_offer_tilemaps)` consumes bit 0 to clear the main dialogue area and bit 1 to clear both player-choice tile areas. It then consumes the two pending copy slots at `$FFDE60` and `$FFDEA0` through `$125E6 (vblank_flush_mr_x_dialogue_copy_slot)`. The connection between accepting the offer and the bad ending is unambiguous.
+The choices themselves are stored in player-object state, particularly bits in `object+$59`. `$FFDE0E (mr_x_dialogue_clear_flags)` does not store the answers. During gameplay VBlank, `$12576 (vblank_update_mr_x_offer_tilemaps)` consumes bit 0 to clear the main dialogue area and bit 1 to clear both player-choice tile areas. It then consumes the two pending copy slots at `$FFDE60` and `$FFDEA0` through `$125E6 (vblank_flush_mr_x_dialogue_copy_slot)`. The bad ending comes only from the duel's survivor refusing the second offer (§7.4).
 
 ### 7.3 One-player path
 
-`$11CCA (mr_x_offer_choice_init)` begins by clearing `$FFDE10 (bad_ending_selected)`. The player's response then selects one of two branches:
+`$11CCA (mr_x_offer_choice_init)` begins by clearing `$FFDE10 (bad_ending_selected)`. `$11DEC (mr_x_offer_open_single_choice)` opens the choice, and `$11E1A (mr_x_offer_wait_single_choice)` waits until `$120EC (poll_mr_x_offer_player_choice_input)` confirms it: one state on (`$0B`) for YES, eight on (`$12`) for NO.
 
-- refuse: the scene ends, control is restored, and the fight against Mr. X can finish normally;
-- accept: `$12074 (mr_x_offer_mark_bad_ending)` writes `1` to `$FFDE10 (bad_ending_selected)` and advances the dialogue state.
+- YES: `$11E28 (mr_x_offer_start_reward_text)` ("You show a lot of potential. Here's your reward..."), then `$11E50 (mr_x_offer_send_back_to_round6)` sets `$FF34`/`$FF36` and restarts the campaign at round 6. On the next visit `$11C8A (mr_x_offer_open_dialogue_window)` reads `$FF36` and jumps straight to state `$13`: no second question.
+- NO: `$11EA8 (mr_x_offer_start_refusal_text)` ("You really want to die, don't you... I'll be happy to oblige!"), then `$11F10 (mr_x_offer_release_to_fight)` writes state `$41`, clears the clock and the fight with Mr. X goes on.
 
-Combat and stage exit still finish through the normal round-clear mechanism. The result byte is consumed only later at `$183C4 (round_clear_select_ending)`, after the score tally.
+**One player never gets the bad ending**: neither branch writes `$FFDE10 (bad_ending_selected)`. (An earlier version of this section said accepting did; the jump table says otherwise.)
 
 ### 7.4 Two-player path
 
-The same state machine supports additional cases in 2P mode:
+`$11F1C (mr_x_offer_open_choice_p1)` / `$11F4E (mr_x_offer_open_choice_p2)` open both choices, and `$11F74 (mr_x_offer_compare_2p_choices)` compares them once both are confirmed:
 
-- matching answers proceed directly to the corresponding branch;
-- conflicting raw selection bits activate a P1-versus-P2 confrontation;
-- `$FFFA43 (duel_damage_modifier)` triples the low damage nibble (modulo 16)
-  and selects alternate player-reaction values during this fight;
-- the `$FFFF18 (player_mode)` mask can be modified temporarily while the machine determines which player continues;
-- one branch returns to round 6 by setting `level = 5` before re-entering the normal cycle.
+- matching answers take the one-player branches: both YES state `$0B` (round 6), both NO state `$12` (the fight);
+- different answers take the duel: `$11FA8 (mr_x_offer_start_duel)` sets `$FFFA43 (duel_damage_modifier)` (it triples the low damage nibble, modulo 16, and selects alternate player-reaction values), restarts the level music and announces "After working as a team for so long, you part company. Now, a fight to the death!"; `$11FDA (mr_x_offer_close_window_for_duel)` and `$12010 (mr_x_offer_begin_duel)` hand control back;
+- `$11E72 (mr_x_offer_wait_duel_end)` (state `$29`) waits for `$FFFF22 (p1_out_or_continue_flag)` or `$FFFF25 (p2_out_or_continue_flag)`, clears `$FFFA43 (duel_damage_modifier)` and pans the camera; the scene reloads from `$11C42 (mr_x_offer_load_scene_art)`;
+- `$12028 (mr_x_offer_start_post_duel_text)` asks the survivor "You're no ordinary man. It would be a waste to kill you. Why don't you join my organization?", `$12050 (mr_x_offer_reset_survivor_choice)` puts the cursor on YES, and `$11DEC (mr_x_offer_open_single_choice)` opens the survivor's choice;
+- YES: `$1206C (mr_x_offer_post_duel_accept)` writes state `$0B`, the reward text and the round-6 restart;
+- NO: `$12074 (mr_x_offer_mark_bad_ending)` sets `$FFDE10 (bad_ending_selected)` with "You're an evil man. I never would have expected this from you. Die, traitor!", `$120A2 (mr_x_offer_resume_fight)` returns to state `$12`, and the fight with Mr. X follows; `$183C4 (round_clear_select_ending)` shows the bad ending after it.
 
-The ROM jump and control tables establish the raw route matrix completely.
-`$11F74 (mr_x_offer_compare_2p_choices)` performs the equal/different test, and
-`$120EC (poll_mr_x_offer_player_choice_input)` is called from every player
-update but returns immediately unless object `+$59` bit 4 marks that player's
-Mr. X offer-choice UI as active. Only then does it own per-player selection and
-confirm handling. It reads **held** `object+$54` (then clears that word):
+So the bad ending is the duel's survivor refusing Mr. X and then beating him.
+
+`$120EC (poll_mr_x_offer_player_choice_input)` is called from every player update but returns immediately unless object `+$59` bit 4 marks that player's Mr. X choice UI as active and `$120AA (mr_x_offer_control_table)` has bit 7 set for the current state. It reads **held** `object+$54` (then clears that word):
 
 - held **UP** (bit 0) clears `+$59` bit 3 → YES;
 - held **DOWN** (bit 1) sets `+$59` bit 3 → NO;
-- any held face bits in `$70` (attack/jump/special after remap = B/C/A)
-  register the choice and set `+$59` bit 5.
+- any held face bits in `$70` (attack/jump/special after remap = B/C/A) register the choice, set `+$59` bit 5 and advance the state by one, or by eight on a one-player NO.
 
-`object+$59` bit 3 is the selected side in each choice UI:
+`object+$59` bit 3 is the selected side. The options are drawn YES above, NO below (`$1256A (mr_x_offer_options_text_en)`, `$1227E (mr_x_offer_options_text_jp)`), and the cursor rows `$1226E (mr_x_offer_cursor_yes_text)` / `$12276 (mr_x_offer_cursor_no_text)` put the arrow on the upper row while bit 3 is clear:
 
-| Phase | P1 bit 3 | P2 bit 3 | Static route |
+| Phase | P1 bit 3 | P2 bit 3 | Route |
 |---|---:|---:|---|
-| Initial 2P choice | 0 | 0 | state `$0B`; set `$FF34/$FF36`, fade, then `$108F8` restarts at `level=5` / `game_state=$28` |
+| One-player choice | 0 (YES) | — | state `$0B`; reward text, `$FF34/$FF36`, restart at round 6 |
+| One-player choice | 1 (NO) | — | state `$12`; refusal text, then the fight |
+| Initial 2P choice | 0 | 0 | state `$0B`; the same round-6 restart |
 | Initial 2P choice | 1 | 1 | state `$12`, then `$18/$41`; release the clock and continue the final fight |
-| Initial 2P choice | 0 | 1 | state `$22`; enable the player duel |
-| Initial 2P choice | 1 | 0 | state `$22`; enable the player duel |
-| Post-duel choice | 0 | — | state `$34->$0B`; Round 6 restart route |
-| Post-duel choice | 1 | — | state `$3B->$3C`; `$12074 (mr_x_offer_mark_bad_ending)` sets `$FFDE10 (bad_ending_selected)` |
+| Initial 2P choice | 0 | 1 | state `$22`; the player duel |
+| Initial 2P choice | 1 | 0 | state `$22`; the player duel |
+| Post-duel choice | 0 (YES) | — | state `$34->$0B`; round-6 restart |
+| Post-duel choice | 1 (NO) | — | state `$3B->$3C`; `$FFDE10 (bad_ending_selected)` set, then `$40->$12` and the fight |
 
-The remaining dynamic/visual task is only to attach the exact localized answer
-text to raw bit 3 in each prompt; route destinations no longer depend on a
-runtime matrix.
+Every state of `$11B94 (mr_x_offer_jt)`, with its `$120AA (mr_x_offer_control_table)` byte (`$01` locked, `$02` input zeroed, `$00` free, `$81` choice):
+
+| States | Routine |
+|---|---|
+| `$00` | `$11C2E (mr_x_offer_load_scene)` |
+| `$01`, `$2B` | `$11C7E (mr_x_offer_wait_art_cues)` |
+| `$02`, `$2C` | `$11C8A (mr_x_offer_open_dialogue_window)` |
+| `$03`/`$04`, `$07`/`$08`, `$0E`/`$0F`, `$15`/`$16`, `$1A`/`$1B`, `$24`/`$25`, `$2F`/`$30`, `$3E`/`$3F` | `$11C18 (mr_x_offer_start_delay)` / `$11C22 (mr_x_offer_wait_delay)` |
+| `$05` | `$11CCA (mr_x_offer_choice_init)` |
+| `$06`, `$0D`, `$14`, `$19`, `$23`, `$2E`, `$3D` | `$11CFE (mr_x_offer_type_dialogue)` |
+| `$09`, `$31` | `$11DEC (mr_x_offer_open_single_choice)` |
+| `$0A` (`$81`) | `$11E1A (mr_x_offer_wait_single_choice)` |
+| `$0B`, `$12`, `$20`, `$27`, `$3B` | `$11E1C (mr_x_offer_clear_dialogue)` |
+| `$0C` | `$11E28 (mr_x_offer_start_reward_text)` |
+| `$10`, `$17` | `$11ED0 (mr_x_offer_close_dialogue_window)` |
+| `$11` (`$02`) | `$11E50 (mr_x_offer_send_back_to_round6)` |
+| `$13` | `$11EA8 (mr_x_offer_start_refusal_text)` |
+| `$18` (`$00`) | `$11F10 (mr_x_offer_release_to_fight)` |
+| `$1C`, `$1D` | `$11F1C (mr_x_offer_open_choice_p1)`, `$11F4E (mr_x_offer_open_choice_p2)` |
+| `$1E`, `$1F`, `$33`, `$35`-`$3A` (`$81`) | `$11EA6 (mr_x_offer_wait)` |
+| `$21` | `$11F74 (mr_x_offer_compare_2p_choices)` |
+| `$22` | `$11FA8 (mr_x_offer_start_duel)` |
+| `$26` | `$11FDA (mr_x_offer_close_window_for_duel)` |
+| `$28` | `$12010 (mr_x_offer_begin_duel)` |
+| `$29` (`$00`) | `$11E72 (mr_x_offer_wait_duel_end)` |
+| `$2A` | `$11C42 (mr_x_offer_load_scene_art)` |
+| `$2D` | `$12028 (mr_x_offer_start_post_duel_text)` |
+| `$32` | `$12050 (mr_x_offer_reset_survivor_choice)` |
+| `$34` (`$81`) | `$1206C (mr_x_offer_post_duel_accept)` |
+| `$3C` | `$12074 (mr_x_offer_mark_bad_ending)` |
+| `$40` | `$120A2 (mr_x_offer_resume_fight)` |
+| `$41` (`$00`) | `$11F1A (mr_x_offer_done)` |
+
+The dialogue is drawn by `$121DA (mr_x_offer_begin_dialogue_text)`, the options by `$121B0 (mr_x_offer_draw_choice_options)`, each row through `$1221E (mr_x_offer_expand_text_row)`.
 
 The transition from office scene to combat is also explicit. Object type `$33`
 dispatches through `$12B5C (mr_x_office_controller_update)`. Once bit 3 of
@@ -569,6 +598,8 @@ The dynamic run therefore confirms the manuscript's central claims about the nar
 
 ## 13. Future work
 
-Capture both choice prompts in each ROM language/region and associate the
-displayed left/right words with `object+$59` bit 3. The assembly and ROM tables
-already determine every route destination and the exact Round 6 restart point.
+The words on the choice prompts are now tied to `object+$59` bit 3 from the
+ROM's own option and cursor rows (§7.4: YES above, the cursor there while the
+bit is clear), in both the Japanese and English tables. Not yet checked on a
+running game: whether the out/continue flags that end the duel are set by the
+loser's last life or by a single knockdown.

@@ -53,6 +53,17 @@ C0001E, vdp_disable_, "100% - VDP Disable/Debug Register (Mirror)"
 
 ; Streets of Rage specific
 
+01226E, mr_x_offer_cursor_yes_text, "100% - Mr. X choice cursor rows with the arrow ($FB) on the upper (YES) row; drawn while +$59 bit 3 is clear"
+012276, mr_x_offer_cursor_no_text, "100% - Mr. X choice cursor rows with the arrow ($FB) on the lower (NO) row; drawn while +$59 bit 3 is set"
+01227E, mr_x_offer_options_text_jp, "100% - Japanese YES/NO option rows (hai above, iie below)"
+012286, mr_x_offer_question_text_jp, "100% - Japanese first offer question"
+012390, mr_x_offer_question_text_en, "100% - English first offer question: Well, you found your way here. Would you consider becoming my right-hand man?"
+0123E2, mr_x_offer_reward_text_en, "100% - English YES reply: You show a lot of potential. Here's your reward..."
+01241A, mr_x_offer_refusal_text_en, "100% - English NO reply: You really want to die, don't you... I'll be happy to oblige!"
+01245E, mr_x_offer_post_duel_text_en, "100% - English post-duel question to the survivor: You're no ordinary man... why don't you join my organization?"
+0124C0, mr_x_offer_duel_text_en, "100% - English duel announcement: After working as a team for so long, you part company. Now, a fight to the death!"
+012518, mr_x_offer_traitor_text_en, "100% - English post-duel NO reply (bad ending): You're an evil man... Die, traitor!"
+01256A, mr_x_offer_options_text_en, "100% - English YES/NO option rows (YES above, NO below)"
 005970, continue_override_threshold_table, "100% - B[4] - Values $00,$01,$07,$09 indexed by $FFFF35 on the nonstandard continue-reset path; result replaces the active player's bonus-life threshold index"
 003A30, player_frame_timing_table, "100% - W[] - Offsets to rows of per-frame update counts for player animations; $3A14 loads +$0D from row +$0C, entry +$0A. Row 8 (Axel's rear attack) 1,5,2; row 26 (Blaze's) 3,8,3"
 00423C, player_attack_descriptor_table, "100% - Per-animation offsets to per-character frame bytes read by compute_player_attack_descriptor: low nibble the frame's damage (+$34), high nibble the hit property OR'd into +$42 (bit 0 knocks down)"
