@@ -108,7 +108,9 @@ void StreetsOfRage::sound_ym2612_acquire(m_long /*entry_*/) {
         if (shouldQuit())
             break;
 
-        if ((memory().readByte(kZ80DacBusy) & 0x80u) != 0) {
+        // With the chips disabled (--silent, or the pre-rendered soundtrack)
+        // the YM2612 drops every write, so there is no DAC stream to avoid.
+        if (!sound().disabled() && (memory().readByte(kZ80DacBusy) & 0x80u) != 0) {
             // Drop the bus so the host release path can run a Z80 slice, then
             // hammer BUSREQ immediately like the ROM's three-NOP retry.
             memory().writeWord(kZ80Busreq, 0);

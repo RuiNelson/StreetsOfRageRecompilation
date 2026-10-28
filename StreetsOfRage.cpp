@@ -1,5 +1,6 @@
 #include "SoR.hpp"
 #include "SoRCheats.hpp"
+#include "SoRSoundtrack.hpp"
 #include "Logger.hpp"
 #include <cerrno>
 #include <cstdio>
@@ -324,6 +325,11 @@ void StreetsOfRage::setCallLog(const std::string &path) {
 }
 
 void StreetsOfRage::logEntry(m_long entry) {
+    // sound_process_queue, sound_reset_all and sound_fade_music drive the
+    // pre-rendered soundtrack (SoRSoundtrack.hpp).
+    if ((entry == 0x00072D08u || entry == 0x00072F8Au || entry == 0x00073066u) && SoRSoundtrack::isOpen())
+        SoRSoundtrack::onEntry(entry, memory());
+
     if (callLog_ == nullptr)
         return;
 

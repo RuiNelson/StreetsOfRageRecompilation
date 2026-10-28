@@ -37,11 +37,32 @@ set(MEGADRIVE_ENVIRONMENT_DIR
 )
 add_subdirectory("${MEGADRIVE_ENVIRONMENT_DIR}" "${CMAKE_BINARY_DIR}/MegaDriveEnvironment")
 
+# SDL3_mixer plays the pre-rendered soundtrack (SoRSoundtrack.cpp): FLAC
+# through the bundled dr_flac, so no other codec or system library is needed.
+foreach(format AIFF VOC AU GME MOD MP3 MIDI OPUS VORBIS_STB VORBIS_VORBISFILE WAVPACK FLAC_LIBFLAC)
+    set(SDLMIXER_${format} OFF CACHE BOOL "" FORCE)
+endforeach()
+set(SDLMIXER_WAVE ON CACHE BOOL "" FORCE)
+set(SDLMIXER_FLAC ON CACHE BOOL "" FORCE)
+set(SDLMIXER_FLAC_DRFLAC ON CACHE BOOL "" FORCE)
+set(SDLMIXER_VENDORED OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_TESTS OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SDLMIXER_INSTALL OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    SDL3_mixer
+    GIT_REPOSITORY https://github.com/libsdl-org/SDL_mixer.git
+    GIT_TAG        release-3.2.4
+)
+FetchContent_MakeAvailable(SDL3_mixer)
+
 file(GLOB_RECURSE SOR_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.c"
 )
 list(FILTER SOR_SOURCES EXCLUDE REGEX ".*/build/.*")
+# tools/ holds separate programs, such as the soundtrack renderer.
+list(FILTER SOR_SOURCES EXCLUDE REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/tools/.*")
 
 add_executable(sor ${SOR_SOURCES})
 
@@ -62,6 +83,7 @@ target_include_directories(sor PRIVATE
 target_link_libraries(sor PRIVATE
     MegaDriveEnvironment::MegaDriveEnvironment
     CLI11::CLI11
+    SDL3_mixer::SDL3_mixer
 )
 
 if(MSVC)

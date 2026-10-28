@@ -1,8 +1,11 @@
 #include "SoRCheats.hpp"
+#include "SoRSoundtrack.hpp"
 #include "SoR.hpp"
 #include "config/controls/ControlsConfigUI.hpp"
 #include <CLI/CLI.hpp>
 #include <cstdint>
+#include <cstdio>
+#include <filesystem>
 #include <string>
 
 int main(int argc, char *argv[]) {
@@ -25,8 +28,17 @@ int main(int argc, char *argv[]) {
     std::string   sorCallLogFile;
     std::string   languagePin = "jp";
     std::string   videoHz     = "60";
+    std::string   soundMode   = "prerendered";
+    std::string   soundtrackDir; // default: soundtrack/ next to the ROM
 
     app.add_flag("--silent", silentFlag, "Disable audio output entirely (chip writes are dropped)");
+    app.add_option("--sound",
+                   soundMode,
+                   "Audio source: prerendered (the tools/soundtrack FLAC renders; emulated when they are "
+                   "missing) or emulated (YM2612, PSG and Z80 DAC in real time)")
+        ->capture_default_str()
+        ->check(CLI::IsMember({"prerendered", "emulated"}));
+    app.add_option("--soundtrack", soundtrackDir, "Pre-rendered soundtrack directory (default: soundtrack next to the ROM)");
     app.add_flag("--configControls", configControlsFlag, "Open controller configuration UI");
     app.add_option("--lang", languagePin, "Console language pin: jp=low/Japanese, en=high/overseas")
         ->capture_default_str()
@@ -75,8 +87,21 @@ int main(int argc, char *argv[]) {
                                              : MegaDriveEnvironment::VideoStandard::Hz60);
         env.setVDPTurboMultiplier(turboMultiplier);
         env.setWidescreen(widescreenFlag);
-        if (silentFlag)
+        if (silentFlag) {
             env.sound().disable();
+        } else if (soundMode == "prerendered") {
+            const std::filesystem::path directory = soundtrackDir.empty()
+                                                        ? std::filesystem::path(sorRomPath).parent_path() / "soundtrack"
+                                                        : std::filesystem::path(soundtrackDir);
+            // The engine still runs; only the chip output is replaced.
+            if (SoRSoundtrack::open(directory))
+                env.sound().disable();
+            else
+                std::fprintf(stderr,
+                             "No pre-rendered soundtrack in %s (run scripts/render_soundtrack.py); "
+                             "emulating the sound chips\n",
+                             directory.string().c_str());
+        }
     };
 
     if (configControlsFlag) {
@@ -104,6 +129,7 @@ int main(int argc, char *argv[]) {
             sor.setCallLog(sorCallLogFile);
         }
         sor.boot();
+        SoRSoundtrack::close();
     }
 
     return 0;

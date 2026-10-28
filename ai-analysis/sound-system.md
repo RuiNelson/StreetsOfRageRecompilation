@@ -274,10 +274,41 @@ Each frame (simplified):
 | `$81`–`$9F` | **Music** | `$7288C (music_pointer_table)` → arm FM + PSG (+ DAC) channels |
 | `$A0`–`$CF` | **SFX** | `$73B56 (sfx_pointer_table)` → arm SFX channels; may steal music slots |
 | `$D0`–`$DF` | **Direct PCM** | `(ID + $B6)` → `$A01FFF (z80_dac_command)` under BUSREQ |
-| `$E0`–`$E3` | **Special** | `$E0` → `$7302E (sound_start_music_fade)` |
-| else / idle | Reset / idle | `$72F8A (sound_reset_all)` path or mark `sound_pending_id = $80` |
+| `$E0`–`$E3` | **Special** | Jump table at `$72D90`; see 5.4 |
+| `$E4`–`$FF`, or bit 7 clear | Reset | `$72F8A (sound_reset_all)` |
+| `$80` | Idle | No action; every exit marks `sound_pending_id = $80` |
 
 Priorities: music ~**`$80`**; SFX roughly **`$2F`–`$7F`** (e.g. `$BD`/`$BF` at `$7F`); PCM **`$72`–`$78`**.
+
+### 5.4 Special commands and the engine gate
+
+Decoded from the four `bra.w` entries at `$72D90`:
+
+| ID | Target | Effect |
+|----|--------|--------|
+| `$E0` | `$7302E (sound_start_music_fade)` | Fade: `$FFF002 (stop_music)` = `$10`, music DAC/PSG cut at once, FM attenuation +1 every 5 frames for 15 steps, then `$72F8A (sound_reset_all)` |
+| `$E1` | `$72F8A (sound_reset_all)` | Immediate stop of music and effects (a PCM sample already streaming on the Z80 is not stopped) |
+| `$E2` | `$72FE4` | Clears and keys off the two FM effect channels `$FFF1F0 (sound_sfx_fm0)` and `$FFF220 (sound_sfx_fm1)`, restores their music channels, resets `$FFF000 (sound_active_priority)`; music keeps playing |
+| `$E3` | `$72F8A (sound_reset_all)` | Same as `$E1` |
+
+Game code posts `$E0` from the level flow (twice) and `$8890
+(bad_ending_sequence_update)`, and `$E1` from the OPTIONS sound test (stop
+before playing), `$108E (game_start_screen_update)`, `$17A2
+(initialize_player_continues)`, `$904E (game_mode_intro)`, `$108CC
+(ingame_finish_fade)` and `$10C88 (update_game_clock)`.
+Starting any music also runs `$72F8A (sound_reset_all)` first, so a new track
+cuts every playing effect; no effect stops the music.
+
+Sequence command `$F9` (`$73384`) toggles `$FFF007 (sound_engine_gate)`: zero
+becomes `$01`, non-zero becomes `$80`. While the gate is positive,
+`$72914 (sound_engine)` keys every FM channel off, silences the PSG and skips
+the music channels (frozen in place) but still processes the queue and ticks
+the effects; a negative gate is cleared on the next tick and the music resumes.
+The only user is effect `$BD`, whose sequence opens with `$F9`: it is the pause
+jingle posted by `$10D2E (handle_pause_start_input)` on both pause and unpause.
+
+The music pointer table holds 17 tracks (`$81`-`$91`; `$728D0` follows it), and
+`$8D` and `$8E` point at the same data (`$7D91C`).
 
 ---
 

@@ -36,6 +36,8 @@ Before changing files:
 | `SorRuntime.*` | Host orchestration around the recompiled cartridge |
 | `SoRManualFunctions.cpp` | Hand-written implementations of selected ROM routines |
 | `SoRControls.cpp` | Hand-written controller sampling, input remap, OPTIONS controls, character-select input, and pause/Start routines |
+| `SoRSoundtrack.*` | Pre-rendered soundtrack playback (SDL3_mixer) driven by the ROM's own sound engine |
+| `tools/soundtrack/` | Separate CMake project: the Genesis Plus GX renderer that produces that soundtrack |
 | `code-analysis/manual_functions.txt` | Addresses dispatched to manual implementations |
 | `code-analysis/labels.csv` | ROM code entry points and control-flow labels |
 | `code-analysis/addresses.csv` | ROM data, RAM, hardware, table, and buffer symbols |
@@ -62,8 +64,9 @@ Requirements:
 - Git/network access for CMake `FetchContent`;
 - Python 3 and sibling `RageDecompiler` for regeneration and analysis.
 
-`CMakeLists.txt` builds `sor`, fetches CLI11, and adds
-`MegaDriveEnvironment`. It deliberately requests shared yaml-cpp, zlib, and
+`CMakeLists.txt` builds `sor`, fetches CLI11 and SDL3_mixer (`release-3.2.4`,
+FLAC through its bundled dr_flac, every other codec off), and adds
+`MegaDriveEnvironment`. `tools/` is excluded from the `sor` source glob. It deliberately requests shared yaml-cpp, zlib, and
 libpng dependencies and avoids relinking `sor` for implementation-only runtime
 library rebuilds.
 
@@ -129,6 +132,89 @@ limit. SOVR is still set as on hardware, so game logic reading it is unaffected.
 `main.cpp` publishes the launch options through `RemoteAccess::setFlag`: flag 0
 is `--widescreen`, flag 1 is `--altControls` (6-button). `autoplay`'s
 `host_flags.py` mirrors the indices; change both together.
+
+## Pre-rendered soundtrack (`--sound`)
+
+User decision: the host's real-time YM2612/PSG/Z80 emulation is not good
+enough for this game (the 68000 sequences the music and the BUSREQ/DAC-busy
+handshakes cost host CPU that hardware never pays), so `sor` plays renders made
+by Genesis Plus GX with the **Nuked OPN2 YM3438** core, **no low-pass filter**
+(post-processing is for later), **48 kHz lossless (FLAC)**. Music, sound
+effects and PCM voices are all pre-rendered. Music under `--turbo` plays at
+normal speed (turbo is a development mode). A sound effect borrowing a music
+channel is a hardware limitation the port does not reproduce: the music keeps
+playing under it.
+
+`--sound prerendered` is the default and falls back to `emulated` (with a
+message) when `--soundtrack DIR` (default: `soundtrack/` next to the ROM, i.e.
+`rom/soundtrack/`) has no `manifest.tsv`. `--silent` still disables all audio.
+In prerendered mode `Sound` is disabled (chip writes dropped) and nothing else
+changes: the 68000 engine runs every tick and keeps `$FFF000`-`$FFF36F` exactly
+as on hardware, which game logic reads (`handle_pause_start_input` tests
+`stop_music`). `SOR_SOUNDTRACK_TRACE=1` logs every engine event.
+
+### Rendering: `tools/soundtrack`, `../scripts/render_soundtrack.py`
+
+A standalone CMake project (so `sor` never fetches the emulator). It fetches
+upstream Genesis Plus GX at a pinned commit (`SOR_GPGX_COMMIT`) into its own
+build tree and compiles core + libretro glue **unmodified** (statically, no
+CHD/Tremor/zlib), plus libFLAC 1.5.0. `gpgx_glue.c` reaches RAM, Z80 RAM, the
+cartridge ROM and `audio_set_rate`, which libretro does not expose (libretro
+pins 44.1 kHz). The script builds it, renders into `rom/soundtrack.rendering/`
+and swaps it in (~2 minutes, ~180 MB, 77 files: `$81`-`$91`, `$A0`-`$CF`,
+`$D0`-`$DB`). `--chip ym2612` selects Nuked's Model 1 mode.
+
+How a render works (`render_soundtrack.cpp`):
+
+1. Boot 600 frames, then park the main loop by writing `bra.s *` at `$3A2
+   (game_infinite_loop)` in GPGX's ROM copy (the boot checksum already ran):
+   VBlank keeps calling `$72914 (sound_engine)` and nothing else posts sounds.
+   Post `$E1`, wait, check every channel block is idle, save a state.
+2. Per ID: restore the state, write the ID to `$FFF00A (play_se)`, run frames.
+   The machine is paced at **exactly 60.0 Hz** (the host's rate) so a frame is
+   exactly 800 samples and loop points are exact sample indices.
+3. Loop: the first frame N whose sequencer RAM (`$FFF040`-`$FFF1EF` for music,
+   `$FFF1F0`-`$FFF36F` for effects) is byte-identical to an earlier frame M.
+   `loop_start` is M + 5 s (release tails of the intro gone), `loop_end` N + 5 s
+   (end of file). The RAM repeats but the chips' free-running phases (PSG tone
+   counters, LFO) do not, so the raw seam jumped by ~1200; the last 25 ms
+   before `loop_end` are cross-faded into the samples before `loop_start`, which
+   makes the jump continuous.
+4. A non-looping sound ends when its channel blocks are idle (and, for PCM,
+   `$A01FFD (z80_dac_busy)` is clear), plus up to 4 s of release; the settled
+   tail is trimmed. Every render starts at its first non-zero sample (the base
+   state is digital zero; the first chip write lands 20-400 samples into
+   frame 1).
+
+`manifest.tsv` columns: `id kind file frames loop_start loop_end name` (hex ID,
+`-1` for no loop, names decoded from the sound test's `$1C684` rows). The FLAC
+files also carry `LOOPSTART`/`LOOPLENGTH` tags.
+
+Render facts: `$83` (title) does not loop; `$8D` (name entry) and `$8E` (round
+clear) are the same data; `$BD`, `$CF`, `$D1` and `$DA` are not in the sound
+test. Loop starts range from 6 s (`$8A`) to 147 s (`$84`).
+
+### Playback: `SoRSoundtrack.cpp`
+
+`StreetsOfRage::logEntry` (every traced entry) forwards three engine entries:
+
+| Entry | Action |
+| --- | --- |
+| `$72D08 (sound_process_queue)` | Replicate the ROM's pick: each `play_se` slot with bit 7 and priority (`$72824 (sound_priority_table)`, ID - `$81`) at least the running one replaces `$FFF009 (sound_pending_id)` |
+| `$72F8A (sound_reset_all)` | Stop music and effects; a PCM voice keeps playing, as the Z80 keeps streaming it. Reached by every music start, `$E1`, `$E3`, `$E4`+, and the end of a fade |
+| `$73066 (sound_fade_music)` | Right after the queue each tick: start the pick (music streamed from disk with its loop; effect predecoded on one track per SFX channel block, header byte 3 through `$72E74`; voice on one PCM track), `$E2` stops the effects on `$FFF1F0`/`$FFF220`; set the music gain from `stop_music` (15 steps of 0.75 dB, then the reset); pause the music while `$FFF007 (sound_engine_gate)` is positive |
+
+`$BD` is the pause jingle (`handle_pause_start_input`): its sequence starts with
+`$F9`, which sets the gate to `$01` (music keyed off and frozen) or, when set,
+to `$80` (released on the next tick), so pausing and unpausing both post `$BD`.
+The fade's immediate cut of the music DAC/PSG channels is not reproduced (one
+stem per track).
+
+Validated on macOS (arm64): `SDL_AUDIO_DRIVER=disk` capture of the attract
+mode is sample-identical to `music_83.flac`; a 2-minute autoplay session plays
+title, select, round 1, effects and voices with no clipping; `$BD` x2, `$E0`,
+`$E1`, `$E2` posted through remote access behave as above; CPU 21% vs 29%
+emulated over the same 45 s. Not tested: Windows and Linux builds, `--hz 50`.
 
 ## Widescreen (`--widescreen`)
 
@@ -288,7 +374,9 @@ keeping the generated declaration, dispatcher, and call sites intact.
   on the DAC-busy retry: voices pulse `$A01FFD (z80_dac_busy)` briefly, and
   a host sleep after release lets the Z80 thread start a long slice that
   stalls the next BUSREQ (frame hitch). Retry immediately, like the ROM's
-  three NOPs.
+  three NOPs. When the chips are disabled (`--silent`, or the pre-rendered
+  soundtrack) it skips the DAC-busy retry: the YM2612 drops every write, so
+  there is no Z80 DAC stream to stay clear of.
 - Preserve 68000-visible register, memory, flag, stack, and control-flow
   effects expected by callers.
 - Base behavior on `output/sor.asm`, analysis data, and bounded runtime
@@ -495,6 +583,7 @@ output, compile `sor`, and execute an appropriate bounded observation.
 Never commit:
 
 - `rom/SOR.bin` or any commercial ROM dump;
+- `rom/soundtrack/` (renders derived from the ROM);
 - build directories or CMake fetch trees;
 - caches, screenshots, logs, or temporary discovery output;
 - local captures not explicitly requested as fixtures.
