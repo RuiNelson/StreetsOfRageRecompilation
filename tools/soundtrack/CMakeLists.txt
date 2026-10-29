@@ -108,3 +108,7 @@ endif()
 add_executable(sor_soundtrack render_soundtrack.cpp)
 target_compile_definitions(sor_soundtrack PRIVATE SOR_GPGX_COMMIT="${SOR_GPGX_COMMIT}")
 target_link_libraries(sor_soundtrack PRIVATE gpgx FLAC::FLAC)
+if(MINGW)
+    # No toolchain DLLs next to the renderer.
+    target_link_options(sor_soundtrack PRIVATE -static-libgcc -static-libstdc++)
+endif()

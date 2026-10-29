@@ -95,8 +95,13 @@ cmake --build build --parallel
 ```
 
 On multi-config generators, pass `--config Debug` or `--config Release`.
-Windows builds should put runtime DLL targets in a common output directory;
-the meta-repository README contains a complete CMake/Ninja/vcpkg command.
+Windows uses llvm-mingw (Clang, LLD, libc++, UCRT) with Ninja: pass
+`-G Ninja -DCMAKE_C_COMPILER=<arch>-w64-mingw32-clang
+-DCMAKE_CXX_COMPILER=<arch>-w64-mingw32-clang++` (the scripts do), and
+`sor` raises its stack with `-Wl,--stack,8388608`. `MegaDriveEnvironment` is
+static there and the C++ runtime is linked in (`-static-libstdc++`), so only
+`SDL3.dll`/`SDL3_mixer.dll` sit next to `sor.exe`. The meta-repository README
+has the complete command. Not yet built on a real Windows machine.
 
 ## ROM and regeneration
 

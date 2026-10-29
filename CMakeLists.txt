@@ -91,6 +91,9 @@ if(MSVC)
     # main's stack. Match the typical 8 MiB Unix process stack instead of
     # MSVC's 1 MiB default, which overflows during cartridge startup.
     target_link_options(sor PRIVATE /STACK:8388608)
+elseif(MINGW)
+    # Same reason as above: the default Windows stack is 1 MiB.
+    target_link_options(sor PRIVATE -Wl,--stack,8388608)
 endif()
 
 if(WIN32)
