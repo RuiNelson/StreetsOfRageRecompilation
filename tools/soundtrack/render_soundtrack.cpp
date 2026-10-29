@@ -595,6 +595,10 @@ int main(int argc, char **argv) {
         return 2;
     }
 
+    // A wrapper (the Builder app) reads these lines through a pipe, where stdio would hold them
+    // back until the end: report each item as it is rendered.
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
+
     fs::create_directories(options.out);
     g_systemDir = fs::absolute(options.out).string();
 
