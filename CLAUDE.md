@@ -186,8 +186,9 @@ and every byte in `$FFFC04`-`$FFFC0A` keep their format and frame.
   that is not connected counts as `auto`.
 - Defaults (user): P1 arrows, ORIGINAL 3 Special/Punch/Jump/Start = Z X C V,
   ENHANCED 6 Special/Punch/Jump/Back Attack/Pick/Throw/Start = Z X C V B N M;
-  P2 W S A D, H J K L and H J K Y U I L; gamepad RT, West, South (+ LT, North,
-  East). Default scheme ORIGINAL 3.
+  P2 W S A D, H J K L and H J K Y U I L; gamepad ORIGINAL 3 Special RT, Punch
+  West, Jump South, ENHANCED 6 Special East, Punch West, Jump South, Back
+  Attack LT, Pick Item North, Throw Knife RT. Default scheme ORIGINAL 3.
 - `controls.yaml` is created with the defaults when missing; a missing or bad
   entry keeps its default; a file that does not parse is left untouched. No
   migration from MegaDriveEnvironment's `./controls.yaml` (user).
