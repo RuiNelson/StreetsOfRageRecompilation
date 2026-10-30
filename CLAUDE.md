@@ -66,7 +66,8 @@ Requirements:
 - SDL3 (optional: CMake fetches `release-3.4.8` when `find_package(SDL3)` fails);
 - sibling `MegaDriveEnvironment`;
 - Git/network access for CMake `FetchContent`;
-- Python 3 and sibling `RageDecompiler` for regeneration and analysis.
+- Python 3 and sibling `RageDecompiler` for regeneration and analysis;
+- `make` and network access for the first build of the bundled CPython (macOS, Linux).
 
 `CMakeLists.txt` builds `sor`, fetches CLI11 and SDL3_mixer (`release-3.2.4`,
 FLAC through its bundled dr_flac, every other codec off), and adds
@@ -106,6 +107,39 @@ Windows uses llvm-mingw (Clang, LLD, libc++, UCRT) with Ninja: pass
 static there and the C++ runtime is linked in (`-static-libstdc++`), so only
 `SDL3.dll`/`SDL3_mixer.dll` sit next to `sor.exe`. The meta-repository README
 has the complete command. Not yet built on a real Windows machine.
+
+## The Python AI in the process (`SoRPython`, `--ai-path`)
+
+For the **1 PLAYER AI ASSIST** mode, `sor` runs the same Python AI the external
+`autoplay` does (`../autoplay/ai-code/sor_ai`). User decisions: our own CPython as a
+shared library next to the binary, not the machine's, called through the **C API
+directly** (no pybind11), and part of every build, with no variant without it. Windows
+comes once macOS is finished (2026-10-30): until then CMake skips it there and
+`SoRPython.cpp` is a stub that only says so, so that build keeps working (not yet tried).
+Linux takes the same path as macOS, not yet tried either.
+
+- `cmake/CPythonRuntime.cmake` builds the pinned version (`SOR_CPYTHON_VERSION`, checked
+  by SHA-256) at configure time into `.cpython/<version>-<arch>/`: gitignored and outside
+  `build/`, so `--clean` and `--release` keep it. About 2 minutes, once, needing `make`
+  and network access. To rebuild it (say, after changing its options), delete `.cpython/`
+  and `python/` in the build folder.
+- It is PGO-optimized even for a Debug `sor`: `tools/tick_bench.py`'s mean tick was 1.28
+  ms plain and 1.19 ms with PGO. Modules that link other libraries of the machine
+  (`_ssl`, `_decimal`, `_zstd`, ...) are disabled, so the runtime depends only on the
+  system: check with `otool -L` when changing the version. `_decimal` and
+  `_remote_debugging` got in that way, tied to Homebrew.
+- After linking, the library goes next to `sor` and the stdlib into `python/lib/python3.X/`
+  beside it. `.cpython`'s own Python is usable for measuring (`DYLD_LIBRARY_PATH=.../lib`),
+  and it lacks Tk, so it cannot import `sor_autoplay.app` or the tests that do.
+- `SoRPython` runs one thread (SDL, 16 MiB of stack) that owns the interpreter's whole
+  lifetime: nothing else touches Python or waits for the GIL, so the AI can never slow
+  the game. It is isolated: search paths are `--ai-path` (default `ai-code` in the CWD)
+  and the bundled stdlib; the system Python and `PYTHON*` play no part. Code from that
+  folder runs only once `SoRPython::start` is called: never at launch, except with the
+  debug flag `--aiAssist`.
+- It calls `sor_ai.embedded.run(sor_host)`; the module `sor_host` is the AI's view of the
+  game. A failing AI (missing folder, exception, `sys.exit`) is reported on stderr as
+  `[ai] ...` and the game goes on. One that does not end is abandoned 3 seconds into quitting.
 
 ## ROM and regeneration
 

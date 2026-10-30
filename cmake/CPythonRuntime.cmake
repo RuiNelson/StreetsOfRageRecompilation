@@ -60,7 +60,7 @@ if(NOT EXISTS "${SOR_CPYTHON_STAMP}")
         _bz2 _ctypes _curses _curses_panel _dbm _decimal _gdbm _hashlib _lzma _remote_debugging _sqlite3 _ssl _tkinter
         _uuid _zstd readline)
     # PGO: 7% off the AI's mean tick and 6% off its p99 (tools/tick_bench.py), for
-    # about 40 s more once. Its training run needs the test package, removed below.
+    # about 30 s more once. Its training run needs the test package, removed below.
     set(configure_options --prefix=${SOR_CPYTHON_PREFIX} --enable-shared --enable-optimizations --without-ensurepip
         --without-static-libpython)
     foreach(module IN LISTS disabled_modules)
