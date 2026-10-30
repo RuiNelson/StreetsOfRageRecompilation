@@ -22,6 +22,10 @@ using SoRControlsConfig::PlayerConfig;
 using SoRControlsConfig::SchemeBindings;
 
 constexpr Sint16 kTriggerThreshold = 16384;
+
+// SOR_INPUT_TRACE=1: log every gamepad event and each player's actions when
+// they change (stderr), to see what a controller really sends.
+bool gTrace = false;
 constexpr int    kMenuStickThreshold = 16384;
 
 // Tap latches (State::keyTapped): one per reader, P1's and P2's samples and
@@ -197,6 +201,35 @@ bool handleEvent(void * /*userdata*/, SDL_Event *event) {
     if (!s.started)
         return true;
 
+    if (gTrace) {
+        switch (event->type) {
+            case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+            case SDL_EVENT_GAMEPAD_BUTTON_UP:
+                std::fprintf(stderr,
+                             "[input] pad %u button %s %s\n",
+                             (unsigned)event->gbutton.which,
+                             SDL_GetGamepadStringForButton(static_cast<SDL_GamepadButton>(event->gbutton.button)),
+                             event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ? "down" : "up");
+                break;
+            case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+                std::fprintf(stderr,
+                             "[input] pad %u axis %s = %d\n",
+                             (unsigned)event->gaxis.which,
+                             SDL_GetGamepadStringForAxis(static_cast<SDL_GamepadAxis>(event->gaxis.axis)),
+                             (int)event->gaxis.value);
+                break;
+            case SDL_EVENT_GAMEPAD_ADDED:
+            case SDL_EVENT_GAMEPAD_REMOVED:
+                std::fprintf(stderr,
+                             "[input] pad %u %s\n",
+                             (unsigned)event->gdevice.which,
+                             event->type == SDL_EVENT_GAMEPAD_ADDED ? "added" : "removed");
+                break;
+            default:
+                break;
+        }
+    }
+
     switch (event->type) {
         case SDL_EVENT_KEY_DOWN:
             // Ctrl/Alt/Cmd chords are the host's hotkeys, not game input.
@@ -263,6 +296,8 @@ bool handleEvent(void * /*userdata*/, SDL_Event *event) {
 
 void start(const std::filesystem::path &configPath) {
     SDL_InitSubSystem(SDL_INIT_GAMEPAD);
+    const char *traceValue = SDL_getenv("SOR_INPUT_TRACE");
+    gTrace                 = traceValue != nullptr && *traceValue != '\0' && *traceValue != '0';
     State &s = state();
     {
         std::lock_guard lock(s.mutex);
@@ -329,7 +364,23 @@ ActionMask physicalActions(int player) {
     for (Pad &pad : s.pads)
         pad.buttonTapped[static_cast<std::size_t>(player)].fill(false);
 
-    return static_cast<ActionMask>(mask & SoRControlsConfig::schemeActions(scheme));
+    mask = static_cast<ActionMask>(mask & SoRControlsConfig::schemeActions(scheme));
+    if (gTrace) {
+        static std::array<ActionMask, 2> traced{};
+        if (traced[static_cast<std::size_t>(player)] != mask) {
+            traced[static_cast<std::size_t>(player)] = mask;
+            const Pad *pad = assignedPadsLocked(s)[static_cast<std::size_t>(player)];
+            std::fprintf(stderr,
+                         "[input] P%d actions %03x (scheme %s, pad %s, LT %d, RT %d)\n",
+                         player + 1,
+                         (unsigned)mask,
+                         scheme == Scheme::Enhanced6 ? "enhanced6" : "original3",
+                         pad ? pad->name.c_str() : "none",
+                         pad ? (int)pad->axes[SDL_GAMEPAD_AXIS_LEFT_TRIGGER] : 0,
+                         pad ? (int)pad->axes[SDL_GAMEPAD_AXIS_RIGHT_TRIGGER] : 0);
+        }
+    }
+    return mask;
 }
 
 Scheme scheme(int player) {

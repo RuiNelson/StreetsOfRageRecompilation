@@ -73,11 +73,12 @@ void bindPad(SchemeBindings &bindings, std::span<const Action> actions, std::spa
 
 PlayerConfig defaultPlayer(int player) {
     PlayerConfig config;
-    // Pads (user): ORIGINAL 3 Special RT, Punch West, Jump South; ENHANCED 6
-    // Special East, Punch West, Jump South, Back Attack LT, Pick Item North,
-    // Throw Knife RT.
+    // Pads (user): ORIGINAL 3 Special RB, Punch West, Jump South; ENHANCED 6
+    // Special East, Punch West, Jump South, Back Attack LB, Pick Item North,
+    // Throw Knife RB. The shoulder buttons (L1/R1 on a DualSense), not the
+    // triggers: the user's "LT/RT" were the bumpers.
     const std::array<PadInput, 3> original3Pad = {
-        PadInput::rightTrigger(),
+        PadInput::ofButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER),
         PadInput::ofButton(SDL_GAMEPAD_BUTTON_WEST),
         PadInput::ofButton(SDL_GAMEPAD_BUTTON_SOUTH),
     };
@@ -85,9 +86,9 @@ PlayerConfig defaultPlayer(int player) {
         PadInput::ofButton(SDL_GAMEPAD_BUTTON_EAST),
         PadInput::ofButton(SDL_GAMEPAD_BUTTON_WEST),
         PadInput::ofButton(SDL_GAMEPAD_BUTTON_SOUTH),
-        PadInput::leftTrigger(),
+        PadInput::ofButton(SDL_GAMEPAD_BUTTON_LEFT_SHOULDER),
         PadInput::ofButton(SDL_GAMEPAD_BUTTON_NORTH),
-        PadInput::rightTrigger(),
+        PadInput::ofButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER),
     };
     SchemeBindings &original3 = config.schemeBindings(Scheme::Original3);
     SchemeBindings &enhanced6 = config.schemeBindings(Scheme::Enhanced6);
