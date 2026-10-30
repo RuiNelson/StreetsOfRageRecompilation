@@ -140,6 +140,19 @@ Linux takes the same path as macOS, not yet tried either.
 - It calls `sor_ai.embedded.run(sor_host)`; the module `sor_host` is the AI's view of the
   game. A failing AI (missing folder, exception, `sys.exit`) is reported on stderr as
   `[ai] ...` and the game goes on. One that does not end is abandoned 3 seconds into quitting.
+- With AI ASSIST on (`SoRRemoteInput::setAiAssist`, the debug flag `--aiAssist`; the menu
+  comes next), `sample_all_joypads` publishes the 64 KiB of work RAM every 2 sampled frames
+  (`SoRPython::publishFrame`): the CPU thread fills a spare buffer with no lock and swaps it
+  in, and the AI takes the newest, so a slow tick skips frames and delays nothing. The AI
+  answers with the same `SORX` documents as a remote client (`sor_host.set_input`), applied by
+  `SoRRemoteInput::update` to a P2 of its own. P2 then plays from those alone: a client's P2
+  records and physical P2 devices are ignored, while P1 and the observer work as ever.
+  `HOST_MODE` in `SORG` tells clients. The flag is host state, not game state, so it is not
+  in 68000 RAM, and the game sees an ordinary 2-player game.
+- `tools/ai_assist_fight.py` (autoplay) runs it live with an external AI on P1. Measured at
+  `--turbo 2`: round 1 cleared with 34,900 points on P2 and no life lost, 6,944 ticks, mean
+  1.12 ms, worst 7.0 ms, 2 skipped, 0 failed. The user called the A/B against the socket
+  unnecessary (2026-10-30), so that was not run.
 
 ## ROM and regeneration
 

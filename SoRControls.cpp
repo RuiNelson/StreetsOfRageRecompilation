@@ -1,6 +1,7 @@
 #include "SoRCheats.hpp"
 #include "SoRControlsMenu.hpp"
 #include "SoRInput.hpp"
+#include "SoRPython.hpp"
 #include "SoRRemoteInput.hpp"
 #include "SoR.hpp"
 
@@ -142,8 +143,11 @@ struct SampledPlayer {
 
 SampledPlayer samplePlayer(int playerIndex) {
     const SoRInput::Scheme scheme  = SoRInput::scheme(playerIndex);
-    SoRInput::ActionMask   actions = static_cast<SoRInput::ActionMask>(SoRInput::physicalActions(playerIndex) |
-                                                                     SoRRemoteInput::actions(playerIndex));
+    // With AI ASSIST on, P2 is the AI's alone: no physical device reaches it.
+    const bool             aiPlays = playerIndex == 1 && SoRRemoteInput::aiAssist();
+    SoRInput::ActionMask   actions = static_cast<SoRInput::ActionMask>(
+        (aiPlays ? SoRInput::ActionMask{0} : SoRInput::physicalActions(playerIndex)) |
+        SoRRemoteInput::actions(playerIndex));
     actions = static_cast<SoRInput::ActionMask>(actions & SoRControlsConfig::schemeActions(scheme));
 
     // Opposite directions cancel each other, as a real pad cannot report both.
@@ -485,6 +489,8 @@ void StreetsOfRage::sample_all_joypads(m_long entry_) {
     SoRRemoteInput::update(remoteAccess(), gameUptimeFrames());
     const SampledPlayer player1 = samplePlayer(0);
     const SampledPlayer player2 = samplePlayer(1);
+    if (SoRRemoteInput::aiAssist())
+        SoRPython::publishFrame(memory(), gameUptimeFrames(), player2.enhanced);
 
     memory().writeWord(kZ80BusRequest, 0x0100u);
     cpu().a[1] = kIoPlayer1DataPort;

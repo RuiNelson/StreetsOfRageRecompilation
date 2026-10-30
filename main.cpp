@@ -2,6 +2,7 @@
 #include "SoRControlsConfig.hpp"
 #include "SoRInput.hpp"
 #include "SoRPython.hpp"
+#include "SoRRemoteInput.hpp"
 #include "SoRSoundtrack.hpp"
 #include "SoR.hpp"
 #include <CLI/CLI.hpp>
@@ -79,7 +80,7 @@ int main(int argc, char *argv[]) {
 
     app.add_option("--ai-path", aiPath, "Directory holding the Python AI's code (the sor_ai package)")
         ->capture_default_str();
-    app.add_flag("--aiAssist", aiAssistFlag, "Debug: start the Python AI at launch");
+    app.add_flag("--aiAssist", aiAssistFlag, "Debug: P2 is the Python AI from launch, whichever mode is chosen");
 
     CLI11_PARSE(app, argc, argv);
 
@@ -131,8 +132,10 @@ int main(int argc, char *argv[]) {
         if (!sorCallLogFile.empty()) {
             sor.setCallLog(sorCallLogFile);
         }
-        if (aiAssistFlag)
-            SoRPython::start(aiPath);
+        if (aiAssistFlag) {
+            SoRRemoteInput::setAiAssist(true);
+            SoRPython::start(aiPath, sor.memory(), widescreenFlag);
+        }
         sor.boot();
         SoRPython::stop();
         SoRInput::stop();

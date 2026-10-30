@@ -31,6 +31,8 @@ class RemoteAccess;
 //                        reads it and adapts, it never sets it), seq:u32 (the last one
 //                        applied), end frame:u64 (the frame its schedule is
 //                        released on; 0 when none has played)
+//   0x0102 HOST_MODE     flags:u8, bit 0 = AI ASSIST: P2 is the AI inside the
+//                        game, and a client's P2 records are ignored
 //
 // Actions are SoRControlsConfig::Action bits. Input from a client that has
 // disconnected, or left over from before a restart, is dropped until the
@@ -46,7 +48,12 @@ constexpr std::uint16_t kVersion = 1;
 /// players' schedules and publishes their status.
 void update(RemoteAccess &remote, std::uint64_t frame);
 
-/// The actions the client holds for @p player (0 or 1) on this frame.
+/// The actions the client holds for @p player (0 or 1) on this frame; with AI
+/// ASSIST on, player 1 (P2) is the embedded AI's instead (SoRPython).
 ActionMask actions(int player);
+
+/// AI ASSIST: P2 plays from the embedded AI's input documents alone.
+void setAiAssist(bool enabled);
+bool aiAssist();
 
 } // namespace SoRRemoteInput

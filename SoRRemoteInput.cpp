@@ -1,9 +1,11 @@
 #include "SoRRemoteInput.hpp"
 
 #include "SoRInput.hpp"
+#include "SoRPython.hpp"
 #include "system/remote/RemoteAccess.hpp"
 
 #include <array>
+#include <atomic>
 #include <vector>
 
 namespace SoRRemoteInput {
@@ -17,8 +19,13 @@ constexpr std::size_t                 kHeaderSize  = 12;
 
 constexpr std::uint16_t kTagPlayerInput    = 0x0001;
 constexpr std::uint16_t kTagPlayerStatus   = 0x0101;
+constexpr std::uint16_t kTagHostMode       = 0x0102;
 
 constexpr std::uint8_t kFlagQueue = 0x01;
+
+constexpr std::uint8_t kHostModeAiAssist = 0x01;
+
+constexpr int kAiPlayerIndex = 1;
 
 constexpr ActionMask kAllActions = (1u << SoRControlsConfig::kActionCount) - 1u;
 
@@ -42,6 +49,9 @@ struct Player {
 // CPU thread only.
 struct State {
     std::array<Player, 2>     players{};
+    Player                    aiPlayer; // P2, from the embedded AI
+    std::atomic<bool>         aiAssist{false};
+    std::vector<std::uint8_t> aiDocument;
     std::vector<std::uint8_t> document;   // the buffer last read
     std::vector<std::uint8_t> stale;      // dropped until the buffer changes
     bool                      staleValid = false;
@@ -99,7 +109,7 @@ void startSchedule(Player &player, std::vector<Entry> entries, std::uint64_t fra
     player.endFrame    = player.activeEnd;
 }
 
-void applyPlayerInput(std::span<const std::uint8_t> payload, std::uint64_t frame) {
+void applyPlayerInput(std::span<const std::uint8_t> payload, std::uint64_t frame, bool fromAi) {
     if (payload.size() < 10)
         return;
     const int index = payload[0] - 1;
@@ -111,7 +121,10 @@ void applyPlayerInput(std::span<const std::uint8_t> payload, std::uint64_t frame
     if (payload.size() < 10u + count * 4u)
         return;
 
-    Player &player = state().players[static_cast<std::size_t>(index)];
+    // The embedded AI plays P2 and nothing else.
+    if (fromAi && index != kAiPlayerIndex)
+        return;
+    Player &player = fromAi ? state().aiPlayer : state().players[static_cast<std::size_t>(index)];
     player.held    = static_cast<ActionMask>(readU16(payload, 2) & kAllActions);
     if (seq == player.seq)
         return;
@@ -136,7 +149,7 @@ void applyPlayerInput(std::span<const std::uint8_t> payload, std::uint64_t frame
     }
 }
 
-void applyDocument(std::span<const std::uint8_t> document, std::uint64_t frame) {
+void applyDocument(std::span<const std::uint8_t> document, std::uint64_t frame, bool fromAi) {
     if (document.size() < kHeaderSize || !std::equal(kInputMagic.begin(), kInputMagic.end(), document.begin()) ||
         readU16(document, 4) != kVersion)
         return;
@@ -151,7 +164,7 @@ void applyDocument(std::span<const std::uint8_t> document, std::uint64_t frame) 
             return;
         const auto payload = document.subspan(at, length);
         if (tag == kTagPlayerInput)
-            applyPlayerInput(payload, frame);
+            applyPlayerInput(payload, frame, fromAi);
         at += length;
     }
 }
@@ -181,7 +194,7 @@ void publish(RemoteAccess &remote) {
     State                    &s = state();
     std::vector<std::uint8_t> out(kStatusMagic.begin(), kStatusMagic.end());
     appendU16(out, kVersion);
-    appendU16(out, 2);
+    appendU16(out, 3);
     appendU32(out, 0);
     for (int index = 0; index < 2; ++index) {
         const Player &player = s.players[static_cast<std::size_t>(index)];
@@ -192,6 +205,9 @@ void publish(RemoteAccess &remote) {
         appendU32(out, player.seq);
         appendU64(out, player.endFrame);
     }
+    appendU16(out, kTagHostMode);
+    appendU16(out, 1);
+    out.push_back(s.aiAssist.load(std::memory_order_acquire) ? kHostModeAiAssist : 0);
     if (out != s.published) {
         s.published = out;
         remote.setGameData(out);
@@ -220,20 +236,39 @@ void update(RemoteAccess &remote, std::uint64_t frame) {
             s.document = std::move(document);
             if (!s.staleValid || s.document != s.stale) {
                 s.staleValid = false;
-                applyDocument(s.document, frame);
+                applyDocument(s.document, frame, false);
             }
         }
     }
 
+    if (restarted) {
+        const auto seq = s.aiPlayer.seq;
+        s.aiPlayer     = Player{};
+        s.aiPlayer.seq = seq;
+    }
+    if (SoRPython::takeInput(s.aiDocument))
+        applyDocument(s.aiDocument, frame, true);
+
     for (Player &player : s.players)
         advance(player, frame);
+    advance(s.aiPlayer, frame);
     publish(remote);
 }
 
 ActionMask actions(int player) {
     if (player < 0 || player > 1)
         return 0;
+    if (player == kAiPlayerIndex && aiAssist())
+        return state().aiPlayer.current;
     return state().players[static_cast<std::size_t>(player)].current;
+}
+
+void setAiAssist(bool enabled) {
+    state().aiAssist.store(enabled, std::memory_order_release);
+}
+
+bool aiAssist() {
+    return state().aiAssist.load(std::memory_order_acquire);
 }
 
 } // namespace SoRRemoteInput

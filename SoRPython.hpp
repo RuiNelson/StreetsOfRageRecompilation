@@ -1,6 +1,10 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
+#include <vector>
+
+class SystemMemory;
 
 // The Python AI (the sor_ai package) in this process, on the CPython that
 // cmake/CPythonRuntime.cmake puts next to the executable.
@@ -14,7 +18,15 @@
 namespace SoRPython {
 
 /// Starts the thread, once; the code in @p aiPath runs only from this call on.
-void start(const std::filesystem::path &aiPath);
+void start(const std::filesystem::path &aiPath, SystemMemory &memory, bool widescreen);
+
+/// CPU thread, once per sampled frame: the game as the AI's next tick sees it.
+/// Every kFramesPerTick frames it copies the work RAM; the AI takes the newest
+/// copy whenever it is ready, so a slow tick skips frames and delays nothing.
+void publishFrame(SystemMemory &memory, std::uint64_t frame, bool player2Enhanced);
+
+/// CPU thread: the input document the AI sent since the last call, if any.
+bool takeInput(std::vector<std::uint8_t> &document);
 
 /// Asks the AI to end and waits for the interpreter to finish, for a few
 /// seconds: an AI that does not end is abandoned, never waited on forever.
