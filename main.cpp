@@ -132,9 +132,10 @@ int main(int argc, char *argv[]) {
         if (!sorCallLogFile.empty()) {
             sor.setCallLog(sorCallLogFile);
         }
+        SoRPython::configure(aiPath, widescreenFlag);
         if (aiAssistFlag) {
-            SoRRemoteInput::setAiAssist(true);
-            SoRPython::start(aiPath, sor.memory(), widescreenFlag);
+            SoRRemoteInput::forceAiAssist();
+            SoRPython::start(sor.memory());
         }
         sor.boot();
         SoRPython::stop();

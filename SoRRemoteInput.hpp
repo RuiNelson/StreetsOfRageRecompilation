@@ -52,8 +52,12 @@ void update(RemoteAccess &remote, std::uint64_t frame);
 /// ASSIST on, player 1 (P2) is the embedded AI's instead (SoRPython).
 ActionMask actions(int player);
 
-/// AI ASSIST: P2 plays from the embedded AI's input documents alone.
+/// AI ASSIST: P2 plays from the embedded AI's input documents alone. The mode
+/// screen sets it with the player's choice.
 void setAiAssist(bool enabled);
 bool aiAssist();
+
+/// --aiAssist: on whatever the mode screen says, for measuring without the menu.
+void forceAiAssist();
 
 } // namespace SoRRemoteInput

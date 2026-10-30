@@ -1,12 +1,17 @@
 #include "SoRCheats.hpp"
 #include "SoRControlsMenu.hpp"
+#include "SoRPython.hpp"
+#include "SoRRemoteInput.hpp"
 #include "SoR.hpp"
 
+#include <array>
 #include <cstdint>
+#include <string_view>
 
 namespace {
 
 constexpr m_long kVdpControl = 0x00C00004u;
+constexpr m_long kVdpData    = 0x00C00000u;
 
 constexpr m_long kGameState  = 0xFFFFFF00u;
 constexpr m_long kLevel      = 0xFFFFFF02u;
@@ -63,6 +68,73 @@ constexpr m_long kCharCursorX          = 0x000019FCu;
 constexpr m_long kCharPortraitPointers = 0x00001A02u;
 constexpr m_long kCharacterIdFromSlot  = 0x00001A0Eu;
 
+constexpr m_long kSelectMenuCursorPrev = 0xFFFFB842u;
+constexpr m_long kSpriteTableBuffer    = 0xFFFFDA00u;
+constexpr m_long kBlazePreviewSelected = 0xFFFFBA5Cu;
+
+// 1 PLAYER AI ASSIST, the row the ROM does not have, between 2 PLAYERS and
+// OPTIONS: the third row keeps its place (VRAM $C7A0, column 16 of row 15) and
+// OPTIONS moves two cells down from it, as far as the ROM's rows are apart.
+// Without the AI, the screen is the ROM's: OPTIONS stays on the third row.
+constexpr m_word kCursorAiAssist    = 2;
+constexpr m_word kCursorOptions     = 3;
+constexpr m_long kAiAssistRowVdp    = 0x47A00003u;
+constexpr m_long kOptionsRowVdp     = 0x48A00003u;
+constexpr m_word kOptionsCursorY    = 0x0108;
+constexpr std::string_view kAiAssistText = "1 PLAYER AI ASSIST";
+
+constexpr m_long kCursorYTable  = 0x0000162Au;
+constexpr m_long kCursorTiles   = 0x00001622u;
+constexpr m_long kSkip2pRemap   = 0x00001630u;
+
+// The ROM's menu font: A is 1, the digit 1 is $1C, a space is 0.
+constexpr m_word menuGlyph(char c) {
+    if (c >= 'A' && c <= 'Z')
+        return static_cast<m_word>(c - 'A' + 1);
+    return c == '1' ? 0x1C : 0;
+}
+
+// "COMPUTER" in place of "2 PLAYER" over the P2 cursor. That label is three
+// sprite pieces of ROM art (2, 4 and 2 tiles: "2 ", then "PLAYER", shared with
+// P1's), so the eight new tiles go to VRAM that the screen leaves free, and the
+// sprite table is pointed at them. They are drawn from the screen's own small
+// font, without its opaque background: its colour 2 stays only as an outline.
+constexpr m_word           kLabelTiles      = 0x00D1;
+constexpr m_word           kP2LabelTile     = 0x00CF;
+constexpr m_word           kFontTiles       = 0x07C0; // + the letter's menu glyph
+constexpr std::string_view kComputerText    = "COMPUTER";
+constexpr std::array<m_word, 3> kLabelPieceOffsets = {0, 2, 6};
+
+using TilePixels = std::array<m_byte, 64>;
+
+TilePixels withoutBackground(const TilePixels &glyph) {
+    constexpr m_byte kOutline = 2;
+    TilePixels       result{};
+    for (int y = 0; y < 8; ++y) {
+        for (int x = 0; x < 8; ++x) {
+            const m_byte pixel = glyph[static_cast<std::size_t>(y * 8 + x)];
+            if (pixel != kOutline && pixel != 0) {
+                result[static_cast<std::size_t>(y * 8 + x)] = pixel;
+                continue;
+            }
+            for (int ny = y - 1; ny <= y + 1; ++ny) {
+                for (int nx = x - 1; nx <= x + 1; ++nx) {
+                    if (nx < 0 || ny < 0 || nx > 7 || ny > 7)
+                        continue;
+                    const m_byte near = glyph[static_cast<std::size_t>(ny * 8 + nx)];
+                    if (near != kOutline && near != 0)
+                        result[static_cast<std::size_t>(y * 8 + x)] = kOutline;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+constexpr m_long vramWriteCommand(m_long address) {
+    return 0x40000000u | ((address & 0x3FFFu) << 16) | ((address >> 14) & 3u);
+}
+
 constexpr m_long signExtendWord(m_word value) {
     return static_cast<m_long>(static_cast<std::int32_t>(static_cast<std::int16_t>(value)));
 }
@@ -110,6 +182,8 @@ void StreetsOfRage::init_game_start_screen(m_long entry_) {
     SOR_CALL_68K(load_nemesis_art_bundle(), 0x1000u, 0x00A63Au);
 
     memory().writeWord(kSelectScreenSubstate, 0);
+    // Chosen anew here (select_menu_resolve_choice).
+    SoRRemoteInput::setAiAssist(false);
     cpu().d[1] = 0;
     cpu().a[1] = kP1Object;
     SOR_CALL_68K(memfill_long_128(), 0x1010u, 0x0103D0u);
@@ -120,12 +194,18 @@ void StreetsOfRage::init_game_start_screen(m_long entry_) {
     cpu().a[5] = 0x0000108Au;
     for (int row = 0; row < 3; ++row) {
         cpu().d[6] = 9;
-        cpu().d[7] = memory().readLong(cpu().a[6]);
+        cpu().d[7] = row == 2 && SoRPython::available() ? kOptionsRowVdp : memory().readLong(cpu().a[6]);
         cpu().a[6] += 4;
         SOR_CALL_68K(vdp_write_menu_string(), 0x1026u, 0x01290Au);
         cpu().setDw(5, memory().readWord(cpu().a[5]));
         cpu().a[5] += 2;
         cpu().setDw(4, static_cast<m_word>(cpu().dw(4) - 1));
+    }
+
+    if (SoRPython::available()) {
+        memory().writeLong(kVdpControl, kAiAssistRowVdp);
+        for (const char c : kAiAssistText)
+            memory().writeWord(kVdpData, menuGlyph(c));
     }
 
     memory().writeWord(kPaletteFadeCounter, 0x40);
@@ -185,9 +265,14 @@ void StreetsOfRage::select_menu_resolve_choice(m_long /*entry_*/) {
     traceEnter(0x114Au);
 
     const m_word cursor = memory().readWord(kSelectMenuCursor);
-    if (cursor < 2) {
+    if (cursor <= kCursorAiAssist) {
         cpu().setDw(0, cursor);
-        memory().writeByte(kPlayerMode, memory().readByte(0x0000117Au + signExtendWord(cursor)));
+        const bool aiAssist = cursor == kCursorAiAssist;
+        // 1 PLAYER AI ASSIST is the ROM's 2-player game, with the AI on P2.
+        memory().writeByte(kPlayerMode, aiAssist ? 3 : memory().readByte(0x0000117Au + signExtendWord(cursor)));
+        SoRRemoteInput::setAiAssist(aiAssist);
+        if (aiAssist)
+            SoRPython::start(memory());
         memory().writeWord(kGameState, 0x20);
         cpu().setNZClearVC(0x20u, 0x8000u);
         cpu().ssp += 4;
@@ -460,6 +545,51 @@ void StreetsOfRage::player_state_dispatcher(m_long /*entry_*/) {
     dispatch(cpu().a[1] + signExtendWord(relative));
 }
 
+void StreetsOfRage::select_menu_cursor_update(m_long /*entry_*/) {
+    traceEnter(0x1586u);
+    const m_long object = cpu().a[0];
+
+    const m_byte vertical = static_cast<m_byte>(memory().readByte(kP1ButtonPress) & 0x03u);
+    cpu().setDb(0, vertical);
+    if (vertical != 0) {
+        cpu().d[7] = 0xFFFFFFB9u;
+        SOR_CALL_68K(queue_sound_id(), 0x1596u, 0x01069Eu);
+        const m_word cursor = memory().readWord(object + 0x40);
+        memory().writeWord(object + 0x42, cursor);
+        memory().writeWord(object + 0x40, wrappedStep(cursor, kCursorOptions, (vertical & 0x01u) == 0));
+    }
+
+    const m_byte timer = static_cast<m_byte>(memory().readByte(object + 0x0D) - 1);
+    memory().writeByte(object + 0x0D, timer);
+    if (timer == 0) {
+        memory().writeByte(object + 0x0D, memory().readByte(object + 0x0C));
+        const m_byte frame = static_cast<m_byte>(memory().readByte(object + 0x0A) + 1);
+        memory().writeByte(object + 0x0A, frame >= 2 ? 0 : frame);
+    }
+
+    // The rows that are not there are skipped: 2 PLAYERS with one pad (the
+    // ROM's remap), AI ASSIST without the AI.
+    const bool   ai       = SoRPython::available();
+    const m_word previous = memory().readWord(object + 0x42);
+    m_word       cursor   = memory().readWord(object + 0x40);
+    if (cursor == kCursorAiAssist && !ai)
+        cursor = previous == kCursorOptions ? 1 : kCursorOptions;
+    if (cursor == 1 && memory().readByte(kSelectMenuOptionCount) == 1)
+        cursor = memory().readByte(kSkip2pRemap + signExtendWord(previous));
+    if (cursor == kCursorAiAssist && !ai)
+        cursor = kCursorOptions;
+    memory().writeWord(object + 0x40, cursor);
+
+    // Without the AI, OPTIONS is on the ROM's third row.
+    const m_word y = cursor == kCursorOptions ? (ai ? kOptionsCursorY : memory().readWord(kCursorYTable + 4u))
+                                              : memory().readWord(kCursorYTable + cursor * 2u);
+    memory().writeWord(kSpriteTableBuffer, y);
+    memory().writeLong(kSpriteTableBuffer + 2u, memory().readLong(kCursorTiles + memory().readByte(object + 0x0A) * 4u));
+    memory().writeWord(kSpriteTableBuffer + 6u, 0x00F0);
+    memory().writeLong(kSpriteTableBuffer + 8u, 0);
+    cpu().ssp += 4;
+}
+
 // ---------------------------------------------------------------------------
 // Character select ($1634-$1916)
 // ---------------------------------------------------------------------------
@@ -485,7 +615,8 @@ void StreetsOfRage::init_character_select_screen(m_long /*entry_*/) {
     memory().writeWord(kP1Object + 0x58, 0);
     memory().writeWord(kP1Object + 0x10, 0x20);
     cpu().a[6] = 0x00001708u;
-    if (memory().readByte(kPlayerMode) == 3) {
+    // 1 PLAYER AI ASSIST: the P2 cursor waits for the player's pick.
+    if (memory().readByte(kPlayerMode) == 3 && !SoRRemoteInput::aiAssist()) {
         memory().writeByte(kP2Object, 6);
         memory().writeWord(kP2Object + 0x58, 2);
         memory().writeWord(kP2Object + 0x10, 0xE0);
@@ -512,6 +643,29 @@ void StreetsOfRage::init_character_select_screen(m_long /*entry_*/) {
     cpu().d[0] = 0x00001615u;
     cpu().setNZClearVC(cpu().d[0], 0x80000000u);
     SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1704u, 0x00A8B8u);
+
+    if (SoRRemoteInput::aiAssist()) {
+        const auto vram = vdp().stateSnapshot().vram;
+        std::array<m_word, kComputerText.size() * 16> tiles{};
+        for (std::size_t letter = 0; letter < kComputerText.size(); ++letter) {
+            const std::size_t source = (kFontTiles + menuGlyph(kComputerText[letter])) * 32u;
+            TilePixels        glyph{};
+            for (std::size_t byte = 0; byte < 32; ++byte) {
+                glyph[byte * 2]     = static_cast<m_byte>(vram[source + byte] >> 4);
+                glyph[byte * 2 + 1] = static_cast<m_byte>(vram[source + byte] & 0x0Fu);
+            }
+            const TilePixels clean = withoutBackground(glyph);
+            for (std::size_t word = 0; word < 16; ++word) {
+                m_word value = 0;
+                for (std::size_t pixel = 0; pixel < 4; ++pixel)
+                    value = static_cast<m_word>((value << 4) | clean[word * 4 + pixel]);
+                tiles[letter * 16 + word] = value;
+            }
+        }
+        memory().writeLong(kVdpControl, vramWriteCommand(kLabelTiles * 32u));
+        for (const m_word value : tiles)
+            memory().writeWord(kVdpData, value);
+    }
     cpu().ssp += 4;
 }
 
@@ -523,6 +677,38 @@ void StreetsOfRage::screen_state_dispatcher(m_long /*entry_*/) {
     cpu().setDw(0, relative);
     cpu().setNZClearVC(relative, 0x8000u);
     dispatch(cpu().a[1] + signExtendWord(relative));
+
+    // 1 PLAYER AI ASSIST: "COMPUTER" over the P2 cursor, in the frame's sprite
+    // table: the piece with the "2 " tiles, and the two that follow it.
+    if (SoRRemoteInput::aiAssist()) {
+        m_long sprite = kSpriteTableBuffer;
+        for (int count = 0; count < 80; ++count, sprite += 8) {
+            const m_word attributes = memory().readWord(sprite + 4);
+            if ((attributes & 0x07FFu) == kP2LabelTile) {
+                for (std::size_t piece = 0; piece < kLabelPieceOffsets.size(); ++piece) {
+                    const m_long entry = sprite + piece * 8u + 4u;
+                    memory().writeWord(entry, static_cast<m_word>((memory().readWord(entry) & 0xF800u) |
+                                                                  (kLabelTiles + kLabelPieceOffsets[piece])));
+                }
+                break;
+            }
+            if ((memory().readByte(sprite + 3) & 0x7Fu) == 0)
+                break;
+        }
+    }
+}
+
+void StreetsOfRage::char_select_fade_in(m_long /*entry_*/) {
+    traceEnter(0x1738u);
+    SOR_CALL_68K(palette_fade_in_step(), 0x173Eu, 0x0105CCu);
+    if (!cpu().ne()) {
+        memory().writeWord(kCharSelectSubstate, static_cast<m_word>(memory().readWord(kCharSelectSubstate) + 2));
+        memory().writeByte(0xFFFFB95Cu, 1);
+        // 1 PLAYER AI ASSIST: the computer's preview waits for its cursor.
+        if (memory().readByte(kPlayerMode) == 3 && !SoRRemoteInput::aiAssist())
+            memory().writeByte(kBlazePreviewSelected, 1);
+    }
+    cpu().ssp += 4;
 }
 
 void StreetsOfRage::char_select_play_music(m_long /*entry_*/) {

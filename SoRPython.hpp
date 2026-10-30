@@ -17,8 +17,14 @@ class SystemMemory;
 // part. An AI that fails is reported on stderr and the game goes on without it.
 namespace SoRPython {
 
-/// Starts the thread, once; the code in @p aiPath runs only from this call on.
-void start(const std::filesystem::path &aiPath, SystemMemory &memory, bool widescreen);
+/// Says where the AI's code is. Nothing in it runs yet.
+void configure(const std::filesystem::path &aiPath, bool widescreen);
+
+/// Whether the configured folder holds the AI (the mode's menu row depends on it).
+bool available();
+
+/// Starts the thread, once; the configured code runs only from this call on.
+void start(SystemMemory &memory);
 
 /// CPU thread, once per sampled frame: the game as the AI's next tick sees it.
 /// Every kFramesPerTick frames it copies the work RAM; the AI takes the newest

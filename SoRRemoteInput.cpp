@@ -51,6 +51,7 @@ struct State {
     std::array<Player, 2>     players{};
     Player                    aiPlayer; // P2, from the embedded AI
     std::atomic<bool>         aiAssist{false};
+    std::atomic<bool>         aiAssistForced{false};
     std::vector<std::uint8_t> aiDocument;
     std::vector<std::uint8_t> document;   // the buffer last read
     std::vector<std::uint8_t> stale;      // dropped until the buffer changes
@@ -207,7 +208,7 @@ void publish(RemoteAccess &remote) {
     }
     appendU16(out, kTagHostMode);
     appendU16(out, 1);
-    out.push_back(s.aiAssist.load(std::memory_order_acquire) ? kHostModeAiAssist : 0);
+    out.push_back(aiAssist() ? kHostModeAiAssist : 0);
     if (out != s.published) {
         s.published = out;
         remote.setGameData(out);
@@ -268,7 +269,11 @@ void setAiAssist(bool enabled) {
 }
 
 bool aiAssist() {
-    return state().aiAssist.load(std::memory_order_acquire);
+    return state().aiAssist.load(std::memory_order_acquire) || state().aiAssistForced.load(std::memory_order_acquire);
+}
+
+void forceAiAssist() {
+    state().aiAssistForced.store(true, std::memory_order_release);
 }
 
 } // namespace SoRRemoteInput

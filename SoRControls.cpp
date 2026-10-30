@@ -316,7 +316,13 @@ void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
 void StreetsOfRage::char_select_cursor_dispatcher(m_long /*entry_*/) {
     traceEnter(0x18D4u);
 
-    cpu().a[1] = cpu().a[0] == kP1Object ? kP1ButtonHeld : kP2ButtonHeld;
+    // 1 PLAYER AI ASSIST: the player also picks the computer's character, with
+    // the word P1's cursor has just used. The sampled word will not do: this
+    // pass runs every other frame here, so a press can already be gone from it
+    // and only live on in the copy the pass took right after sampling.
+    cpu().a[1] = cpu().a[0] == kP1Object ? kP1ButtonHeld
+                 : SoRRemoteInput::aiAssist() ? kP1Object + kPlayerInputWord
+                                              : kP2ButtonHeld;
     cpu().setDw(0,
                 static_cast<m_word>(memory().readWord(cpu().a[0] + kPlayerInputWord) | memory().readWord(cpu().a[1])));
     memory().writeWord(cpu().a[0] + kPlayerInputWord, cpu().dw(0));
@@ -359,6 +365,18 @@ void StreetsOfRage::char_select_player_input(m_long /*entry_*/) {
         const m_word slot               = memory().readWord(object + 0x58);
         cpu().setDw(0, slot);
         memory().writeByte(characterIdAddress, memory().readByte(kCharacterIdFromSlot + signExtendWord(slot)));
+        if (object == kP1Object && SoRRemoteInput::aiAssist() && memory().readByte(kPlayerMode) != 1) {
+            // 1 PLAYER AI ASSIST: the computer's cursor appears now, on a free
+            // character, as the ROM's P2 cursor does at the start of the screen.
+            const m_word computerSlot = slot == 2 ? 1 : 2;
+            memory().writeByte(kP2Object, 6);
+            memory().writeWord(kP2Object + 0x58, computerSlot);
+            memory().writeWord(kP2Object + 0x10, memory().readWord(kCharCursorX + computerSlot * 2u));
+            memory().writeByte(memory().readLong(kCharPreviewPointers + computerSlot * 4u) + 0x5C, 1);
+            cpu().a[6] = kCharNewPalette + computerSlot * 2u;
+            SOR_CONTROLS_CALL_68K(load_palette_list_to_active(), 0x19B2u, 0x01053Eu);
+            cpu().a[0] = object;
+        }
         cpu().d[7] = 0xFFFFFFBAu;
         cpu().setNZClearVC(cpu().d[7], 0x80000000u);
         queue_sound_id();
@@ -374,7 +392,9 @@ void StreetsOfRage::char_select_player_input(m_long /*entry_*/) {
     m_word newSlot = memory().readWord(cpu().a[2] + signExtendWord(cpu().dw(0)));
     cpu().setDw(1, newSlot);
 
-    if (memory().readByte(kPlayerMode) != 1) {
+    // 1 PLAYER AI ASSIST: while the player picks, no other cursor is on screen.
+    const bool computerPending = SoRRemoteInput::aiAssist() && object == kP1Object;
+    if (memory().readByte(kPlayerMode) != 1 && !computerPending) {
         const m_long otherObject = object == kP1Object ? kP2Object : kP1Object;
         cpu().a[3]               = otherObject;
         cpu().setDw(2, memory().readWord(otherObject + 0x58));
@@ -489,7 +509,7 @@ void StreetsOfRage::sample_all_joypads(m_long entry_) {
     SoRRemoteInput::update(remoteAccess(), gameUptimeFrames());
     const SampledPlayer player1 = samplePlayer(0);
     const SampledPlayer player2 = samplePlayer(1);
-    if (SoRRemoteInput::aiAssist())
+    if (SoRRemoteInput::aiAssist() && memory().readByte(kDemoMode) == 0)
         SoRPython::publishFrame(memory(), gameUptimeFrames(), player2.enhanced);
 
     memory().writeWord(kZ80BusRequest, 0x0100u);

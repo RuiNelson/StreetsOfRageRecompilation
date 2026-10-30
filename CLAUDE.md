@@ -149,6 +149,22 @@ Linux takes the same path as macOS, not yet tried either.
   records and physical P2 devices are ignored, while P1 and the observer work as ever.
   `HOST_MODE` in `SORG` tells clients. The flag is host state, not game state, so it is not
   in 68000 RAM, and the game sees an ordinary 2-player game.
+- **The mode's screens** (user: original look, the row after 2 PLAYERS, the player picks
+  their character and then the computer's, "COMPUTER" for "2 PLAYER"). `select_menu_cursor`
+  is 0 1 PLAYER, 1 2 PLAYERS, 2 AI ASSIST, 3 OPTIONS (it was 2); the row takes the third row's
+  place and OPTIONS moves two cells down. Without the AI (`SoRPython::available()`: no
+  `sor_ai/embedded.py` in `--ai-path`, or the Windows stub) the screen is the ROM's: three rows,
+  index 2 skipped. Choosing the row sets `player_mode` to 3 and the flag and starts Python, so
+  the mode screen's init clears the flag and each choice sets it; `--aiAssist` forces it through.
+  On character select the P2 cursor and Blaze's preview do not exist until P1 locks; then P1's
+  buttons move a cursor spawned on a free character. They come from P1's `+$54`, not the sampled
+  word: the select-screen pass runs every other frame, so a press can be gone from `$FFFC04`
+  while it lives on in the copy `$AD8E` took after sampling (half the P2 taps were lost before).
+  The label is ROM sprite art, 2 + 4 + 2 tiles with the middle shared with "1 PLAYER", so eight
+  tiles at VRAM tile `$D1` (free on this screen) are drawn from the screen's small font
+  (`$7C0`+letter, its opaque colour 2 kept only as an outline) and `screen_state_dispatcher`
+  repoints the frame's sprite-table entries. VDP data-port reads lag a word here (no prefetch
+  on address set): `stateSnapshot().vram` reads VRAM instead.
 - `tools/ai_assist_fight.py` (autoplay) runs it live with an external AI on P1. Measured at
   `--turbo 2`: round 1 cleared with 34,900 points on P2 and no life lost, 6,944 ticks, mean
   1.12 ms, worst 7.0 ms, 2 skipped, 0 failed. The user called a full A/B against the socket

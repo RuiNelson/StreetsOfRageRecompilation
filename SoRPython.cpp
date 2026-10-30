@@ -272,18 +272,27 @@ int interpreterThread(void * /*unused*/) {
 
 namespace SoRPython {
 
-void start(const std::filesystem::path &aiPath, SystemMemory &memory, bool widescreen) {
+void configure(const std::filesystem::path &aiPath, bool widescreen) {
     State &shared = state();
-    if (shared.thread != nullptr)
-        return;
-    shared.memory     = &memory;
-    shared.widescreen = widescreen;
     std::error_code error;
-    shared.aiPath = std::filesystem::absolute(aiPath, error);
-    if (error || !std::filesystem::is_directory(shared.aiPath, error)) {
-        std::fprintf(stderr, "[ai] no Python AI: '%s' is not a folder (see --ai-path)\n", aiPath.string().c_str());
+    const std::filesystem::path absolute = std::filesystem::absolute(aiPath, error);
+    shared.aiPath     = error ? aiPath : absolute;
+    shared.widescreen = widescreen;
+    if (!available())
+        std::fprintf(stderr, "[ai] no Python AI in '%s' (see --ai-path): 1 PLAYER AI ASSIST is hidden\n",
+                     shared.aiPath.string().c_str());
+}
+
+bool available() {
+    std::error_code error;
+    return std::filesystem::is_regular_file(state().aiPath / "sor_ai" / "embedded.py", error);
+}
+
+void start(SystemMemory &memory) {
+    State &shared = state();
+    if (shared.thread != nullptr || !available())
         return;
-    }
+    shared.memory = &memory;
     const SDL_PropertiesID properties = SDL_CreateProperties();
     SDL_SetPointerProperty(properties, SDL_PROP_THREAD_CREATE_ENTRY_FUNCTION_POINTER,
                            reinterpret_cast<void *>(interpreterThread));
@@ -353,8 +362,14 @@ void stop() {
 
 namespace SoRPython {
 
-void start(const std::filesystem::path & /*aiPath*/, SystemMemory & /*memory*/, bool /*widescreen*/) {
-    std::fprintf(stderr, "[ai] the Python AI is not available in this build yet\n");
+void configure(const std::filesystem::path & /*aiPath*/, bool /*widescreen*/) {
+}
+
+bool available() {
+    return false;
+}
+
+void start(SystemMemory & /*memory*/) {
 }
 
 void publishFrame(SystemMemory & /*memory*/, std::uint64_t /*frame*/, bool /*player2Enhanced*/) {

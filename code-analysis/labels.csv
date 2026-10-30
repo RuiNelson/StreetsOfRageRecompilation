@@ -69,7 +69,7 @@
 00001546, select_menu_sync_pad_count, "100% - Hot-plug: set select_menu_option_count to 3 or 1 from p2_joypad_present_negated"
 00001564, player_state_dispatcher, "100% - Jump table on object+$30; on mode-select drives menu cursor states"
 0000157C, select_menu_cursor_init, "100% - Menu cursor object: set anim timer and advance object+$30"
-00001586, select_menu_cursor_update, "100% - Menu cursor: Up/Down change select_menu_cursor 0..2, place sprite, skip 2P if one pad"
+00001586, select_menu_cursor_update, "100% - Menu cursor: Up/Down change select_menu_cursor 0..2, place sprite, skip 2P if one pad (manual: a fourth row, 1 PLAYER AI ASSIST)"
 
 ; Character select (game_state $20/$22 core at $1634; wrappers at $927C/$92A8)
 00001634, init_character_select_screen, "100% - Char-select init: clear low RAM, spawn type-6 cursors + type-7 animated character previews, load art/UI"

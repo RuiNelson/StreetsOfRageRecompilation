@@ -62,8 +62,10 @@
 0014F2 # options_row_nav
 001546 # select_menu_sync_pad_count
 001564 # player_state_dispatcher
+001586 # select_menu_cursor_update (1 PLAYER AI ASSIST: fourth row)
 001634 # init_character_select_screen
 00170A # screen_state_dispatcher
+001738 # char_select_fade_in (1 PLAYER AI ASSIST: no P2 preview until P1 has picked)
 001726 # char_select_play_music
 00175A # char_select_interactive
 0017A2 # initialize_player_continues

@@ -136,6 +136,9 @@ Sub-state advances by **+2** (word index into the table).
 
 ## 5. Main menu (1P / 2P / OPTIONS)
 
+The port adds a fourth row, **1 PLAYER AI ASSIST**, as index 2, moving OPTIONS to index 3
+(`StreetsOfRageRecompilation/CLAUDE.md`, **The Python AI in the process**). What follows is the ROM.
+
 ### 5.1 Cursor object
 
 While sub-state is `$00` / `$02`, update calls `$1564 (player_state_dispatcher)` on `$FFB800 (p1_object)`. In this screen that object is a **menu cursor**, not an in-game fighter:
