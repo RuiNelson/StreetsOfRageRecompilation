@@ -113,16 +113,19 @@ has the complete command. Not yet built on a real Windows machine.
 For the **1 PLAYER AI ASSIST** mode, `sor` runs the same Python AI the external
 `autoplay` does (`../autoplay/ai-code/sor_ai`). User decisions: our own CPython as a
 shared library next to the binary, not the machine's, called through the **C API
-directly** (no pybind11), and part of every build, with no variant without it. Windows
-comes once macOS is finished (2026-10-30): until then CMake skips it there and
-`SoRPython.cpp` is a stub that only says so, so that build keeps working (not yet tried).
-Linux takes the same path as macOS, not yet tried either.
+directly** (no pybind11), and part of every build, with no variant without it. Runs on
+macOS. Windows and Linux are written and not yet tried (2026-10-30).
 
 - `cmake/CPythonRuntime.cmake` builds the pinned version (`SOR_CPYTHON_VERSION`, checked
   by SHA-256) at configure time into `.cpython/<version>-<arch>/`: gitignored and outside
   `build/`, so `--clean` and `--release` keep it. About 2 minutes, once, needing `make`
   and network access. To rebuild it (say, after changing its options), delete `.cpython/`
-  and `python/` in the build folder.
+  and `python/` in the build folder. On Windows upstream has no llvm-mingw build, and a
+  Python installed there is no use (its DLL is in its own folder, not on the search path,
+  and is named by version), so CMake downloads the official build of the same version from
+  NuGet (`python`, or `pythonarm64`; pinned by SHA-256): it has the DLL, stdlib, headers and
+  import library in one file, and `py` plays no part. `python/Lib` and `python/DLLs` hold the
+  stdlib there, and `vcruntime140*.dll` go next to `sor.exe` with the Python DLLs.
 - It is PGO-optimized even for a Debug `sor`: `tools/tick_bench.py`'s mean tick was 1.28
   ms plain and 1.19 ms with PGO. Modules that link other libraries of the machine
   (`_ssl`, `_decimal`, `_zstd`, ...) are disabled, so the runtime depends only on the
@@ -131,6 +134,8 @@ Linux takes the same path as macOS, not yet tried either.
 - After linking, the library goes next to `sor` and the stdlib into `python/lib/python3.X/`
   beside it. `.cpython`'s own Python is usable for measuring (`DYLD_LIBRARY_PATH=.../lib`),
   and it lacks Tk, so it cannot import `sor_autoplay.app` or the tests that do.
+- `scripts/run.py` passes `--ai-path autoplay/ai-code` unless told otherwise; `play.py` has the
+  field. So the Builder's shortcut, which opens `play.py`, needs nothing of its own.
 - `SoRPython` runs one thread (SDL, 16 MiB of stack) that owns the interpreter's whole
   lifetime: nothing else touches Python or waits for the GIL, so the AI can never slow
   the game. It is isolated: search paths are `--ai-path` (default `ai-code` in the CWD)
@@ -156,6 +161,7 @@ Linux takes the same path as macOS, not yet tried either.
   `sor_ai/embedded.py` in `--ai-path`, or the Windows stub) the screen is the ROM's: three rows,
   index 2 skipped. Choosing the row sets `player_mode` to 3 and the flag and starts Python, so
   the mode screen's init clears the flag and each choice sets it; `--aiAssist` forces it through.
+  The whole menu sits 5 tiles left and 2 up of the ROM's place (user), rows and cursor sprite.
   On character select the P2 cursor and Blaze's preview do not exist until P1 locks; then P1's
   buttons move a cursor spawned on a free character. They come from P1's `+$54`, not the sampled
   word: the select-screen pass runs every other frame, so a press can be gone from `$FFFC04`

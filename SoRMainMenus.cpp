@@ -75,12 +75,17 @@ constexpr m_long kBlazePreviewSelected = 0xFFFFBA5Cu;
 // 1 PLAYER AI ASSIST, the row the ROM does not have, between 2 PLAYERS and
 // OPTIONS: the third row keeps its place (VRAM $C7A0, column 16 of row 15) and
 // OPTIONS moves two cells down from it, as far as the ROM's rows are apart.
-// Without the AI, the screen is the ROM's: OPTIONS stays on the third row.
+// Without the AI, the rows are the ROM's: OPTIONS stays on the third.
+// The whole menu then sits 5 tiles left and 2 up of the ROM's place (user), where
+// the wider list is centred better: VDP commands and cursor sprite alike.
+constexpr m_long kMenuShiftVdp      = (2u * 128u + 5u * 2u) << 16;
+constexpr m_word kMenuShiftY        = 16;
+constexpr m_word kMenuCursorX       = 0x00F0 - 40;
 constexpr m_word kCursorAiAssist    = 2;
 constexpr m_word kCursorOptions     = 3;
-constexpr m_long kAiAssistRowVdp    = 0x47A00003u;
-constexpr m_long kOptionsRowVdp     = 0x48A00003u;
-constexpr m_word kOptionsCursorY    = 0x0108;
+constexpr m_long kAiAssistRowVdp    = 0x47A00003u - kMenuShiftVdp;
+constexpr m_long kOptionsRowVdp     = 0x48A00003u - kMenuShiftVdp;
+constexpr m_word kOptionsCursorY    = 0x0108 - kMenuShiftY;
 constexpr std::string_view kAiAssistText = "1 PLAYER AI ASSIST";
 
 constexpr m_long kCursorYTable  = 0x0000162Au;
@@ -194,7 +199,7 @@ void StreetsOfRage::init_game_start_screen(m_long entry_) {
     cpu().a[5] = 0x0000108Au;
     for (int row = 0; row < 3; ++row) {
         cpu().d[6] = 9;
-        cpu().d[7] = row == 2 && SoRPython::available() ? kOptionsRowVdp : memory().readLong(cpu().a[6]);
+        cpu().d[7] = row == 2 && SoRPython::available() ? kOptionsRowVdp : memory().readLong(cpu().a[6]) - kMenuShiftVdp;
         cpu().a[6] += 4;
         SOR_CALL_68K(vdp_write_menu_string(), 0x1026u, 0x01290Au);
         cpu().setDw(5, memory().readWord(cpu().a[5]));
@@ -581,11 +586,12 @@ void StreetsOfRage::select_menu_cursor_update(m_long /*entry_*/) {
     memory().writeWord(object + 0x40, cursor);
 
     // Without the AI, OPTIONS is on the ROM's third row.
-    const m_word y = cursor == kCursorOptions ? (ai ? kOptionsCursorY : memory().readWord(kCursorYTable + 4u))
-                                              : memory().readWord(kCursorYTable + cursor * 2u);
+    const m_word y = cursor == kCursorOptions
+                         ? (ai ? kOptionsCursorY : static_cast<m_word>(memory().readWord(kCursorYTable + 4u) - kMenuShiftY))
+                         : static_cast<m_word>(memory().readWord(kCursorYTable + cursor * 2u) - kMenuShiftY);
     memory().writeWord(kSpriteTableBuffer, y);
     memory().writeLong(kSpriteTableBuffer + 2u, memory().readLong(kCursorTiles + memory().readByte(object + 0x0A) * 4u));
-    memory().writeWord(kSpriteTableBuffer + 6u, 0x00F0);
+    memory().writeWord(kSpriteTableBuffer + 6u, kMenuCursorX);
     memory().writeLong(kSpriteTableBuffer + 8u, 0);
     cpu().ssp += 4;
 }

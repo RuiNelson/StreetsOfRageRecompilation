@@ -1,9 +1,5 @@
 #include "SoRPython.hpp"
 
-#include <cstdio>
-
-#ifdef SOR_EMBED_PYTHON
-
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
@@ -15,6 +11,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstdio>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -213,8 +210,14 @@ bool initializeInterpreter(const std::filesystem::path &aiPath) {
         return false;
     }
     const std::filesystem::path home = std::filesystem::path(basePath) / "python";
+#ifdef _WIN32
+    const std::filesystem::path stdlib     = home / "Lib";
+    const std::filesystem::path extensions = home / "DLLs";
+#else
     const std::filesystem::path stdlib =
         home / "lib" / ("python" + std::to_string(PY_MAJOR_VERSION) + "." + std::to_string(PY_MINOR_VERSION));
+    const std::filesystem::path extensions = stdlib / "lib-dynload";
+#endif
 
     if (PyImport_AppendInittab("sor_host", initHostModule) == -1) {
         std::fprintf(stderr, "[ai] cannot register the sor_host module\n");
@@ -234,7 +237,7 @@ bool initializeInterpreter(const std::filesystem::path &aiPath) {
     };
     if (!succeeded(PyConfig_SetString(&config, &config.home, home.wstring().c_str())))
         return false;
-    for (const std::filesystem::path &path : {aiPath, stdlib, stdlib / "lib-dynload"}) {
+    for (const std::filesystem::path &path : {aiPath, stdlib, extensions}) {
         if (!succeeded(PyWideStringList_Append(&config.module_search_paths, path.wstring().c_str())))
             return false;
     }
@@ -357,31 +360,3 @@ void stop() {
 }
 
 } // namespace SoRPython
-
-#else // SOR_EMBED_PYTHON
-
-namespace SoRPython {
-
-void configure(const std::filesystem::path & /*aiPath*/, bool /*widescreen*/) {
-}
-
-bool available() {
-    return false;
-}
-
-void start(SystemMemory & /*memory*/) {
-}
-
-void publishFrame(SystemMemory & /*memory*/, std::uint64_t /*frame*/, bool /*player2Enhanced*/) {
-}
-
-bool takeInput(std::vector<std::uint8_t> & /*document*/) {
-    return false;
-}
-
-void stop() {
-}
-
-} // namespace SoRPython
-
-#endif // SOR_EMBED_PYTHON

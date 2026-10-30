@@ -1,8 +1,10 @@
 # Our own CPython: the shared library and stdlib `sor` embeds to run the Python
 # AI (SoRPython.cpp), the same on every machine and independent of any Python
-# installed there. Built once from the pinned source into .cpython/ (ignored by
-# Git and outside build/, so --clean and --release do not rebuild it: it takes
-# minutes) and copied next to `sor` by sor_bundle_cpython().
+# installed there. Kept in .cpython/ (ignored by Git and outside build/, so --clean
+# and --release do not redo it) and copied next to `sor` by sor_bundle_cpython().
+# macOS and Linux build it once from the pinned source, which takes minutes;
+# CPython does not support building with llvm-mingw, so Windows takes the official
+# build of the same version from NuGet, which also has the headers and import library.
 #
 # Defines the imported target SoR::CPython.
 
@@ -11,13 +13,23 @@ set(SOR_CPYTHON_SHA256 8b5536d280142ecf6cdfe15d12a21ba1c65e300bbf7b28a8d0cdb8495
 string(REGEX MATCH "^[0-9]+\\.[0-9]+" SOR_CPYTHON_ABI "${SOR_CPYTHON_VERSION}")
 
 set(SOR_CPYTHON_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.cpython/${SOR_CPYTHON_VERSION}-${CMAKE_SYSTEM_PROCESSOR}")
-set(SOR_CPYTHON_PREFIX "${SOR_CPYTHON_ROOT}/install")
 set(SOR_CPYTHON_STAMP "${SOR_CPYTHON_ROOT}/install.complete")
-set(SOR_CPYTHON_STDLIB "${SOR_CPYTHON_PREFIX}/lib/python${SOR_CPYTHON_ABI}")
-if(APPLE)
-    set(SOR_CPYTHON_LIBRARY "${SOR_CPYTHON_PREFIX}/lib/libpython${SOR_CPYTHON_ABI}.dylib")
+if(WIN32)
+    string(REPLACE "." "" SOR_CPYTHON_DLL_ABI "${SOR_CPYTHON_ABI}")
+    set(SOR_CPYTHON_PREFIX "${SOR_CPYTHON_ROOT}/tools")
+    set(SOR_CPYTHON_STDLIB "${SOR_CPYTHON_PREFIX}/Lib")
+    set(SOR_CPYTHON_INCLUDE "${SOR_CPYTHON_PREFIX}/include")
+    set(SOR_CPYTHON_LIBRARY "${SOR_CPYTHON_PREFIX}/python${SOR_CPYTHON_DLL_ABI}.dll")
+    set(SOR_CPYTHON_IMPORT_LIBRARY "${SOR_CPYTHON_PREFIX}/libs/python${SOR_CPYTHON_DLL_ABI}.lib")
 else()
-    set(SOR_CPYTHON_LIBRARY "${SOR_CPYTHON_PREFIX}/lib/libpython${SOR_CPYTHON_ABI}.so.1.0")
+    set(SOR_CPYTHON_PREFIX "${SOR_CPYTHON_ROOT}/install")
+    set(SOR_CPYTHON_STDLIB "${SOR_CPYTHON_PREFIX}/lib/python${SOR_CPYTHON_ABI}")
+    set(SOR_CPYTHON_INCLUDE "${SOR_CPYTHON_PREFIX}/include/python${SOR_CPYTHON_ABI}")
+    if(APPLE)
+        set(SOR_CPYTHON_LIBRARY "${SOR_CPYTHON_PREFIX}/lib/libpython${SOR_CPYTHON_ABI}.dylib")
+    else()
+        set(SOR_CPYTHON_LIBRARY "${SOR_CPYTHON_PREFIX}/lib/libpython${SOR_CPYTHON_ABI}.so.1.0")
+    endif()
 endif()
 
 # A step of the CPython build; any failure stops the configure.
@@ -34,7 +46,35 @@ function(sor_cpython_run working_directory)
     endif()
 endfunction()
 
-if(NOT EXISTS "${SOR_CPYTHON_STAMP}")
+if(WIN32 AND NOT EXISTS "${SOR_CPYTHON_STAMP}")
+    message(STATUS "Downloading CPython ${SOR_CPYTHON_VERSION} into .cpython/ (first time only)")
+    file(REMOVE_RECURSE "${SOR_CPYTHON_ROOT}")
+    file(MAKE_DIRECTORY "${SOR_CPYTHON_ROOT}")
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(ARM64|arm64|aarch64)$")
+        set(package pythonarm64)
+        set(package_sha256 aeb58f2bb6ba9a4cefacae6c23f720133f82bbdc91c8c9dc9a467d483a1a3534)
+    else()
+        set(package python)
+        set(package_sha256 294f5ed7ab97148fcbb57b8c06ba428f6d282c2bbaa266dbe3137284497998f0)
+    endif()
+    set(archive "${SOR_CPYTHON_ROOT}/${package}.zip")
+    file(DOWNLOAD
+        "https://api.nuget.org/v3-flatcontainer/${package}/${SOR_CPYTHON_VERSION}/${package}.${SOR_CPYTHON_VERSION}.nupkg"
+        "${archive}"
+        EXPECTED_HASH SHA256=${package_sha256}
+        STATUS download_status
+    )
+    list(GET download_status 0 download_code)
+    if(NOT download_code EQUAL 0)
+        message(FATAL_ERROR "Could not download CPython ${SOR_CPYTHON_VERSION}: ${download_status}")
+    endif()
+    file(ARCHIVE_EXTRACT INPUT "${archive}" DESTINATION "${SOR_CPYTHON_ROOT}")
+    foreach(directory ensurepip venv pydoc_data)
+        file(REMOVE_RECURSE "${SOR_CPYTHON_STDLIB}/${directory}")
+    endforeach()
+    file(REMOVE "${archive}")
+    file(WRITE "${SOR_CPYTHON_STAMP}" "${SOR_CPYTHON_VERSION}\n")
+elseif(NOT EXISTS "${SOR_CPYTHON_STAMP}")
     message(STATUS "Building CPython ${SOR_CPYTHON_VERSION} into .cpython/ (first time only, takes some minutes)")
     file(REMOVE_RECURSE "${SOR_CPYTHON_ROOT}")
     file(MAKE_DIRECTORY "${SOR_CPYTHON_ROOT}")
@@ -101,13 +141,30 @@ endif()
 add_library(SoR::CPython SHARED IMPORTED)
 set_target_properties(SoR::CPython PROPERTIES
     IMPORTED_LOCATION "${SOR_CPYTHON_LIBRARY}"
-    INTERFACE_INCLUDE_DIRECTORIES "${SOR_CPYTHON_PREFIX}/include/python${SOR_CPYTHON_ABI}"
+    INTERFACE_INCLUDE_DIRECTORIES "${SOR_CPYTHON_INCLUDE}"
 )
+if(WIN32)
+    set_target_properties(SoR::CPython PROPERTIES IMPORTED_IMPLIB "${SOR_CPYTHON_IMPORT_LIBRARY}")
+endif()
 
 # Puts the library next to @p target and the stdlib in python/ beside it, where
 # SoRPython.cpp looks for them.
 function(sor_bundle_cpython target)
     target_link_libraries(${target} PRIVATE SoR::CPython)
+    if(WIN32)
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${SOR_CPYTHON_LIBRARY}"
+                "${SOR_CPYTHON_PREFIX}/python3.dll"
+                "${SOR_CPYTHON_PREFIX}/vcruntime140.dll"
+                "${SOR_CPYTHON_PREFIX}/vcruntime140_1.dll"
+                "$<TARGET_FILE_DIR:${target}>"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${SOR_CPYTHON_STDLIB}" "$<TARGET_FILE_DIR:${target}>/python/Lib"
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${SOR_CPYTHON_PREFIX}/DLLs" "$<TARGET_FILE_DIR:${target}>/python/DLLs"
+            COMMENT "Copying CPython next to ${target}"
+        )
+        return()
+    endif()
     if(APPLE)
         set_property(TARGET ${target} PROPERTY BUILD_RPATH "@loader_path")
     else()
