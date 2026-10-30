@@ -106,7 +106,7 @@ Windows uses llvm-mingw (Clang, LLD, libc++, UCRT) with Ninja: pass
 `sor` raises its stack with `-Wl,--stack,8388608`. `MegaDriveEnvironment` is
 static there and the C++ runtime is linked in (`-static-libstdc++`), so only
 `SDL3.dll`/`SDL3_mixer.dll` sit next to `sor.exe`. The meta-repository README
-has the complete command. Not yet built on a real Windows machine.
+has the complete command. Built and run on a real Windows machine (user, 2026-10-30).
 
 ## The Python AI in the process (`SoRPython`, `--ai-path`)
 
@@ -114,7 +114,8 @@ For the **1 PLAYER AI ASSIST** mode, `sor` runs the same Python AI the external
 `autoplay` does (`../autoplay/ai-code/sor_ai`). User decisions: our own CPython as a
 shared library next to the binary, not the machine's, called through the **C API
 directly** (no pybind11), and part of every build, with no variant without it. Runs on
-macOS. Windows and Linux are written and not yet tried (2026-10-30).
+macOS and on Windows (user, 2026-10-30: `generate_cpp_and_build.py` compiled and the mode
+works, llvm-mingw with the NuGet package). Linux is written and not yet tried.
 
 - `cmake/CPythonRuntime.cmake` builds the pinned version (`SOR_CPYTHON_VERSION`, checked
   by SHA-256) at configure time into `.cpython/<version>-<arch>/`: gitignored and outside
