@@ -38,6 +38,7 @@ Before changing files:
 | `SoRControls.cpp` | Hand-written controller sampling, input remap, OPTIONS controls, character-select input, and pause/Start routines |
 | `SoRInput.*` | Keyboard and gamepad input read from SDL by the game, as actions (see **Controls**) |
 | `SoRControlsConfig.*` | `~/.config/StreetsOfRageProject/controls.yaml`: schemes, bindings, gamepad choice, deadzone |
+| `SoRControlsMenu.*` | OPTIONS > CONTROLS, the in-game controls menu (see **Controls**) |
 | `SoRSoundtrack.*` | Pre-rendered soundtrack playback (SDL3_mixer) driven by the ROM's own sound engine |
 | `tools/soundtrack/` | Separate CMake project: the Genesis Plus GX renderer that produces that soundtrack |
 | `code-analysis/manual_functions.txt` | Addresses dispatched to manual implementations |
@@ -161,9 +162,9 @@ and every byte in `$FFFC04`-`$FFFC0A` keep their format and frame.
   a native edge too, and `findPickupTarget` widens the box). `SoRCheats::
   enhancedControls(player)` is what `SoRInteractions.cpp` tests; `SoRInput`
   publishes it.
-- The ROM's A/B/C layouts (`$FFFFC8 control_scheme`, the OPTIONS CONTROL row)
-  are gone: `remap_player_gameplay_input` never rotates and the row is hidden
-  (`kHideControlRow` in `SoRMainMenus.cpp`).
+- The ROM's A/B/C layouts (`$FFFFC8 control_scheme`) are gone:
+  `remap_player_gameplay_input` never rotates and `$FFFFC8` stays 0. Its
+  OPTIONS row (sub-state `$18/$1A`) is now **CONTROLS** (below).
 - Keyboard bindings (per scheme): directions, the scheme's actions and Start,
   by SDL scancode (saved as `SDL_GetScancodeName`). Key-downs with Ctrl, Alt
   or Cmd held are ignored (host hotkeys); losing focus releases every key.
@@ -196,8 +197,60 @@ and every byte in `$FFFC04`-`$FFFC0A` keep their format and frame.
 - `--altControls` puts both players on ENHANCED 6 for the session
   (`SoRInput::setSchemeOverride`, not saved).
 
-Planned next (user request): an in-game OPTIONS > CONTROLS menu replacing
-`--configControls`, then autoplay sending actions through execution data.
+### OPTIONS > CONTROLS (`SoRControlsMenu`)
+
+User request: the in-game menu replaced `--configControls` (gone from `sor`
+and `play.py`; MegaDriveEnvironment keeps its own UI for the sample game).
+
+- The row: `$1360 (options_highlight_controls)` is now manual (it only adds 2
+  to the sub-state and draws the row white); `options_menu_build` draws it grey
+  instead of loading tilemap bundle `$0D` (the CONTROL label) and the layout
+  strings; `options_row_nav` no longer skips it. It shows "CONTROLS" at row 11
+  and "P1 <scheme>" / "P2 <scheme>" at rows 11 and 13, column 18 (where the
+  ROM's label and layout block were). Punch, Jump or Special on that row opens
+  the menu; Start still leaves OPTIONS.
+- While open, `$1390 (options_input_controls)` runs one menu frame and
+  returns; `game_start_screen_update` ignores Start (it goes back a screen).
+  Its state is C++ (host UI): no work-RAM field changes. On closing, the menu
+  clears what it drew and `options_input_controls` redraws the screen as
+  `options_menu_build` does (bundles `$04 $0B $0C $10`, the sound name and
+  difficulty grey, the cheat rows when unlocked) with CONTROLS selected.
+- Screens: CONTROLS (PLAYER 1, PLAYER 2, BACK); PLAYER n (SCHEME, DEVICE,
+  BIND GAMEPAD, BIND KEYBOARD, JOYSTICK DEADZONE, BACK; the gamepad entries
+  are skipped and say NO GAMEPAD without one, BIND KEYBOARD without
+  `SDL_HasKeyboard()`, for ports without a keyboard); DEVICE (AUTO, up to 7
+  pads, NONE; `>` marks the saved choice, P1/P2 who reads each pad now); BIND
+  (each action in turn; a key/button already given to an earlier action in
+  this pass shows ALREADY USED; Esc or any gamepad's Start cancels and keeps
+  the old bindings; finishing saves); JOYSTICK DEADZONE (left stick X/Y and
+  tilt in percent, a 25-cell bar with `:` at the deadzone, INSIDE THE
+  DEADZONE / MOVING; Left/Right change it by 1 with repeat, applied at once,
+  saved on leaving; the stick does not move the menu there).
+- Navigation from any device (`SoRInput::menuButtons`): arrows, Enter, Esc,
+  both players' direction keys, their Punch/Jump/Special keys or pad inputs
+  to confirm, their Start to go back; any pad's D-pad, left stick (half
+  travel), South, Start; and the remote (autoplay) buttons (directions,
+  A/B/C, Start), which is how it is tested. Directions repeat after 20 frames,
+  every 6. The menu reads its own tap latch (`kMenuLatch`), separate from the
+  players' samples. Sounds: `$B9` move, `$BA` confirm, written to
+  `$FFF00A (play_se)` as `handle_pause_start_input` does.
+- Drawing: the OPTIONS font (a text byte is the tile index: `$01`-`$1A`
+  A-Z, `$1B`-`$24` 0-9, `$26` `:`, `$27` `>`, `$29` `.`, `$2A` `,`, `$2C` `'`,
+  `$2D` `"`, `$2E` `?`, `$2F` `!`; no `+ - % /`) into plane A at `$C000`,
+  palette line 0 (white) for the selected entry and line 1 (grey) for the
+  others: the only two lines with a text colour on this screen. Each frame the
+  screen is composed in a 64x28 buffer and only changed cells are written
+  through the VDP ports. Text stays in columns 2-39 and rows 3-25 so it fits
+  Mode 40 and widescreen.
+- Checked by driving it with remote buttons and posted macOS key events
+  (`read_framebuffer` screenshots, plain and widescreen, with `HOME` pointed
+  at a scratch folder so the user's `controls.yaml` was untouched): every
+  screen, a full ORIGINAL 3 keyboard bind (duplicate refused, saved), Esc
+  cancelling mid-bind, scheme toggling, closing and the OPTIONS redraw, and
+  row navigation afterwards. Not checked here: a real gamepad (DEVICE list,
+  BIND GAMEPAD, the deadzone readout).
+
+Planned next (user request): autoplay sending actions through execution data.
 
 ## 6-button pickup reach (ENHANCED 6)
 

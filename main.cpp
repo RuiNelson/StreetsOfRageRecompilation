@@ -3,7 +3,6 @@
 #include "SoRInput.hpp"
 #include "SoRSoundtrack.hpp"
 #include "SoR.hpp"
-#include "config/controls/ControlsConfigUI.hpp"
 #include <CLI/CLI.hpp>
 #include <cstdint>
 #include <cstdio>
@@ -14,8 +13,6 @@ int main(int argc, char *argv[]) {
     CLI::App app{"MegaDrive Environment"};
     app.set_version_flag("-V,--version", "0.1.0");
 
-    bool          configControlsFlag = false;
-    bool          runSorFlag         = false;
     bool          sorDebugFlag       = false;
     bool          debugUtilsFlag     = false;
     bool          fullScreenFlag     = false;
@@ -42,15 +39,12 @@ int main(int argc, char *argv[]) {
         ->capture_default_str()
         ->check(CLI::IsMember({"prerendered", "emulated"}));
     app.add_option("--soundtrack", soundtrackDir, "Pre-rendered soundtrack directory (default: soundtrack next to the ROM)");
-    app.add_flag("--configControls", configControlsFlag, "Open controller configuration UI");
     app.add_option("--lang", languagePin, "Console language pin: jp=low/Japanese, en=high/overseas")
         ->capture_default_str()
         ->check(CLI::IsMember({"jp", "en"}));
     app.add_option("--hz", videoHz, "Console video frequency pin: 60=low/NTSC, 50=high/PAL")
         ->capture_default_str()
         ->check(CLI::IsMember({"60", "50"}));
-    app.add_flag(
-        "--runSor", runSorFlag, "Explicitly run Streets of Rage (already the default unless --configControls is used)");
     app.add_flag("--debug", sorDebugFlag, "Log CPU/VDP state once per second");
     app.add_flag("--debugUtils", debugUtilsFlag, "Enable debug hotkeys, cheats and remote access");
     app.add_flag("--fullScreen", fullScreenFlag, "Start the game in fullscreen");
@@ -111,10 +105,7 @@ int main(int argc, char *argv[]) {
         }
     };
 
-    if (configControlsFlag) {
-        runControlsConfig();
-    }
-    if (runSorFlag || !configControlsFlag) {
+    {
         StreetsOfRage sor(sorRomPath,
                           static_cast<VDP::Synchronization>(sorVSyncMode),
                           VDP::Integer,

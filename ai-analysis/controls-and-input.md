@@ -155,8 +155,8 @@ After this point, the player state machine can treat bit `$10` as attack, bit
 `$20` as jump, and bit `$40` as police special regardless of the selected
 OPTIONS layout. Directions and Start are never remapped.
 
-The native port never applies `$FFFFC8 (control_scheme)` and hides its
-OPTIONS row: the game reads the keyboard and gamepads itself and binds them to
+The native port never applies `$FFFFC8 (control_scheme)` and turns its
+OPTIONS row into the CONTROLS menu: the game reads the keyboard and gamepads itself and binds them to
 actions per player (`SoRInput`, `~/.config/StreetsOfRageProject/controls.yaml`),
 and the manual sampler writes the logical bits before `$568A
 (remap_player_gameplay_input)` copies the word into each player object. The

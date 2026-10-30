@@ -258,11 +258,11 @@ The raw controller byte uses bit 6 for A, bit 4 for B, and bit 5 for C. Scheme
 1 rotates those bits left and scheme 2 rotates them right into the fixed logical
 roles (bit 4 attack, bit 5 jump, bit 6 special). D-pad and Start are preserved.
 
-In the native port this OPTIONS row is hidden and
-`$568A (remap_player_gameplay_input)` never applies `$FFFFC8 (control_scheme)`
-(which stays 0): players bind actions instead (`controls.yaml`, see
-`controls-and-input.md`), and the manual sampler writes the fixed logical
-bits directly.
+In the native port this OPTIONS row is the CONTROLS menu (bindings per
+player, `SoRControlsMenu`) and `$568A (remap_player_gameplay_input)` never
+applies `$FFFFC8 (control_scheme)` (which stays 0): players bind actions
+instead (`controls.yaml`, see `controls-and-input.md`), and the manual sampler
+writes the fixed logical bits directly.
 
 ### 6.6 Lives (cheat) (`$FFFFCA (lives_setting)`)
 

@@ -4,8 +4,11 @@
 
 #include <filesystem>
 #include <optional>
+#include <string>
+#include <vector>
 
 struct PlayerControlsState;
+struct PlayersControlState;
 
 // Keyboard and gamepad input, read from SDL by the game itself.
 //
@@ -47,5 +50,53 @@ ActionMask fromMegaDriveButtons(const PlayerControlsState &buttons, Scheme schem
 ControlsConfig config();
 /// Applies @p config at once and, when @p persist, writes controls.yaml.
 void setConfig(const ControlsConfig &config, bool persist = true);
+
+// ── For the OPTIONS > CONTROLS menu ───────────────────────────────────────
+
+struct GamepadInfo {
+    SDL_JoystickID id = 0;
+    std::string    guid;
+    std::string    name;
+    /// Which of the connected pads with this GUID it is (0 for the first).
+    int index = 0;
+};
+
+/// The connected gamepads, in connection order.
+std::vector<GamepadInfo> gamepads();
+/// The gamepad @p player reads now, if any.
+std::optional<GamepadInfo> assignedGamepad(int player);
+bool                       keyboardAvailable();
+
+struct StickReading {
+    int x = 0; ///< -32768..32767, left negative
+    int y = 0; ///< -32768..32767, up negative
+};
+/// The raw left stick of @p player's gamepad.
+std::optional<StickReading> leftStick(int player);
+
+struct MenuButtons {
+    bool up = false, down = false, left = false, right = false, confirm = false, back = false;
+};
+/// Once per menu frame: what any device holds (or tapped since the last
+/// call). Keyboard: arrows, Enter, Esc and both players' bindings (their
+/// directions; Punch, Jump or Special confirm; Start goes back). Gamepads:
+/// the D-pad, the left stick when @p sticks, South or a bound action to
+/// confirm, Start to go back. Remote buttons: directions, A/B/C, Start.
+MenuButtons menuButtons(const PlayersControlState &remote, bool sticks = true);
+
+enum class CaptureDevice { Keyboard, Gamepad };
+struct Captured {
+    enum class Status { Pending, Cancelled, Key, Pad };
+    Status                       status = Status::Pending;
+    SDL_Scancode                 key    = SDL_SCANCODE_UNKNOWN;
+    SoRControlsConfig::PadInput pad;
+};
+/// Starts waiting for the next key (Keyboard) or bindable input of
+/// @p player's gamepad (Gamepad); false when that player has no gamepad.
+/// Esc, or Start on any gamepad, cancels.
+bool beginCapture(CaptureDevice device, int player);
+/// Pending, Cancelled, or the next captured input (which is then consumed).
+Captured takeCapture();
+void     endCapture();
 
 } // namespace SoRInput

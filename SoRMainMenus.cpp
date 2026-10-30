@@ -1,4 +1,5 @@
 #include "SoRCheats.hpp"
+#include "SoRControlsMenu.hpp"
 #include "SoR.hpp"
 
 #include <cstdint>
@@ -25,10 +26,6 @@ constexpr m_long kP2AttackFlag  = 0xFFFFFF25u;
 constexpr m_long kSoundTestIndex = 0xFFFFFFC4u;
 constexpr m_long kDifficulty     = 0xFFFFFFC6u;
 constexpr m_long kControlScheme  = 0xFFFFFFC8u;
-
-// The ROM's CONTROL row (A/B/C button layouts) is hidden: players bind
-// actions in controls.yaml instead, and $FFFFC8 stays 0.
-constexpr bool kHideControlRow = true;
 constexpr m_long kLivesSetting   = 0xFFFFFFCAu;
 
 constexpr m_long kP1Object    = 0xFFFFB800u;
@@ -143,7 +140,10 @@ void StreetsOfRage::game_start_screen_update(m_long /*entry_*/) {
     traceEnter(0x108Eu);
 
     const m_word substate = memory().readWord(kSelectScreenSubstate);
-    if (substate >= 0x10 && substate < 0x28 && (memory().readByte(kP1ButtonPress) & 0x80u) != 0) {
+    // Start leaves OPTIONS from any row, except inside the CONTROLS menu,
+    // where it goes back one screen.
+    if (substate >= 0x10 && substate < 0x28 && (memory().readByte(kP1ButtonPress) & 0x80u) != 0 &&
+        !SoRControlsMenu::isOpen()) {
         cpu().d[7] = 0xFFFFFFE1u;
         SOR_CALL_68K(queue_sound_id(), 0x10AEu, 0x01069Eu);
         memory().writeWord(kSelectScreenSubstate, 0x28);
@@ -210,7 +210,9 @@ void StreetsOfRage::options_menu_build(m_long /*entry_*/) {
     SOR_CALL_68K(sub_007f00(), 0x1180u, 0x007F00u);
     memory().writeLong(0xFFFFDA00u, 0);
 
-    cpu().d[0] = kHideControlRow ? 0x000C0504u : 0x0D0C0504u;
+    // The ROM's CONTROL label (bundle $0D) and A/B/C layouts are replaced by
+    // the CONTROLS row (SoRControlsMenu), drawn below.
+    cpu().d[0] = 0x000C0504u;
     SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1190u, 0x00A8B8u);
     cpu().d[0] = 0x10u;
     SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1198u, 0x00A8B8u);
@@ -218,8 +220,7 @@ void StreetsOfRage::options_menu_build(m_long /*entry_*/) {
 
     cpu().setDw(4, 0x2000u);
     SOR_CALL_68K(options_draw_difficulty(), 0x11A4u, 0x0012E4u);
-    if (!kHideControlRow)
-        SOR_CALL_68K(options_draw_controls(), 0x11A8u, 0x001370u);
+    SoRControlsMenu::drawOptionsRow(memory(), false);
 
     if (memory().readByte(kCheatFlag) != 0) {
         SOR_CALL_68K(options_draw_lives_digit(), 0x11B2u, 0x0013E6u);
@@ -415,12 +416,8 @@ void StreetsOfRage::options_row_nav(m_long /*entry_*/) {
             next = 0x18;
         if (static_cast<m_byte>(next) < 0x10)
             next = 0x24;
-        if (kHideControlRow && static_cast<m_byte>(next) == 0x18)
-            next = 0x14;
     } else {
         next = static_cast<m_word>(next + 2);
-        if (kHideControlRow && static_cast<m_byte>(next) == 0x18)
-            next = memory().readByte(kCheatFlag) == 0 ? 0x24 : 0x1C;
         if (memory().readByte(kCheatFlag) == 0 && static_cast<m_byte>(next) == 0x1C)
             next = 0x24;
         if (static_cast<m_byte>(next) >= 0x26)

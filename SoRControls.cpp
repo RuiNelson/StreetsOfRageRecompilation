@@ -1,4 +1,5 @@
 #include "SoRCheats.hpp"
+#include "SoRControlsMenu.hpp"
 #include "SoRInput.hpp"
 #include "SoR.hpp"
 
@@ -25,6 +26,8 @@ constexpr m_long kFadeOutFlag         = 0xFFFFFA71u;
 constexpr m_long kPaletteFadeCounter  = 0xFFFFFB0Cu;
 
 constexpr m_long kCharSelectConfirmCount = 0xFFFFF908u;
+constexpr m_long kSelectScreenSubstate   = 0xFFFFFB0Eu;
+constexpr m_long kCheatFlag              = 0xFFFFFA7Bu;
 
 constexpr m_long kP1ButtonHeld  = 0xFFFFFC04u;
 constexpr m_long kP1ButtonPress = 0xFFFFFC05u;
@@ -54,12 +57,6 @@ constexpr m_byte kButtonX     = 0x40u;
 
 constexpr m_long signExtendWord(m_word value) {
     return static_cast<m_long>(static_cast<std::int32_t>(static_cast<std::int16_t>(value)));
-}
-
-constexpr m_word wrappedStep(m_word value, m_word maximum, bool increment) {
-    if (increment)
-        return value >= maximum ? 0 : static_cast<m_word>(value + 1);
-    return value == 0 ? maximum : static_cast<m_word>(value - 1);
 }
 
 bool bit(m_byte value, unsigned index) {
@@ -258,34 +255,57 @@ void sampleOneJoypadBody(CPU68K &cpu, SystemMemory &memory, const SampledPlayer 
             return;                                                                                                    \
     } while (false)
 
+// $001360 -- OPTIONS sub-state $18: highlight the CONTROLS row (the ROM's
+// CONTROL row, whose A/B/C layouts the bindings replace).
+void StreetsOfRage::options_highlight_controls(m_long /*entry_*/) {
+    traceEnter(0x1360u);
+    memory().writeWord(kSelectScreenSubstate, static_cast<m_word>(memory().readWord(kSelectScreenSubstate) + 2));
+    SoRControlsMenu::drawOptionsRow(memory(), true);
+    return68k(cpu());
+}
+
+// $001390 -- OPTIONS sub-state $1A: the CONTROLS row. Up/Down leave it as
+// every row does; Punch, Jump or Special opens the CONTROLS menu, which then
+// runs here one frame per call until it closes ($FFFFC8 is never changed).
 void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
     traceEnter(0x1390u);
+
+    if (SoRControlsMenu::isOpen()) {
+        if (SoRControlsMenu::frame(memory(), controllers().getCurrentState()) == SoRControlsMenu::Result::Closed) {
+            // Redraw the OPTIONS screen as options_menu_build does, with
+            // this row selected.
+            cpu().d[0] = 0x100C0B04u;
+            SOR_CONTROLS_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1190u, 0x00A8B8u);
+            cpu().setDw(4, 0x2000u);
+            SOR_CONTROLS_CALL_68K(options_draw_sound_name(0x11D6u), 0x119Cu, 0x0011D6u);
+            cpu().setDw(4, 0x2000u);
+            SOR_CONTROLS_CALL_68K(options_draw_difficulty(), 0x11A4u, 0x0012E4u);
+            if (memory().readByte(kCheatFlag) != 0u) {
+                SOR_CONTROLS_CALL_68K(options_draw_lives_digit(), 0x11B2u, 0x0013E6u);
+                SOR_CONTROLS_CALL_68K(options_draw_level_digit(), 0x11B6u, 0x00145Au);
+                cpu().d[0] = 0x00000F0Eu;
+                SOR_CONTROLS_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x11C2u, 0x00A8B8u);
+            }
+            SoRControlsMenu::drawOptionsRow(memory(), true);
+        }
+        return68k(cpu());
+        return;
+    }
 
     cpu().setDw(0, memory().readWord(kControlScheme));
     cpu().setFlag(CPU68K::FlagZ, cpu().dw(0) == 0);
     SOR_CONTROLS_CALL_68K(options_row_nav(), 0x1398u, 0x0014F2u);
     if (cpu().ne()) {
-        cpu().d[0] = 0x0Du;
-        SOR_CONTROLS_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x13CEu, 0x00A8B8u);
-        cpu().setDw(4, 0x2000u);
-        setMoveWordFlags(cpu(), 0x2000u);
-        options_draw_controls();
-        return;
-    }
-
-    const m_byte horizontal = static_cast<m_byte>(memory().readByte(kP1ButtonPress) & 0x0Cu);
-    cpu().setDb(1, horizontal);
-    setMoveByteFlags(cpu(), horizontal);
-    if (horizontal == 0) {
+        SoRControlsMenu::drawOptionsRow(memory(), false);
         return68k(cpu());
         return;
     }
 
-    const m_word value = wrappedStep(cpu().dw(0), 2, (horizontal & 0x08u) != 0);
-    cpu().setDw(0, value);
-    memory().writeWord(kControlScheme, value);
-    setMoveWordFlags(cpu(), value);
-    options_highlight_controls(0x136Cu);
+    if ((memory().readByte(kP1ButtonPress) & 0x70u) != 0u) {
+        memory().writeByte(kPlaySe, 0xBAu);
+        SoRControlsMenu::open();
+    }
+    return68k(cpu());
 }
 
 void StreetsOfRage::char_select_cursor_dispatcher(m_long /*entry_*/) {

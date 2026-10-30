@@ -53,6 +53,7 @@
 00117C # options_menu_build
 001218 # options_input_sound_test
 00131A # options_input_difficulty
+001360 # options_highlight_controls (the CONTROLS row)
 001390 # options_input_controls
 001404 # options_input_lives
 001476 # options_input_level
