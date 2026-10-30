@@ -33,6 +33,24 @@ MegaDriveClient = remote.MegaDriveClient
 MegaDriveRemoteError = remote.MegaDriveRemoteError
 
 
+def _input_client_class() -> Any:
+    """The client whose presses reach the game.
+
+    The game reads its remote input as actions through the execution data
+    (SoRRemoteInput); the gamepad commands no longer reach it. The sibling
+    autoplay checkout's SoRClient keeps press_buttons and sends it that way.
+    """
+
+    source = Path(__file__).resolve().parents[2] / "autoplay" / "src"
+    if source.is_dir() and str(source) not in sys.path:
+        sys.path.insert(0, str(source))
+    try:
+        from sor_autoplay.sor_remote import SoRClient
+    except ModuleNotFoundError as error:
+        raise SystemExit(f"autoplay's sor_remote was not found at {source}: {error}")
+    return SoRClient
+
+
 # Canonical names and widths come from code-analysis/addresses.csv.
 GAME_STATE = 0xFFFF00                  # W
 P1_CHARACTER_ID = 0xFFFF1E             # B
@@ -307,7 +325,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        with MegaDriveClient(args.host, args.port) as game:
+        with _input_client_class()(args.host, args.port) as game:
             result = reach_gameplay(
                 game,
                 args.character,

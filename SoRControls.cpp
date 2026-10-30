@@ -1,6 +1,7 @@
 #include "SoRCheats.hpp"
 #include "SoRControlsMenu.hpp"
 #include "SoRInput.hpp"
+#include "SoRRemoteInput.hpp"
 #include "SoR.hpp"
 
 #include <cstdint>
@@ -132,18 +133,17 @@ using SoRControlsConfig::Action;
 using SoRControlsConfig::actionBit;
 
 // One player's input for the sampler: their actions (keyboard and gamepad
-// through controls.yaml, ORed with remote buttons) and whether they use the
-// ENHANCED 6 scheme.
+// through controls.yaml, ORed with a remote client's, SoRRemoteInput) and
+// whether they use the ENHANCED 6 scheme.
 struct SampledPlayer {
     SoRInput::ActionMask actions  = 0;
     bool                 enhanced = false;
 };
 
-SampledPlayer samplePlayer(int playerIndex, const PlayerControlsState &remote) {
-    const SoRInput::Scheme scheme = SoRInput::scheme(playerIndex);
-    SoRInput::ActionMask   actions =
-        static_cast<SoRInput::ActionMask>(SoRInput::physicalActions(playerIndex) |
-                                          SoRInput::fromMegaDriveButtons(remote, scheme));
+SampledPlayer samplePlayer(int playerIndex) {
+    const SoRInput::Scheme scheme  = SoRInput::scheme(playerIndex);
+    SoRInput::ActionMask   actions = static_cast<SoRInput::ActionMask>(SoRInput::physicalActions(playerIndex) |
+                                                                     SoRRemoteInput::actions(playerIndex));
     actions = static_cast<SoRInput::ActionMask>(actions & SoRControlsConfig::schemeActions(scheme));
 
     // Opposite directions cancel each other, as a real pad cannot report both.
@@ -271,7 +271,8 @@ void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
     traceEnter(0x1390u);
 
     if (SoRControlsMenu::isOpen()) {
-        if (SoRControlsMenu::frame(memory(), controllers().getCurrentState()) == SoRControlsMenu::Result::Closed) {
+        const auto remote = static_cast<SoRInput::ActionMask>(SoRRemoteInput::actions(0) | SoRRemoteInput::actions(1));
+        if (SoRControlsMenu::frame(memory(), remote) == SoRControlsMenu::Result::Closed) {
             // Redraw the OPTIONS screen as options_menu_build does, with
             // this row selected.
             cpu().d[0] = 0x100C0B04u;
@@ -480,10 +481,10 @@ void StreetsOfRage::high_score_name_entry_dispatcher(m_long /*entry_*/) {
 void StreetsOfRage::sample_all_joypads(m_long entry_) {
     traceEnter(entry_);
 
-    // Only remote (autoplay) buttons: MegaDriveEnvironment does not read SDL.
-    const PlayersControlState remote  = controllers().getCurrentState();
-    const SampledPlayer       player1 = samplePlayer(0, remote.player1);
-    const SampledPlayer       player2 = samplePlayer(1, remote.player2);
+    // Once a frame: the remote client's input document (execution data).
+    SoRRemoteInput::update(remoteAccess(), gameUptimeFrames());
+    const SampledPlayer player1 = samplePlayer(0);
+    const SampledPlayer player2 = samplePlayer(1);
 
     memory().writeWord(kZ80BusRequest, 0x0100u);
     cpu().a[1] = kIoPlayer1DataPort;
@@ -507,9 +508,7 @@ void StreetsOfRage::sample_one_joypad(m_long entry_) {
     if (playerIndex < 0) {
         sampleOneJoypadBody(cpu(), memory(), nullptr);
     } else {
-        const PlayersControlState remote = controllers().getCurrentState();
-        const SampledPlayer       player =
-            samplePlayer(playerIndex, playerIndex == 0 ? remote.player1 : remote.player2);
+        const SampledPlayer player = samplePlayer(playerIndex);
         sampleOneJoypadBody(cpu(), memory(), &player);
     }
     return68k(cpu());

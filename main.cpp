@@ -17,7 +17,6 @@ int main(int argc, char *argv[]) {
     bool          debugUtilsFlag     = false;
     bool          fullScreenFlag     = false;
     bool          silentFlag         = false;
-    bool          altControlsFlag    = false;
     bool          widescreenFlag     = false;
     bool          integerScalingFlag = false;
     int           sorVSyncMode       = 0; // 0 = internal timer (default); 1/2/3 = VSync/VSync2/VSync3
@@ -48,9 +47,6 @@ int main(int argc, char *argv[]) {
     app.add_flag("--debug", sorDebugFlag, "Log CPU/VDP state once per second");
     app.add_flag("--debugUtils", debugUtilsFlag, "Enable debug hotkeys, cheats and remote access");
     app.add_flag("--fullScreen", fullScreenFlag, "Start the game in fullscreen");
-    app.add_flag("--altControls",
-                 altControlsFlag,
-                 "Put both players on the ENHANCED 6 control scheme for this session (not saved)");
     app.add_flag("--widescreen",
                  widescreenFlag,
                  "Use VDP Mode 48 (48x27 tiles, 384x216) instead of Mode 40; a host-only mode the hardware lacks");
@@ -115,13 +111,10 @@ int main(int argc, char *argv[]) {
         // MegaDriveEnvironment keeps only the remote (autoplay) buttons.
         sor.controllers().setPhysicalInputEnabled(false);
         SoRInput::start(SoRControlsConfig::defaultPath());
-        if (altControlsFlag)
-            SoRInput::setSchemeOverride(SoRInput::Scheme::Enhanced6);
         // Host mode flags for GET_FLAGS; the indices are mirrored by autoplay/src/sor_autoplay/host_flags.py.
+        // (Flag 1 was --altControls; each player's scheme is now in the game data, SoRRemoteInput.)
         constexpr std::size_t kFlagWidescreen = 0;
-        constexpr std::size_t kFlagSixButton  = 1;
         sor.remoteAccess().setFlag(kFlagWidescreen, widescreenFlag);
-        sor.remoteAccess().setFlag(kFlagSixButton, altControlsFlag);
         sor.setDebugLog(sorDebugFlag);
         sor.setDebugUtilities(debugUtilsFlag);
         sor.setStartFullscreen(fullScreenFlag);

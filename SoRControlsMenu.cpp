@@ -670,7 +670,7 @@ bool isOpen() {
     return menu().isOpen;
 }
 
-Result frame(SystemMemory &memory, const PlayersControlState &remote) {
+Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
     Menu &m = menu();
     if (!m.isOpen)
         return Result::Closed;

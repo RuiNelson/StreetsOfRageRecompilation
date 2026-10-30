@@ -1,11 +1,11 @@
 #pragma once
 
+#include "SoRControlsConfig.hpp"
 #include "data_types.hpp"
 
 #include <string_view>
 
 class SystemMemory;
-struct PlayersControlState;
 
 // OPTIONS > CONTROLS: the in-game controls menu.
 //
@@ -31,8 +31,9 @@ void open();
 bool isOpen();
 
 enum class Result { Open, Closed };
-/// One menu frame. On Closed the menu has cleared plane A and the caller
-/// redraws the OPTIONS screen.
-Result frame(SystemMemory &memory, const PlayersControlState &remote);
+/// One menu frame; @p remote is the remote client's actions (both players).
+/// On Closed the menu has cleared plane A and the caller redraws the OPTIONS
+/// screen.
+Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote);
 
 } // namespace SoRControlsMenu

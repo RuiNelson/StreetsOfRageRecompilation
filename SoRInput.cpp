@@ -1,7 +1,6 @@
 #include "SoRInput.hpp"
 
 #include "SoRCheats.hpp"
-#include "system/controllers/Controllers.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -48,7 +47,7 @@ struct State {
     bool                                 started = false;
     std::filesystem::path                path;
     ControlsConfig                       config = ControlsConfig::defaults();
-    std::optional<Scheme>                schemeOverride;
+    std::array<std::optional<Scheme>, 2> schemeOverride; // per player, this session only
     std::array<bool, SDL_SCANCODE_COUNT> keys{};
     // Per reader (kLatchCount): pressed since its last read. A press
     // released before the next frame is sampled still counts for that one
@@ -94,7 +93,8 @@ void closePadLocked(State &s, SDL_JoystickID id) {
 }
 
 Scheme effectiveSchemeLocked(const State &s, int player) {
-    return s.schemeOverride.value_or(s.config.players[static_cast<std::size_t>(player)].scheme);
+    const auto index = static_cast<std::size_t>(player);
+    return s.schemeOverride[index].value_or(s.config.players[index].scheme);
 }
 
 void publishSchemesLocked(const State &s) {
@@ -340,33 +340,13 @@ Scheme scheme(int player) {
     return effectiveSchemeLocked(s, std::clamp(player, 0, 1));
 }
 
-void setSchemeOverride(std::optional<Scheme> scheme) {
+void setSchemeOverride(int player, std::optional<Scheme> scheme) {
+    if (player < 0 || player > 1)
+        return;
     State          &s = state();
     std::lock_guard lock(s.mutex);
-    s.schemeOverride = scheme;
+    s.schemeOverride[static_cast<std::size_t>(player)] = scheme;
     publishSchemesLocked(s);
-}
-
-ActionMask fromMegaDriveButtons(const PlayerControlsState &buttons, Scheme scheme) {
-    ActionMask mask = 0;
-    setIf(mask, buttons.up, Action::Up);
-    setIf(mask, buttons.down, Action::Down);
-    setIf(mask, buttons.left, Action::Left);
-    setIf(mask, buttons.right, Action::Right);
-    setIf(mask, buttons.start, Action::Start);
-    if (scheme == Scheme::Enhanced6) {
-        setIf(mask, buttons.b, Action::Punch);
-        setIf(mask, buttons.c, Action::Jump);
-        setIf(mask, buttons.a, Action::BackAttack);
-        setIf(mask, buttons.x, Action::Special);
-        setIf(mask, buttons.y, Action::Pickup);
-        setIf(mask, buttons.z, Action::Throw);
-    } else {
-        setIf(mask, buttons.a, Action::Special);
-        setIf(mask, buttons.b, Action::Punch);
-        setIf(mask, buttons.c, Action::Jump);
-    }
-    return mask;
 }
 
 ControlsConfig config() {
@@ -428,7 +408,7 @@ std::optional<StickReading> leftStick(int player) {
     return StickReading{pad->axes[SDL_GAMEPAD_AXIS_LEFTX], pad->axes[SDL_GAMEPAD_AXIS_LEFTY]};
 }
 
-MenuButtons menuButtons(const PlayersControlState &remote, bool sticks) {
+MenuButtons menuButtons(ActionMask remote, bool sticks) {
     State           &s = state();
     std::lock_guard lock(s.mutex);
     MenuButtons     buttons;
@@ -480,14 +460,13 @@ MenuButtons menuButtons(const PlayersControlState &remote, bool sticks) {
         pad.buttonTapped[kMenuLatch].fill(false);
     }
 
-    for (const PlayerControlsState *remoteButtons : {&remote.player1, &remote.player2}) {
-        buttons.up      = buttons.up || remoteButtons->up;
-        buttons.down    = buttons.down || remoteButtons->down;
-        buttons.left    = buttons.left || remoteButtons->left;
-        buttons.right   = buttons.right || remoteButtons->right;
-        buttons.confirm = buttons.confirm || remoteButtons->a || remoteButtons->b || remoteButtons->c;
-        buttons.back    = buttons.back || remoteButtons->start;
-    }
+    auto has        = [remote](Action action) { return (remote & actionBit(action)) != 0; };
+    buttons.up      = buttons.up || has(Action::Up);
+    buttons.down    = buttons.down || has(Action::Down);
+    buttons.left    = buttons.left || has(Action::Left);
+    buttons.right   = buttons.right || has(Action::Right);
+    buttons.confirm = buttons.confirm || has(Action::Punch) || has(Action::Jump) || has(Action::Special);
+    buttons.back    = buttons.back || has(Action::Start);
     return buttons;
 }
 

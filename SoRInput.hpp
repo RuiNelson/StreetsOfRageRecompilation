@@ -7,8 +7,6 @@
 #include <string>
 #include <vector>
 
-struct PlayerControlsState;
-struct PlayersControlState;
 
 // Keyboard and gamepad input, read from SDL by the game itself.
 //
@@ -38,14 +36,10 @@ ActionMask physicalActions(int player);
 /// The scheme @p player uses now (the session override, else controls.yaml).
 Scheme scheme(int player);
 
-/// Puts both players on @p scheme for this session without saving it
-/// (--altControls); std::nullopt returns to controls.yaml.
-void setSchemeOverride(std::optional<Scheme> scheme);
-
-/// Remote (autoplay) Mega Drive buttons as actions, with the mappings the
-/// game used before it bound actions: ORIGINAL 3 A=Special B=Punch C=Jump;
-/// ENHANCED 6 B=Punch C=Jump A=Back Attack X=Special Y=Pick Item Z=Throw.
-ActionMask fromMegaDriveButtons(const PlayerControlsState &buttons, Scheme scheme);
+/// Puts @p player (0 or 1) on @p scheme for this session without saving it
+/// (a remote client's SCHEME_OVERRIDE, SoRRemoteInput); std::nullopt returns
+/// to controls.yaml.
+void setSchemeOverride(int player, std::optional<Scheme> scheme);
 
 ControlsConfig config();
 /// Applies @p config at once and, when @p persist, writes controls.yaml.
@@ -81,8 +75,9 @@ struct MenuButtons {
 /// call). Keyboard: arrows, Enter, Esc and both players' bindings (their
 /// directions; Punch, Jump or Special confirm; Start goes back). Gamepads:
 /// the D-pad, the left stick when @p sticks, South or a bound action to
-/// confirm, Start to go back. Remote buttons: directions, A/B/C, Start.
-MenuButtons menuButtons(const PlayersControlState &remote, bool sticks = true);
+/// confirm, Start to go back. @p remote, the remote client's actions (both
+/// players): directions, Punch/Jump/Special to confirm, Start to go back.
+MenuButtons menuButtons(ActionMask remote, bool sticks = true);
 
 enum class CaptureDevice { Keyboard, Gamepad };
 struct Captured {

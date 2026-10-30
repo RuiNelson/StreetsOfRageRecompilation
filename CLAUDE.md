@@ -39,6 +39,7 @@ Before changing files:
 | `SoRInput.*` | Keyboard and gamepad input read from SDL by the game, as actions (see **Controls**) |
 | `SoRControlsConfig.*` | `~/.config/StreetsOfRageProject/controls.yaml`: schemes, bindings, gamepad choice, deadzone |
 | `SoRControlsMenu.*` | OPTIONS > CONTROLS, the in-game controls menu (see **Controls**) |
+| `SoRRemoteInput.*` | Remote (autoplay) input as actions through the execution data, and each player's status in the game data (see **Controls**) |
 | `SoRSoundtrack.*` | Pre-rendered soundtrack playback (SDL3_mixer) driven by the ROM's own sound engine |
 | `tools/soundtrack/` | Separate CMake project: the Genesis Plus GX renderer that produces that soundtrack |
 | `code-analysis/manual_functions.txt` | Addresses dispatched to manual implementations |
@@ -138,8 +139,9 @@ limit. SOVR is still set as on hardware, so game logic reading it is unaffected.
 ## Host flags (`GET_FLAGS`)
 
 `main.cpp` publishes the launch options through `RemoteAccess::setFlag`: flag 0
-is `--widescreen`, flag 1 is `--altControls` (both players on ENHANCED 6).
-`autoplay`'s `host_flags.py` mirrors the indices; change both together.
+is `--widescreen`. Flag 1 was `--altControls`, removed with the per-player
+schemes (each player's scheme is in the game data, below). `autoplay`'s
+`host_flags.py` mirrors the indices; change both together.
 
 ## Controls (`SoRInput`, `controls.yaml`)
 
@@ -189,13 +191,13 @@ and every byte in `$FFFC04`-`$FFFC0A` keep their format and frame.
 - `controls.yaml` is created with the defaults when missing; a missing or bad
   entry keeps its default; a file that does not parse is left untouched. No
   migration from MegaDriveEnvironment's `./controls.yaml` (user).
-- Remote (autoplay) Mega Drive buttons are still folded in as actions
-  (`SoRInput::fromMegaDriveButtons`: ORIGINAL 3 A=Special B=Punch C=Jump;
-  ENHANCED 6 B=Punch C=Jump A=Back Attack X=Special Y=Pick Z=Throw), so
-  autoplay is unchanged. Opposite directions cancel after physical and remote
-  are combined.
-- `--altControls` puts both players on ENHANCED 6 for the session
-  (`SoRInput::setSchemeOverride`, not saved).
+- Remote (autoplay) input is actions too, through the remote-access
+  execution data (`SoRRemoteInput`, user decision): MegaDriveEnvironment's
+  gamepad commands no longer reach the game. Opposite directions cancel after
+  physical and remote are combined. See **Remote input** below.
+- A remote client can put a player on a scheme for the session
+  (`SCHEME_OVERRIDE`, `SoRInput::setSchemeOverride(player, ...)`, never saved);
+  `--altControls` is gone.
 
 ### OPTIONS > CONTROLS (`SoRControlsMenu`)
 
@@ -242,7 +244,8 @@ and `play.py`; MegaDriveEnvironment keeps its own UI for the sample game).
   screen is composed in a 64x28 buffer and only changed cells are written
   through the VDP ports. Text stays in columns 2-39 and rows 3-25 so it fits
   Mode 40 and widescreen.
-- Checked by driving it with remote buttons and posted macOS key events
+- Checked (before remote input moved to the execution data) by driving it
+  with remote buttons and posted macOS key events
   (`read_framebuffer` screenshots, plain and widescreen, with `HOME` pointed
   at a scratch folder so the user's `controls.yaml` was untouched): every
   screen, a full ORIGINAL 3 keyboard bind (duplicate refused, saved), Esc
@@ -250,7 +253,32 @@ and `play.py`; MegaDriveEnvironment keeps its own UI for the sample game).
   row navigation afterwards. Not checked here: a real gamepad (DEVICE list,
   BIND GAMEPAD, the deadzone readout).
 
-Planned next (user request): autoplay sending actions through execution data.
+### Remote input (`SoRRemoteInput`)
+
+User decision: autoplay sends its input through the execution data as
+actions, in a binary format built with Python's `struct` (not YAML), and
+reads each player's state back from MegaDriveEnvironment's game-data buffer,
+which only the game writes (`GET_GAME_DATA`). The layout is in
+`SoRRemoteInput.hpp` and mirrored by `autoplay/src/sor_autoplay/sor_remote.py`
+(change both together): a container (`magic:4, version:u16, records:u16,
+serial:u32`) and tagged records, unknown tags skipped.
+
+- `sample_all_joypads` calls `SoRRemoteInput::update` once a frame with
+  `gameUptimeFrames()`: it re-reads the buffer (applying it only when the
+  bytes change), advances both players' schedules and writes the status.
+- `PLAYER_INPUT`: `held` is the steady state; a new `seq` starts its schedule
+  (`actions, frames` entries) on the first frame sampled, in place of `held`;
+  with the QUEUE flag a schedule arriving while another plays waits for it and
+  one frame of `held` (a fresh edge), only the newest waiting one kept --
+  MegaDriveEnvironment's `QUEUE_PRESS_BUTTONS`. Lockstep sends the tick's
+  frames as one schedule, without the flag.
+- `PLAYER_STATUS` (game data): each player's effective scheme, last `seq`
+  applied and the frame its schedule ends.
+- A client that disconnects (`RemoteAccess::clientConnected()`) or a restart
+  (the frame count going back) leaves its document behind: it is dropped
+  (actions and overrides cleared) until the buffer changes.
+- The CONTROLS menu takes both players' remote actions as one more device
+  (directions, Punch/Jump/Special confirm, Start back).
 
 ## 6-button pickup reach (ENHANCED 6)
 
