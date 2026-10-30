@@ -151,8 +151,10 @@ Linux takes the same path as macOS, not yet tried either.
   in 68000 RAM, and the game sees an ordinary 2-player game.
 - `tools/ai_assist_fight.py` (autoplay) runs it live with an external AI on P1. Measured at
   `--turbo 2`: round 1 cleared with 34,900 points on P2 and no life lost, 6,944 ticks, mean
-  1.12 ms, worst 7.0 ms, 2 skipped, 0 failed. The user called the A/B against the socket
-  unnecessary (2026-10-30), so that was not run.
+  1.12 ms, worst 7.0 ms, 2 skipped, 0 failed. The user called a full A/B against the socket
+  unnecessary (2026-10-30); three runs each had finished by then, every one clearing round 1
+  with no life lost: P2's score 34,500-37,100 embedded, 35,300-40,300 over the socket, a small
+  sample. Frames from the join do not compare, because the two join at different times.
 
 ## ROM and regeneration
 
