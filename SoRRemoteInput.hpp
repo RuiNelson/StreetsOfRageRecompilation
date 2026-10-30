@@ -13,7 +13,7 @@ class RemoteAccess;
 // Both directions are binary, big-endian, and built to grow: a container
 // `magic:4, version:u16, record count:u16, serial:u32`, then records
 // `tag:u16, length:u16, payload`; an unknown tag is skipped. Mirrored by
-// autoplay's `sor_autoplay/sor_remote.py` (Python `struct`); change both
+// autoplay's `sor_ai/remote_input.py` (Python `struct`); change both
 // together.
 //
 // Client -> game (SET_EXECUTION_DATA, magic "SORX"):

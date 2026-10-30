@@ -267,7 +267,7 @@ User decision: autoplay sends its input through the execution data as
 actions, in a binary format built with Python's `struct` (not YAML), and
 reads each player's state back from MegaDriveEnvironment's game-data buffer,
 which only the game writes (`GET_GAME_DATA`). The layout is in
-`SoRRemoteInput.hpp` and mirrored by `autoplay/src/sor_autoplay/sor_remote.py`
+`SoRRemoteInput.hpp` and mirrored by `autoplay/ai-code/sor_ai/remote_input.py`
 (change both together): a container (`magic:4, version:u16, records:u16,
 serial:u32`) and tagged records, unknown tags skipped.
 
@@ -582,7 +582,7 @@ keeping the generated declaration, dispatcher, and call sites intact.
   globals, BCD fields, flag bits), written on the same frame as the ROM
   writes it. Do not move state into C++ members, statics, or heap memory,
   and keep reading data tables from the ROM. `autoplay` reads the game by
-  address (`../autoplay/src/sor_autoplay/memory_map.py`, `rom_data.py`) and
+  address (`../autoplay/ai-code/sor_ai/memory_map.py`, `rom_data.py`) and
   its enemy models are frame-exact, so a relocated or retimed field breaks
   the AI. This is a project rule: reimplementation makes the code readable,
   never a different data model.

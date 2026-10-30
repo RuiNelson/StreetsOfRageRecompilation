@@ -589,7 +589,7 @@ saltar), a IA fica presa a tentar dar murros no inimigo, mas este ainda não
 está disponível" -- the AI correctly detects an enemy jumping up from below
 the boat's deck, but it isn't actually reachable yet, and the AI gets stuck
 repeatedly trying to punch it. Reproduced at round 5, wave 3 (0-indexed, the
-4th wave): the enemy is **HakuRo, type `$25`** (`autoplay/src/sor_autoplay
+4th wave): the enemy is **HakuRo, type `$25`** (`autoplay/ai-code/sor_ai
 /ai/tokens/enemy.py`'s `HakuRo(Grunt)` -- type `$2A` is a *different*
 object, its own table near `$103AE` right after Jack's `$28` helper table,
 not examined here; the live capture below is type `$25` on every row).
@@ -653,7 +653,7 @@ state `$13`'s word (`$1300`) does not match any of the generic hi-byte
 families and falls through to `CombatPhase.UNKNOWN` -- not one of
 `should_ignore_as_target`'s phases (`DEATH`/`SCRIPTED`), so nothing already
 in the pipeline excluded it from targeting. The fix
-(`autoplay/src/sor_autoplay/ai/reach.py`'s `enemy_still_emerging`, wired into
+(`autoplay/ai-code/sor_ai/ai/reach.py`'s `enemy_still_emerging`, wired into
 `live_enemies`) does not touch `phases.py` at all: it reads `Enemy.world_z`
 (now threaded onto every ordinary enemy and boss, not only Jack, in
 `observe.py`) against `hazards.base_floor_z(level_index)`, the same round's-
@@ -673,7 +673,7 @@ HakuRo that has actually landed).
 
 ## The street enemies, state by state
 
-Decoded for the autoplay AI's lookahead (`autoplay/src/sor_autoplay/ai/grunt.py`)
+Decoded for the autoplay AI's lookahead (`autoplay/ai-code/sor_ai/ai/grunt.py`)
 and checked in lockstep: `autoplay/tools/grunt_lab.py` records the raw object
 bytes of the player and every ordinary enemy frame by frame while a scripted
 actor wanders among them, and `--check` replays each update through the
@@ -1889,7 +1889,7 @@ answered by the `$18` step above rather than by the approach.
 #### The claw box, the side-dependent gate, and holding him
 
 Everything in this subsection was re-derived from the disassembly for
-autoplay's Souther plan (`autoplay/src/sor_autoplay/ai/souther.py`) and then
+autoplay's Souther plan (`autoplay/ai-code/sor_ai/ai/souther.py`) and then
 measured frame by frame in lockstep (`autoplay/tools/souther_hold_lab.py`).
 Where it disagrees with the text above, this is the corrected reading.
 
