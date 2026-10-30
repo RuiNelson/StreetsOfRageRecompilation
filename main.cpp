@@ -1,6 +1,7 @@
 #include "SoRCheats.hpp"
 #include "SoRControlsConfig.hpp"
 #include "SoRInput.hpp"
+#include "SoRPython.hpp"
 #include "SoRSoundtrack.hpp"
 #include "SoR.hpp"
 #include <CLI/CLI.hpp>
@@ -19,6 +20,7 @@ int main(int argc, char *argv[]) {
     bool          silentFlag         = false;
     bool          widescreenFlag     = false;
     bool          integerScalingFlag = false;
+    bool          aiAssistFlag       = false;
     int           sorVSyncMode       = 0; // 0 = internal timer (default); 1/2/3 = VSync/VSync2/VSync3
     int           remoteAccessPort   = 6969;
     std::uint32_t turboMultiplier    = 0;
@@ -29,6 +31,7 @@ int main(int argc, char *argv[]) {
     std::string   videoHz     = "60";
     std::string   soundMode   = "prerendered";
     std::string   soundtrackDir; // default: soundtrack/ next to the ROM
+    std::string   aiPath = "ai-code";
 
     app.add_flag("--silent", silentFlag, "Disable audio output entirely (chip writes are dropped)");
     app.add_option("--sound",
@@ -73,6 +76,10 @@ int main(int argc, char *argv[]) {
                    sorCallLogFile,
                    "Write every 68000 subroutine entry and call to this typed CSV file "
                    "(event, source, callsite, target)");
+
+    app.add_option("--ai-path", aiPath, "Directory holding the Python AI's code (the sor_ai package)")
+        ->capture_default_str();
+    app.add_flag("--aiAssist", aiAssistFlag, "Debug: start the Python AI at launch");
 
     CLI11_PARSE(app, argc, argv);
 
@@ -124,7 +131,10 @@ int main(int argc, char *argv[]) {
         if (!sorCallLogFile.empty()) {
             sor.setCallLog(sorCallLogFile);
         }
+        if (aiAssistFlag)
+            SoRPython::start(aiPath);
         sor.boot();
+        SoRPython::stop();
         SoRInput::stop();
         SoRSoundtrack::close();
     }

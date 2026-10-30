@@ -56,6 +56,12 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(SDL3_mixer)
 
+# The Python AI runs inside the game. Windows comes after macOS (user decision):
+# until then it builds without it, and SoRPython.cpp only says so.
+if(NOT WIN32)
+    include(cmake/CPythonRuntime.cmake)
+endif()
+
 file(GLOB_RECURSE SOR_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.c"
@@ -63,6 +69,7 @@ file(GLOB_RECURSE SOR_SOURCES CONFIGURE_DEPENDS
 list(FILTER SOR_SOURCES EXCLUDE REGEX ".*/build/.*")
 # tools/ holds separate programs, such as the soundtrack renderer.
 list(FILTER SOR_SOURCES EXCLUDE REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/tools/.*")
+list(FILTER SOR_SOURCES EXCLUDE REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/\\.cpython/.*")
 
 add_executable(sor ${SOR_SOURCES})
 
@@ -86,6 +93,11 @@ target_link_libraries(sor PRIVATE
     yaml-cpp::yaml-cpp
     SDL3_mixer::SDL3_mixer
 )
+
+if(NOT WIN32)
+    sor_bundle_cpython(sor)
+    target_compile_definitions(sor PRIVATE SOR_EMBED_PYTHON=1)
+endif()
 
 if(MSVC)
     # StreetsOfRage contains the complete emulation environment and is created on
