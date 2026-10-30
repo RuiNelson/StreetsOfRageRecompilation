@@ -33,13 +33,8 @@ void stop();
 /// it was already released, and that latch is consumed here.
 ActionMask physicalActions(int player);
 
-/// The scheme @p player uses now (the session override, else controls.yaml).
+/// The scheme @p player uses (controls.yaml).
 Scheme scheme(int player);
-
-/// Puts @p player (0 or 1) on @p scheme for this session without saving it
-/// (a remote client's SCHEME_OVERRIDE, SoRRemoteInput); std::nullopt returns
-/// to controls.yaml.
-void setSchemeOverride(int player, std::optional<Scheme> scheme);
 
 ControlsConfig config();
 /// Applies @p config at once and, when @p persist, writes controls.yaml.

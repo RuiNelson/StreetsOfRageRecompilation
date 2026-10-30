@@ -25,10 +25,10 @@ class RemoteAccess;
 //     schedule arriving while another plays waits for it to end and for one
 //     frame of `held` after it (a fresh edge), and only the newest waiting
 //     one is kept -- MegaDriveEnvironment's QUEUE_PRESS_BUTTONS.
-//   0x0002 SCHEME_OVERRIDE player:u8, scheme:u8 (0 none, 1 ORIGINAL 3,
-//                        2 ENHANCED 6) -- for this session, never saved.
 // Game -> client (RemoteAccess::setGameData, GET_GAME_DATA, magic "SORG"):
-//   0x0101 PLAYER_STATUS player:u8, scheme:u8 (1/2), seq:u32 (the last one
+//   0x0101 PLAYER_STATUS player:u8, scheme:u8 (1 ORIGINAL 3, 2 ENHANCED 6:
+//                        the player's own, from controls.yaml -- a client
+//                        reads it and adapts, it never sets it), seq:u32 (the last one
 //                        applied), end frame:u64 (the frame its schedule is
 //                        released on; 0 when none has played)
 //

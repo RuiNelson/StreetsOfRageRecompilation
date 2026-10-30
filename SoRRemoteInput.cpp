@@ -4,7 +4,6 @@
 #include "system/remote/RemoteAccess.hpp"
 
 #include <array>
-#include <optional>
 #include <vector>
 
 namespace SoRRemoteInput {
@@ -17,7 +16,6 @@ constexpr std::array<std::uint8_t, 4> kStatusMagic = {'S', 'O', 'R', 'G'};
 constexpr std::size_t                 kHeaderSize  = 12;
 
 constexpr std::uint16_t kTagPlayerInput    = 0x0001;
-constexpr std::uint16_t kTagSchemeOverride = 0x0002;
 constexpr std::uint16_t kTagPlayerStatus   = 0x0101;
 
 constexpr std::uint8_t kFlagQueue = 0x01;
@@ -39,8 +37,6 @@ struct Player {
     bool               hasWaiting = false;
     ActionMask         current    = 0;
     std::uint64_t      endFrame   = 0; // reported in PLAYER_STATUS
-
-    std::optional<Scheme> schemeOverride;
 };
 
 // CPU thread only.
@@ -88,24 +84,11 @@ std::uint64_t scheduleLength(const std::vector<Entry> &entries) {
     return frames;
 }
 
-void setOverride(int index, std::optional<Scheme> scheme) {
-    Player &player = state().players[static_cast<std::size_t>(index)];
-    if (player.schemeOverride == scheme)
-        return;
-    player.schemeOverride = scheme;
-    SoRInput::setSchemeOverride(index, scheme);
-}
-
 void clearPlayers() {
-    State &s = state();
-    for (int index = 0; index < 2; ++index) {
-        Player &player = s.players[static_cast<std::size_t>(index)];
-        const auto scheme = player.schemeOverride;
-        const auto seq    = player.seq;
-        player            = Player{};
-        player.seq            = seq;
-        player.schemeOverride = scheme;
-        setOverride(index, std::nullopt);
+    for (Player &player : state().players) {
+        const auto seq = player.seq;
+        player         = Player{};
+        player.seq     = seq;
     }
 }
 
@@ -153,34 +136,13 @@ void applyPlayerInput(std::span<const std::uint8_t> payload, std::uint64_t frame
     }
 }
 
-void applySchemeOverride(std::span<const std::uint8_t> payload) {
-    if (payload.size() < 2)
-        return;
-    const int index = payload[0] - 1;
-    if (index < 0 || index > 1)
-        return;
-    switch (payload[1]) {
-        case 1:
-            setOverride(index, Scheme::Original3);
-            break;
-        case 2:
-            setOverride(index, Scheme::Enhanced6);
-            break;
-        default:
-            setOverride(index, std::nullopt);
-            break;
-    }
-}
-
 void applyDocument(std::span<const std::uint8_t> document, std::uint64_t frame) {
     if (document.size() < kHeaderSize || !std::equal(kInputMagic.begin(), kInputMagic.end(), document.begin()) ||
         readU16(document, 4) != kVersion)
         return;
     const std::uint16_t records = readU16(document, 6);
 
-    // A schedule or override the document no longer names ends with it.
-    std::array<bool, 2> overrideSeen{false, false};
-    std::size_t         at = kHeaderSize;
+    std::size_t at = kHeaderSize;
     for (std::uint16_t r = 0; r < records && at + 4 <= document.size(); ++r) {
         const std::uint16_t tag    = readU16(document, at);
         const std::uint16_t length = readU16(document, at + 2);
@@ -188,18 +150,10 @@ void applyDocument(std::span<const std::uint8_t> document, std::uint64_t frame) 
         if (at + length > document.size())
             return;
         const auto payload = document.subspan(at, length);
-        if (tag == kTagPlayerInput) {
+        if (tag == kTagPlayerInput)
             applyPlayerInput(payload, frame);
-        } else if (tag == kTagSchemeOverride) {
-            applySchemeOverride(payload);
-            if (!payload.empty() && payload[0] >= 1 && payload[0] <= 2)
-                overrideSeen[payload[0] - 1u] = true;
-        }
         at += length;
     }
-    for (int index = 0; index < 2; ++index)
-        if (!overrideSeen[static_cast<std::size_t>(index)])
-            setOverride(index, std::nullopt);
 }
 
 void advance(Player &player, std::uint64_t frame) {

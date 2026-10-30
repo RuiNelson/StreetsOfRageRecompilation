@@ -47,7 +47,6 @@ struct State {
     bool                                 started = false;
     std::filesystem::path                path;
     ControlsConfig                       config = ControlsConfig::defaults();
-    std::array<std::optional<Scheme>, 2> schemeOverride; // per player, this session only
     std::array<bool, SDL_SCANCODE_COUNT> keys{};
     // Per reader (kLatchCount): pressed since its last read. A press
     // released before the next frame is sampled still counts for that one
@@ -93,8 +92,7 @@ void closePadLocked(State &s, SDL_JoystickID id) {
 }
 
 Scheme effectiveSchemeLocked(const State &s, int player) {
-    const auto index = static_cast<std::size_t>(player);
-    return s.schemeOverride[index].value_or(s.config.players[index].scheme);
+    return s.config.players[static_cast<std::size_t>(player)].scheme;
 }
 
 void publishSchemesLocked(const State &s) {
@@ -338,15 +336,6 @@ Scheme scheme(int player) {
     State          &s = state();
     std::lock_guard lock(s.mutex);
     return effectiveSchemeLocked(s, std::clamp(player, 0, 1));
-}
-
-void setSchemeOverride(int player, std::optional<Scheme> scheme) {
-    if (player < 0 || player > 1)
-        return;
-    State          &s = state();
-    std::lock_guard lock(s.mutex);
-    s.schemeOverride[static_cast<std::size_t>(player)] = scheme;
-    publishSchemesLocked(s);
 }
 
 ControlsConfig config() {

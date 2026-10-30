@@ -195,9 +195,9 @@ and every byte in `$FFFC04`-`$FFFC0A` keep their format and frame.
   execution data (`SoRRemoteInput`, user decision): MegaDriveEnvironment's
   gamepad commands no longer reach the game. Opposite directions cancel after
   physical and remote are combined. See **Remote input** below.
-- A remote client can put a player on a scheme for the session
-  (`SCHEME_OVERRIDE`, `SoRInput::setSchemeOverride(player, ...)`, never saved);
-  `--altControls` is gone.
+- Each player's scheme is theirs, from `controls.yaml`: a remote client
+  queries it (`PLAYER_STATUS`) and adapts, never sets it (user: autoplay
+  detects the scheme by querying the host). `--altControls` is gone.
 
 ### OPTIONS > CONTROLS (`SoRControlsMenu`)
 
@@ -276,7 +276,7 @@ serial:u32`) and tagged records, unknown tags skipped.
   applied and the frame its schedule ends.
 - A client that disconnects (`RemoteAccess::clientConnected()`) or a restart
   (the frame count going back) leaves its document behind: it is dropped
-  (actions and overrides cleared) until the buffer changes.
+  (actions cleared) until the buffer changes.
 - The CONTROLS menu takes both players' remote actions as one more device
   (directions, Punch/Jump/Special confirm, Start back).
 
