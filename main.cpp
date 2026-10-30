@@ -59,7 +59,7 @@ int main(int argc, char *argv[]) {
                  "Scale the picture by whole multiples only (320x224 in 1920x1080 is drawn 4x at 1280x896)");
     app.add_option("--vsync",
                    sorVSyncMode,
-                   "Frame sync — 0=internal timer from --hz (default), "
+                   "Frame sync — 0=automatic: internal timer from --hz, no tearing, any monitor (default), "
                    "1=VSync, 2=VSync2 (½ rate), 3=VSync3 (⅓ rate)")
         ->capture_default_str()
         ->check(CLI::Range(0, 3));
