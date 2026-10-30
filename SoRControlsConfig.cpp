@@ -73,10 +73,10 @@ void bindPad(SchemeBindings &bindings, std::span<const Action> actions, std::spa
 
 PlayerConfig defaultPlayer(int player) {
     PlayerConfig config;
-    // Pads (user): ORIGINAL 3 Special RB, Punch West, Jump South; ENHANCED 6
-    // Special East, Punch West, Jump South, Back Attack LB, Pick Item North,
-    // Throw Knife RB. The shoulder buttons (L1/R1 on a DualSense), not the
-    // triggers: the user's "LT/RT" were the bumpers.
+    // Pads (user, PlayStation names): ENHANCED 6 Square Punch, Cross Jump,
+    // Circle Special, L1 Back Attack, Triangle Pick Item, R1 Throw Knife;
+    // ORIGINAL 3 the same with Special on R1. The shoulder buttons, not the
+    // triggers.
     const std::array<PadInput, 3> original3Pad = {
         PadInput::ofButton(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER),
         PadInput::ofButton(SDL_GAMEPAD_BUTTON_WEST),
