@@ -83,6 +83,7 @@ target_include_directories(sor PRIVATE
 target_link_libraries(sor PRIVATE
     MegaDriveEnvironment::MegaDriveEnvironment
     CLI11::CLI11
+    yaml-cpp::yaml-cpp
     SDL3_mixer::SDL3_mixer
 )
 

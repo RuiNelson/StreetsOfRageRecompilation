@@ -1,4 +1,6 @@
 #include "SoRCheats.hpp"
+#include "SoRControlsConfig.hpp"
+#include "SoRInput.hpp"
 #include "SoRSoundtrack.hpp"
 #include "SoR.hpp"
 #include "config/controls/ControlsConfigUI.hpp"
@@ -54,7 +56,7 @@ int main(int argc, char *argv[]) {
     app.add_flag("--fullScreen", fullScreenFlag, "Start the game in fullscreen");
     app.add_flag("--altControls",
                  altControlsFlag,
-                 "Use the alternative 6-button control layout and hide OPTIONS control remapping");
+                 "Put both players on the ENHANCED 6 control scheme for this session (not saved)");
     app.add_flag("--widescreen",
                  widescreenFlag,
                  "Use VDP Mode 48 (48x27 tiles, 384x216) instead of Mode 40; a host-only mode the hardware lacks");
@@ -118,7 +120,12 @@ int main(int argc, char *argv[]) {
                           VDP::Integer,
                           debugUtilsFlag ? static_cast<std::uint16_t>(remoteAccessPort) : 0);
         configureEnvironment(sor);
-        SoRCheats::setAltControlsEnabled(altControlsFlag);
+        // The game reads the keyboard and gamepads itself (controls.yaml);
+        // MegaDriveEnvironment keeps only the remote (autoplay) buttons.
+        sor.controllers().setPhysicalInputEnabled(false);
+        SoRInput::start(SoRControlsConfig::defaultPath());
+        if (altControlsFlag)
+            SoRInput::setSchemeOverride(SoRInput::Scheme::Enhanced6);
         // Host mode flags for GET_FLAGS; the indices are mirrored by autoplay/src/sor_autoplay/host_flags.py.
         constexpr std::size_t kFlagWidescreen = 0;
         constexpr std::size_t kFlagSixButton  = 1;
@@ -134,6 +141,7 @@ int main(int argc, char *argv[]) {
             sor.setCallLog(sorCallLogFile);
         }
         sor.boot();
+        SoRInput::stop();
         SoRSoundtrack::close();
     }
 

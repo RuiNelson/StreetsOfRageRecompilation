@@ -36,6 +36,8 @@ Before changing files:
 | `SorRuntime.*` | Host orchestration around the recompiled cartridge |
 | `SoRManualFunctions.cpp` | Hand-written implementations of selected ROM routines |
 | `SoRControls.cpp` | Hand-written controller sampling, input remap, OPTIONS controls, character-select input, and pause/Start routines |
+| `SoRInput.*` | Keyboard and gamepad input read from SDL by the game, as actions (see **Controls**) |
+| `SoRControlsConfig.*` | `~/.config/StreetsOfRageProject/controls.yaml`: schemes, bindings, gamepad choice, deadzone |
 | `SoRSoundtrack.*` | Pre-rendered soundtrack playback (SDL3_mixer) driven by the ROM's own sound engine |
 | `tools/soundtrack/` | Separate CMake project: the Genesis Plus GX renderer that produces that soundtrack |
 | `code-analysis/manual_functions.txt` | Addresses dispatched to manual implementations |
@@ -135,19 +137,78 @@ limit. SOVR is still set as on hardware, so game logic reading it is unaffected.
 ## Host flags (`GET_FLAGS`)
 
 `main.cpp` publishes the launch options through `RemoteAccess::setFlag`: flag 0
-is `--widescreen`, flag 1 is `--altControls` (6-button). `autoplay`'s
-`host_flags.py` mirrors the indices; change both together.
+is `--widescreen`, flag 1 is `--altControls` (both players on ENHANCED 6).
+`autoplay`'s `host_flags.py` mirrors the indices; change both together.
 
-## 6-button pickup reach (`--altControls`)
+## Controls (`SoRInput`, `controls.yaml`)
 
-User request: picking items up with Y was frustrating for people, because a
-missed Y shows nothing (in 3-button mode the same press punched, which was the
-feedback). `findPickupTarget` (`SoRInteractions.cpp`, the `$3136` port) widens
-the box under `--altControls` from X ±`$14` / lane ±`$10` to ±`$1C` / ±`$18`;
-the height test, the slot scan, eligibility and the work-RAM writes are the
-ROM's, and without `--altControls` the box is the ROM's. The user chose only
-this: no press buffer, no miss sound. `autoplay` presses Y inside the ROM box,
-which the wider one contains, so it needs no change.
+User decision: the game reads SDL itself instead of MegaDriveEnvironment's
+`Controllers` (`main.cpp` calls `controllers().setPhysicalInputEnabled(false)`,
+which keeps only the remote buttons autoplay sends), and binds **actions**,
+not Mega Drive buttons. `SoRInput` follows `Controllers`' pattern: an SDL event
+watch on the main thread keeps every key, pad button and axis under a mutex;
+`sample_all_joypads`/`sample_one_joypad` (CPU thread) turn each player's state
+into actions through `SoRControlsConfig` and write the held byte themselves.
+The ROM's port writes and reads still run, so `$FFFC06`/`$FFFC0A` (pad absent)
+and every byte in `$FFFC04`-`$FFFC0A` keep their format and frame.
+
+- Actions: Up, Down, Left, Right, Start, Special, Punch, Jump, Back Attack,
+  Pick Item (`pickup`), Throw Knife (`throw`).
+- Per player, a scheme: `original3` (Special `$40`, Punch `$10`, Jump `$20`,
+  Start `$80`: the ROM game, Punch picks up, Punch+Jump back attack) or
+  `enhanced6` (the former `--altControls` layout: Back Attack is `$30`, Pick
+  Item and Throw Knife are native per-player presses in `SoRCheats`, Punch has
+  a native edge too, and `findPickupTarget` widens the box). `SoRCheats::
+  enhancedControls(player)` is what `SoRInteractions.cpp` tests; `SoRInput`
+  publishes it.
+- The ROM's A/B/C layouts (`$FFFFC8 control_scheme`, the OPTIONS CONTROL row)
+  are gone: `remap_player_gameplay_input` never rotates and the row is hidden
+  (`kHideControlRow` in `SoRMainMenus.cpp`).
+- Keyboard bindings (per scheme): directions, the scheme's actions and Start,
+  by SDL scancode (saved as `SDL_GetScancodeName`). Key-downs with Ctrl, Alt
+  or Cmd held are ignored (host hotkeys); losing focus releases every key.
+- A key or pad button pressed since a player's previous sample counts for
+  that sample even if already released (`keyTapped`/`buttonTapped`), so a tap
+  shorter than a frame is not lost. Found while checking the keyboard with
+  posted macOS key events (a scratch CGEvent helper holding a key): a held
+  posted key arrives as down/up pairs about every 35 ms, and without the latch
+  the player barely moved. Real keyboards send one down plus repeats.
+- Gamepad bindings (per scheme): the actions only, as positional buttons or a
+  trigger past half travel. The D-pad and the left stick are always the
+  directions (deadzone per axis, percent, default 24 = MDE's old 8000) and
+  SDL Start is always Start.
+- Gamepad choice: `auto`, `none`, or `device` (GUID, name, and which of the
+  connected pads with that GUID). Explicit choices are resolved first, then
+  `auto` hands out the remaining pads in player order (P1 first); a chosen pad
+  that is not connected counts as `auto`.
+- Defaults (user): P1 arrows, ORIGINAL 3 Special/Punch/Jump/Start = Z X C V,
+  ENHANCED 6 Special/Punch/Jump/Back Attack/Pick/Throw/Start = Z X C V B N M;
+  P2 W S A D, H J K L and H J K Y U I L; gamepad RT, West, South (+ LT, North,
+  East). Default scheme ORIGINAL 3.
+- `controls.yaml` is created with the defaults when missing; a missing or bad
+  entry keeps its default; a file that does not parse is left untouched. No
+  migration from MegaDriveEnvironment's `./controls.yaml` (user).
+- Remote (autoplay) Mega Drive buttons are still folded in as actions
+  (`SoRInput::fromMegaDriveButtons`: ORIGINAL 3 A=Special B=Punch C=Jump;
+  ENHANCED 6 B=Punch C=Jump A=Back Attack X=Special Y=Pick Z=Throw), so
+  autoplay is unchanged. Opposite directions cancel after physical and remote
+  are combined.
+- `--altControls` puts both players on ENHANCED 6 for the session
+  (`SoRInput::setSchemeOverride`, not saved).
+
+Planned next (user request): an in-game OPTIONS > CONTROLS menu replacing
+`--configControls`, then autoplay sending actions through execution data.
+
+## 6-button pickup reach (ENHANCED 6)
+
+User request: picking items up with Pick Item was frustrating for people,
+because a missed press shows nothing (in ORIGINAL 3 the same press punched,
+which was the feedback). `findPickupTarget` (`SoRInteractions.cpp`, the `$3136`
+port) widens the box for a player on ENHANCED 6 from X ±`$14` / lane ±`$10` to
+±`$1C` / ±`$18`; the height test, the slot scan, eligibility and the work-RAM
+writes are the ROM's, and on ORIGINAL 3 the box is the ROM's. The user chose
+only this: no press buffer, no miss sound. `autoplay` presses Pick Item inside
+the ROM box, which the wider one contains, so it needs no change.
 
 ## Pre-rendered soundtrack (`--sound`)
 

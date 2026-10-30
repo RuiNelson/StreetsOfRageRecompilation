@@ -10,7 +10,7 @@ std::atomic_bool    p1PunchPowerEnabled_{false};
 // applyPendingSoRCheats -- see SoRCheats.hpp.
 std::atomic_uint    pendingCheats_{kCheatNone};
 std::atomic_int     pendingLevelJump_{-1};
-std::atomic_bool    altControlsEnabled_{false};
+std::atomic_bool    enhancedControls_[2] = {false, false};
 std::atomic_bool    altAttackHeld_[2]    = {false, false};
 std::atomic_bool    altAttackPressed_[2] = {false, false};
 std::atomic_bool    altPickupHeld_[2]    = {false, false};
@@ -34,12 +34,25 @@ bool p1PunchPowerEnabled() {
     return p1PunchPowerEnabled_.load(std::memory_order_acquire);
 }
 
-void setAltControlsEnabled(bool enabled) {
-    altControlsEnabled_.store(enabled, std::memory_order_release);
+void setEnhancedControls(int playerIndex, bool enabled) {
+    if (playerIndex < 0 || playerIndex >= 2)
+        return;
+    enhancedControls_[playerIndex].store(enabled, std::memory_order_release);
 }
 
-bool altControlsEnabled() {
-    return altControlsEnabled_.load(std::memory_order_acquire);
+bool enhancedControls(int playerIndex) {
+    if (playerIndex < 0 || playerIndex >= 2)
+        return false;
+    return enhancedControls_[playerIndex].load(std::memory_order_acquire);
+}
+
+bool enhancedControlsForObject(m_long objectAddress) {
+    const m_long normalized = objectAddress & 0x00FFFFFFu;
+    if (normalized == kP1Object)
+        return enhancedControls(0);
+    if (normalized == 0x00FFB880u)
+        return enhancedControls(1);
+    return false;
 }
 
 void updateAltAttackButton(int playerIndex, bool held) {

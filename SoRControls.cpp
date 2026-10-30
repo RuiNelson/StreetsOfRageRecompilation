@@ -1,4 +1,5 @@
 #include "SoRCheats.hpp"
+#include "SoRInput.hpp"
 #include "SoR.hpp"
 
 #include <cstdint>
@@ -130,9 +131,40 @@ void setShiftRightWordX(CPU68K &cpu, m_word value, int count) {
     cpu.setFlag(CPU68K::FlagX, carry);
 }
 
-void sampleOneJoypadBody(CPU68K                   &cpu,
-                         SystemMemory             &memory,
-                         const PlayerControlsState *altControls) {
+using SoRControlsConfig::Action;
+using SoRControlsConfig::actionBit;
+
+// One player's input for the sampler: their actions (keyboard and gamepad
+// through controls.yaml, ORed with remote buttons) and whether they use the
+// ENHANCED 6 scheme.
+struct SampledPlayer {
+    SoRInput::ActionMask actions  = 0;
+    bool                 enhanced = false;
+};
+
+SampledPlayer samplePlayer(int playerIndex, const PlayerControlsState &remote) {
+    const SoRInput::Scheme scheme = SoRInput::scheme(playerIndex);
+    SoRInput::ActionMask   actions =
+        static_cast<SoRInput::ActionMask>(SoRInput::physicalActions(playerIndex) |
+                                          SoRInput::fromMegaDriveButtons(remote, scheme));
+    actions = static_cast<SoRInput::ActionMask>(actions & SoRControlsConfig::schemeActions(scheme));
+
+    // Opposite directions cancel each other, as a real pad cannot report both.
+    const auto cancel = [&actions](Action a, Action b) {
+        const SoRInput::ActionMask pair = actionBit(a) | actionBit(b);
+        if ((actions & pair) == pair)
+            actions = static_cast<SoRInput::ActionMask>(actions & ~pair);
+    };
+    cancel(Action::Up, Action::Down);
+    cancel(Action::Left, Action::Right);
+    return {actions, scheme == SoRInput::Scheme::Enhanced6};
+}
+
+bool hasAction(SoRInput::ActionMask actions, Action action) {
+    return (actions & actionBit(action)) != 0;
+}
+
+void sampleOneJoypadBody(CPU68K &cpu, SystemMemory &memory, const SampledPlayer *player) {
     const int    altPickupPlayerIndex = altPickupPlayerIndexForBuffer(cpu.a[0]);
     const m_byte oldHeld              = memory.readByte(cpu.a[0]);
 
@@ -149,35 +181,36 @@ void sampleOneJoypadBody(CPU68K                   &cpu,
 
     m_byte held = static_cast<m_byte>(~static_cast<m_byte>(cpu.db(0) | cpu.db(1)));
 
-    // Host-side --altControls hack:
+    // The game reads SDL itself and binds actions (SoRInput, controls.yaml).
     //
-    // The normal path above samples the emulated Mega Drive data port exactly
-    // as the ROM does. The alternative layout needs X/Y and originally tried
-    // to perform another 6-button TH sequence here. That made the result
-    // dependent on the controller's current TH phase and could lose B.
-    //
-    // Controllers has already applied controls.yaml and combined physical and
-    // remote input, so the alternative path receives that logical snapshot
-    // instead. It translates the host buttons directly into the active-high
-    // ROM byte: B=attack, C=jump, A=attack+jump, X=police special, Y=pickup,
-    // Z=knife throw (native edge, like Y), plus directions and Start. The unchanged code below derives the pressed
-    // edge from this held byte, preserving the input format expected by the
-    // original player routines.
-    if (altControls != nullptr && memory.readByte(kDemoMode) == 0u) {
-        m_byte altHeld = 0;
-        setActiveHighButton(altHeld, altControls->up, 0x01u);
-        setActiveHighButton(altHeld, altControls->down, 0x02u);
-        setActiveHighButton(altHeld, altControls->left, 0x04u);
-        setActiveHighButton(altHeld, altControls->right, 0x08u);
-        setActiveHighButton(altHeld, altControls->b, 0x10u);
-        setActiveHighButton(altHeld, altControls->c, 0x20u);
-        setActiveHighButton(altHeld, altControls->a, 0x30u);
-        setActiveHighButton(altHeld, altControls->x, kButtonX);
-        setActiveHighButton(altHeld, altControls->start, kButtonStart);
-        SoRCheats::updateAltAttackButton(altPickupPlayerIndex, altControls->b);
-        SoRCheats::updateAltPickupButton(altPickupPlayerIndex, altControls->y);
-        SoRCheats::updateAltThrowButton(altPickupPlayerIndex, altControls->z);
-        held = altHeld;
+    // The port reads above still run exactly as in the ROM: they set the
+    // pad-absent byte below. MegaDriveEnvironment no longer reads SDL, so the
+    // held byte is replaced by the one the player's actions make, in the
+    // active-high format the original player routines expect: Punch $10,
+    // Jump $20, Special $40 (the police call), Start $80. ENHANCED 6 adds
+    // Back Attack as Punch+Jump ($30, the ROM's own back attack through
+    // $322A) and Pick Item / Throw Knife, which are not ROM bits: they are
+    // native per-player presses, like the native Punch edge, read by the
+    // $3028 / $3084 ports. In the attract demo only Start is kept, below.
+    if (player != nullptr) {
+        const SoRInput::ActionMask actions = player->actions;
+        m_byte                     sampled = 0;
+        setActiveHighButton(sampled, hasAction(actions, Action::Up), 0x01u);
+        setActiveHighButton(sampled, hasAction(actions, Action::Down), 0x02u);
+        setActiveHighButton(sampled, hasAction(actions, Action::Left), 0x04u);
+        setActiveHighButton(sampled, hasAction(actions, Action::Right), 0x08u);
+        setActiveHighButton(sampled, hasAction(actions, Action::Punch), 0x10u);
+        setActiveHighButton(sampled, hasAction(actions, Action::Jump), 0x20u);
+        setActiveHighButton(sampled, hasAction(actions, Action::BackAttack), 0x30u);
+        setActiveHighButton(sampled, hasAction(actions, Action::Special), kButtonX);
+        setActiveHighButton(sampled, hasAction(actions, Action::Start), kButtonStart);
+        held = sampled;
+    }
+
+    if (player != nullptr && player->enhanced && memory.readByte(kDemoMode) == 0u) {
+        SoRCheats::updateAltAttackButton(altPickupPlayerIndex, hasAction(player->actions, Action::Punch));
+        SoRCheats::updateAltPickupButton(altPickupPlayerIndex, hasAction(player->actions, Action::Pickup));
+        SoRCheats::updateAltThrowButton(altPickupPlayerIndex, hasAction(player->actions, Action::Throw));
     } else {
         SoRCheats::updateAltAttackButton(altPickupPlayerIndex, false);
         SoRCheats::updateAltPickupButton(altPickupPlayerIndex, false);
@@ -360,9 +393,14 @@ void StreetsOfRage::remap_player_gameplay_input(m_long /*entry_*/) {
     cpu().setDw(0, static_cast<m_word>(memory().readWord(cpu().a[0] + kPlayerInputWord) & 0xF0F0u));
     cpu().setDw(0, static_cast<m_word>(cpu().dw(0) | memory().readWord(cpu().a[1])));
 
-    const m_byte demo = memory().readByte(kDemoMode);
+    // The ROM rotates A/B/C here by the OPTIONS button layout
+    // ($FFFFC8 control_scheme). Players now bind actions instead
+    // (controls.yaml), so the sampled byte is already in the action layout and
+    // is never rotated; the rotation is kept below, disabled, for reference.
+    constexpr bool kRotateByControlScheme = false;
+    const m_byte   demo                   = memory().readByte(kDemoMode);
     cpu().setFlag(CPU68K::FlagZ, demo == 0);
-    if (demo == 0 && !SoRCheats::altControlsEnabled()) {
+    if (kRotateByControlScheme && demo == 0) {
         const m_word scheme = memory().readWord(kControlScheme);
         cpu().setDw(7, scheme);
         cpu().setFlag(CPU68K::FlagZ, scheme == 0);
@@ -422,20 +460,21 @@ void StreetsOfRage::high_score_name_entry_dispatcher(m_long /*entry_*/) {
 void StreetsOfRage::sample_all_joypads(m_long entry_) {
     traceEnter(entry_);
 
-    const bool                useAltControls =
-        SoRCheats::altControlsEnabled() && memory().readByte(kDemoMode) == 0u;
-    const PlayersControlState controls = controllers().getCurrentState();
+    // Only remote (autoplay) buttons: MegaDriveEnvironment does not read SDL.
+    const PlayersControlState remote  = controllers().getCurrentState();
+    const SampledPlayer       player1 = samplePlayer(0, remote.player1);
+    const SampledPlayer       player2 = samplePlayer(1, remote.player2);
 
     memory().writeWord(kZ80BusRequest, 0x0100u);
     cpu().a[1] = kIoPlayer1DataPort;
     cpu().a[0] = kP1ButtonHeld;
     cpu().a[2] = kDemoAiInputP1;
-    sampleOneJoypadBody(cpu(), memory(), useAltControls ? &controls.player1 : nullptr);
+    sampleOneJoypadBody(cpu(), memory(), &player1);
 
     cpu().a[1] = kIoPlayer2DataPort;
     cpu().a[0] += signExtendWord(0x0002u);
     cpu().a[2] = kDemoAiInputP2;
-    sampleOneJoypadBody(cpu(), memory(), useAltControls ? &controls.player2 : nullptr);
+    sampleOneJoypadBody(cpu(), memory(), &player2);
 
     memory().writeWord(kZ80BusRequest, 0);
     setMoveWordFlags(cpu(), 0);
@@ -444,13 +483,15 @@ void StreetsOfRage::sample_all_joypads(m_long entry_) {
 
 void StreetsOfRage::sample_one_joypad(m_long entry_) {
     traceEnter(entry_);
-    const int                 playerIndex = altPickupPlayerIndexForBuffer(cpu().a[0]);
-    const bool                useAltControls =
-        SoRCheats::altControlsEnabled() && memory().readByte(kDemoMode) == 0u && playerIndex >= 0;
-    const PlayersControlState controls = controllers().getCurrentState();
-    const PlayerControlsState *playerControls =
-        !useAltControls ? nullptr : (playerIndex == 0 ? &controls.player1 : &controls.player2);
-    sampleOneJoypadBody(cpu(), memory(), playerControls);
+    const int playerIndex = altPickupPlayerIndexForBuffer(cpu().a[0]);
+    if (playerIndex < 0) {
+        sampleOneJoypadBody(cpu(), memory(), nullptr);
+    } else {
+        const PlayersControlState remote = controllers().getCurrentState();
+        const SampledPlayer       player =
+            samplePlayer(playerIndex, playerIndex == 0 ? remote.player1 : remote.player2);
+        sampleOneJoypadBody(cpu(), memory(), &player);
+    }
     return68k(cpu());
 }
 

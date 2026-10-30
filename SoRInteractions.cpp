@@ -47,8 +47,8 @@ constexpr m_long kBottleBrokenFlag  = 0x54u;
 constexpr m_byte kButtonAttack = 0x10u;
 constexpr m_byte kKnifeType    = 0x08u;
 
-// $3136's pickup box half-extents (X, lane Y). --altControls widens them: a
-// missed Y press shows nothing, where the original attack button punched, so
+// $3136's pickup box half-extents (X, lane Y). ENHANCED 6 widens them: a
+// missed Pick Item press shows nothing, where the original Punch punched, so
 // the 6-button layout forgives a few pixels. The height (Z) test is unchanged.
 constexpr m_word kPickupHalfX     = 0x0014u;
 constexpr m_word kPickupHalfY     = 0x0010u;
@@ -124,9 +124,9 @@ m_long findPickupTarget(SystemMemory &memory, m_long player) {
     if ((memory.readByte(player + kObjState) & 0xFEu) == 0x28u)
         return 0u;
 
-    const bool   altControls = SoRCheats::altControlsEnabled();
-    const m_word halfX       = altControls ? kAltPickupHalfX : kPickupHalfX;
-    const m_word halfY       = altControls ? kAltPickupHalfY : kPickupHalfY;
+    const bool   enhanced = SoRCheats::enhancedControlsForObject(player);
+    const m_word halfX    = enhanced ? kAltPickupHalfX : kPickupHalfX;
+    const m_word halfY    = enhanced ? kAltPickupHalfY : kPickupHalfY;
 
     for (int slot = 0; slot < kInteractionScanSlots; ++slot) {
         const m_long object = kObjectTable + static_cast<m_long>(slot) * kObjectSlotSize;
@@ -208,10 +208,10 @@ void StreetsOfRage::player_normal_attack_input(m_long entry_) {
 
     const m_long player      = cpu().a[0];
     const m_byte pressed     = memory().readByte(player + kPlayerInputPressed);
-    const bool   altControls = SoRCheats::altControlsEnabled();
+    const bool   enhanced    = SoRCheats::enhancedControlsForObject(player);
     const bool   attackPressed =
-        (pressed & kButtonAttack) != 0u || (altControls && SoRCheats::altAttackButtonPressedForObject(player));
-    const bool pickupPressed = altControls && SoRCheats::altPickupButtonPressedForObject(player);
+        (pressed & kButtonAttack) != 0u || (enhanced && SoRCheats::altAttackButtonPressedForObject(player));
+    const bool pickupPressed = enhanced && SoRCheats::altPickupButtonPressedForObject(player);
     const bool comboPending  = clearBit(memory(), player + kPlayerFlags58, 5);
 
     if (comboPending) {
@@ -224,7 +224,7 @@ void StreetsOfRage::player_normal_attack_input(m_long entry_) {
         return;
     }
 
-    const bool tryPickup = altControls ? (pickupPressed && !attackPressed && !comboPending) : true;
+    const bool tryPickup = enhanced ? (pickupPressed && !attackPressed && !comboPending) : true;
     if (tryPickup) {
         logCallFromReturn(0x3050u, 0x003136u);
         if (!call68k(
@@ -290,11 +290,11 @@ void StreetsOfRage::player_held_object_attack_input(m_long entry_) {
 
     const m_long player      = cpu().a[0];
     const m_byte pressed     = memory().readByte(player + kPlayerInputPressed);
-    const bool   altControls = SoRCheats::altControlsEnabled();
+    const bool   enhanced    = SoRCheats::enhancedControlsForObject(player);
     const bool   attackPressed =
-        (pressed & kButtonAttack) != 0u || (altControls && SoRCheats::altAttackButtonPressedForObject(player));
-    const bool pickupPressed = altControls && SoRCheats::altPickupButtonPressedForObject(player);
-    const bool throwPressed  = altControls && SoRCheats::altThrowButtonPressedForObject(player);
+        (pressed & kButtonAttack) != 0u || (enhanced && SoRCheats::altAttackButtonPressedForObject(player));
+    const bool pickupPressed = enhanced && SoRCheats::altPickupButtonPressedForObject(player);
+    const bool throwPressed  = enhanced && SoRCheats::altThrowButtonPressedForObject(player);
 
     if (!attackPressed && !pickupPressed && !throwPressed) {
         cpu().setFlag(CPU68K::FlagZ, true);
@@ -302,7 +302,7 @@ void StreetsOfRage::player_held_object_attack_input(m_long entry_) {
         return;
     }
 
-    const bool tryPickup = altControls ? (pickupPressed && !attackPressed && !throwPressed) : true;
+    const bool tryPickup = enhanced ? (pickupPressed && !attackPressed && !throwPressed) : true;
     if (tryPickup) {
         logCallFromReturn(0x3092u, 0x003136u);
         if (!call68k(
@@ -322,7 +322,7 @@ void StreetsOfRage::player_held_object_attack_input(m_long entry_) {
 
     const m_byte heldType = memory().readByte(player + kObjHeldType);
 
-    // --altControls: Z is the dedicated knife throw. It does nothing for any
+    // ENHANCED 6: Throw Knife is the dedicated knife throw. It does nothing for any
     // other held object, and attack never throws the knife (below).
     const bool knifeThrow = throwPressed && !attackPressed && heldType == kKnifeType;
 
@@ -348,7 +348,7 @@ void StreetsOfRage::player_held_object_attack_input(m_long entry_) {
             return;
     } else if (knifeThrow) {
         cpu().d[0] = 0x44u;
-    } else if (altControls && heldType == kKnifeType) {
+    } else if (enhanced && heldType == kKnifeType) {
         cpu().d[0] = 0x46u;
     } else {
         cpu().d[0] = 0x44u;

@@ -25,6 +25,10 @@ constexpr m_long kP2AttackFlag  = 0xFFFFFF25u;
 constexpr m_long kSoundTestIndex = 0xFFFFFFC4u;
 constexpr m_long kDifficulty     = 0xFFFFFFC6u;
 constexpr m_long kControlScheme  = 0xFFFFFFC8u;
+
+// The ROM's CONTROL row (A/B/C button layouts) is hidden: players bind
+// actions in controls.yaml instead, and $FFFFC8 stays 0.
+constexpr bool kHideControlRow = true;
 constexpr m_long kLivesSetting   = 0xFFFFFFCAu;
 
 constexpr m_long kP1Object    = 0xFFFFB800u;
@@ -206,7 +210,7 @@ void StreetsOfRage::options_menu_build(m_long /*entry_*/) {
     SOR_CALL_68K(sub_007f00(), 0x1180u, 0x007F00u);
     memory().writeLong(0xFFFFDA00u, 0);
 
-    cpu().d[0] = SoRCheats::altControlsEnabled() ? 0x000C0504u : 0x0D0C0504u;
+    cpu().d[0] = kHideControlRow ? 0x000C0504u : 0x0D0C0504u;
     SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1190u, 0x00A8B8u);
     cpu().d[0] = 0x10u;
     SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1198u, 0x00A8B8u);
@@ -214,7 +218,7 @@ void StreetsOfRage::options_menu_build(m_long /*entry_*/) {
 
     cpu().setDw(4, 0x2000u);
     SOR_CALL_68K(options_draw_difficulty(), 0x11A4u, 0x0012E4u);
-    if (!SoRCheats::altControlsEnabled())
+    if (!kHideControlRow)
         SOR_CALL_68K(options_draw_controls(), 0x11A8u, 0x001370u);
 
     if (memory().readByte(kCheatFlag) != 0) {
@@ -411,11 +415,11 @@ void StreetsOfRage::options_row_nav(m_long /*entry_*/) {
             next = 0x18;
         if (static_cast<m_byte>(next) < 0x10)
             next = 0x24;
-        if (SoRCheats::altControlsEnabled() && static_cast<m_byte>(next) == 0x18)
+        if (kHideControlRow && static_cast<m_byte>(next) == 0x18)
             next = 0x14;
     } else {
         next = static_cast<m_word>(next + 2);
-        if (SoRCheats::altControlsEnabled() && static_cast<m_byte>(next) == 0x18)
+        if (kHideControlRow && static_cast<m_byte>(next) == 0x18)
             next = memory().readByte(kCheatFlag) == 0 ? 0x24 : 0x1C;
         if (memory().readByte(kCheatFlag) == 0 && static_cast<m_byte>(next) == 0x1C)
             next = 0x24;

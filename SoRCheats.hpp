@@ -10,8 +10,12 @@ constexpr m_byte kMaximumAttackDamage  = 0x0Fu;
 
 void setP1PunchPowerEnabled(bool enabled);
 bool p1PunchPowerEnabled();
-void setAltControlsEnabled(bool enabled);
-bool altControlsEnabled();
+// Per player (0 or 1): the ENHANCED 6 scheme is on (SoRInput publishes it).
+// It brings the 6-button rules: Pick Item and Throw Knife as their own
+// actions, Punch never picks up, and the wider pickup box.
+void setEnhancedControls(int playerIndex, bool enabled);
+bool enhancedControls(int playerIndex);
+bool enhancedControlsForObject(m_long objectAddress);
 void updateAltAttackButton(int playerIndex, bool held);
 bool altAttackButtonPressedForObject(m_long objectAddress);
 void updateAltPickupButton(int playerIndex, bool held);

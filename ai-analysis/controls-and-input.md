@@ -155,24 +155,28 @@ After this point, the player state machine can treat bit `$10` as attack, bit
 `$20` as jump, and bit `$40` as police special regardless of the selected
 OPTIONS layout. Directions and Start are never remapped.
 
-The native port's host option `--altControls` deliberately bypasses
-`$FFFFC8 (control_scheme)`: the sampler reads the 6-button pad sequence and
-pre-translates it into the same logical bits before `$568A
-(remap_player_gameplay_input)` copies the word into each player object.
+The native port never applies `$FFFFC8 (control_scheme)` and hides its
+OPTIONS row: the game reads the keyboard and gamepads itself and binds them to
+actions per player (`SoRInput`, `~/.config/StreetsOfRageProject/controls.yaml`),
+and the manual sampler writes the logical bits before `$568A
+(remap_player_gameplay_input)` copies the word into each player object. The
+ROM's port writes and reads still run, so the pad-absent bytes are unchanged.
 
-| Physical button under `--altControls` | Native-port role |
+| Action | Native-port role |
 |---|---|
-| A | Sets logical B+C together, producing the rear attack input. |
-| B | Logical attack (`$10`). |
-| C | Logical jump (`$20`). |
-| X | Logical police special (`$40`), replacing original physical A. |
-| Y | Pickup-only edge tracked outside the ROM input byte. |
-| Z | Knife throw only: while holding a knife, a Z edge starts the throw action `$44` regardless of nearby foes; no effect with any other held object. Attack (A/B) with a knife always stabs (`$46`) and never throws. |
+| Punch | Logical attack (`$10`). |
+| Jump | Logical jump (`$20`). |
+| Special | Logical police special (`$40`). |
 | Start | Start only; pause/demo-abort behavior is unchanged. |
+| Back Attack (ENHANCED 6) | Sets logical attack+jump together (`$30`), producing the rear attack input. |
+| Pick Item (ENHANCED 6) | Pickup-only edge tracked outside the ROM input byte. |
+| Throw Knife (ENHANCED 6) | Knife throw only: while holding a knife, an edge starts the throw action `$44` regardless of nearby foes; no effect with any other held object. Punch with a knife always stabs (`$46`) and never throws. |
 
-Y is not written into `$FFFC04/$FFFC08` because the original active-high button
-byte has no spare bit once D-pad, B, C, X-as-special, and Start are preserved.
-The manual pickup hooks read a native per-player Y edge instead.
+On ORIGINAL 3 a player has only Special, Punch, Jump and Start, which is the
+original game. Pick Item and Throw Knife are not written into
+`$FFFC04/$FFFC08` because the original active-high button byte has no spare bit
+once the directions, attack, jump, special and Start are preserved. The manual
+pickup hooks read native per-player edges instead (`SoRCheats`).
 
 ## Gameplay action priority
 
@@ -195,18 +199,18 @@ starting a normal punch. If no target is found, the same logical attack bit
 starts the attack/combo transition.
 
 This is why the original behavior gives pickup priority over attack when the
-player presses the configured attack button near an item. With `--altControls`,
-the manual pickup hooks invert that priority: B remains attack and will not be
-converted into pickup, while Y alone requests
+player presses the configured attack button near an item. For a player on
+ENHANCED 6, the manual pickup hooks invert that priority: Punch remains attack
+and will not be converted into pickup, while Pick Item alone requests
 `$3136 (find_close_interaction_target)`. Start is no longer overloaded for
 pickup and always reaches the normal Start path.
 
 The search box is the player's X ±`$14` and lane Y ±`$10`, with the object's
-Z between the player's Z - 8 and the player's Z. With `--altControls` the
-native port widens X to ±`$1C` and Y to ±`$18` (Z unchanged): a Y press that
-misses shows nothing, whereas the original attack button gave a punch, so the
-6-button layout forgives a few pixels. Without `--altControls` the box is the
-ROM's.
+Z between the player's Z - 8 and the player's Z. For a player on ENHANCED 6
+the native port widens X to ±`$1C` and Y to ±`$18` (Z unchanged): a Pick Item
+press that misses shows nothing, whereas the original attack button gave a
+punch, so the 6-button scheme forgives a few pixels. On ORIGINAL 3 the box is
+the ROM's.
 
 ### Measured normal punch
 
@@ -693,8 +697,9 @@ set `+$45`; only the callers above arm the tech flag after that launch.
 | Ordinary enemy throw (`$72`, no `+$45`) | No effect | No effect |
 | Special throw into `$5C` with `+$45` | No effect | Bounce cancel → land `$14` |
 
-B+Up is never the landing tech. After OPTIONS remap or `--altControls`, the
-logical jump bit remains bit 5, so the tech is still **logical C + Up**.
+B+Up is never the landing tech. After an OPTIONS remap (ROM) or with any
+native-port binding, the logical jump bit remains bit 5, so the tech is still
+**logical C (Jump) + Up**.
 
 ## Start, pause, and joining
 
