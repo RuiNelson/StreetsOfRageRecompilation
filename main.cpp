@@ -11,9 +11,44 @@
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
+#include <cstring>
 #include <string>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+namespace {
+
+// On Windows `sor` is a GUI program (no console window). A console exists only when a debug option or
+// --help/--version asks for output: the parent terminal's if there is one, else a new window.
+void openConsoleIfWanted(int argc, char *argv[]) {
+#ifdef _WIN32
+    bool wanted = false;
+    for (int i = 1; i < argc; ++i) {
+        const char *a = argv[i];
+        if (std::strcmp(a, "--debug-utils") == 0 || std::strcmp(a, "--debug-log") == 0 ||
+            std::strcmp(a, "--call-log") == 0 || std::strcmp(a, "--aux-addr-file") == 0 ||
+            std::strcmp(a, "-h") == 0 || std::strcmp(a, "--help") == 0 || std::strcmp(a, "-V") == 0 ||
+            std::strcmp(a, "--version") == 0)
+            wanted = true;
+    }
+    if (!wanted)
+        return;
+    if (!AttachConsole(ATTACH_PARENT_PROCESS) && !AllocConsole())
+        return;
+    std::freopen("CONOUT$", "w", stdout);
+    std::freopen("CONOUT$", "w", stderr);
+#else
+    (void)argc;
+    (void)argv;
+#endif
+}
+
+} // namespace
+
 int main(int argc, char *argv[]) {
+    openConsoleIfWanted(argc, argv);
     CLI::App app{"Streets of Rage"};
     app.set_version_flag("-V,--version", "0.1.0");
 

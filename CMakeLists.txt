@@ -104,6 +104,11 @@ elseif(MINGW)
 endif()
 
 if(WIN32)
+    # GUI subsystem: no console window unless main.cpp opens one for --debug-utils/--debug-log.
+    set_target_properties(sor PROPERTIES WIN32_EXECUTABLE TRUE)
+    if(MSVC)
+        target_link_options(sor PRIVATE /ENTRY:mainCRTStartup)
+    endif()
     add_custom_command(TARGET sor POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_RUNTIME_DLLS:sor>
