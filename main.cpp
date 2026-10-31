@@ -139,6 +139,17 @@ int main(int argc, char *argv[]) {
 
     CLI11_PARSE(app, argc, argv);
 
+    // No log output unless a debug option asks for it (--help/--version and parse errors already printed).
+    if (!debugUtilsFlag && !sorDebugFlag && sorCallLogFile.empty() && sorAuxAddrFile.empty()) {
+#ifdef _WIN32
+        constexpr const char *kNull = "NUL";
+#else
+        constexpr const char *kNull = "/dev/null";
+#endif
+        std::freopen(kNull, "w", stdout);
+        std::freopen(kNull, "w", stderr);
+    }
+
     SoRVideoConfig::VideoConfig video;
     if (!defaultVideoFlag)
         video = SoRVideoConfig::loadOrCreate(SoRVideoConfig::defaultPath());
