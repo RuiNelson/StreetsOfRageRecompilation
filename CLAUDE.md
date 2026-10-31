@@ -141,7 +141,7 @@ works, llvm-mingw with the NuGet package). Linux is written and not yet tried.
   beside it. `.cpython`'s own Python is usable for measuring (`DYLD_LIBRARY_PATH=.../lib`),
   and it lacks Tk, so it cannot import `sor_autoplay.app` or the tests that do.
 - `scripts/run.py` passes `--ai-path autoplay/ai-code` unless told otherwise; `play.py` has the
-  field. So the Builder's shortcut, which opens `play.py`, needs nothing of its own.
+  field. The Builder's shortcut to the game passes it itself.
 - `SoRPython` runs one thread (SDL, 16 MiB of stack) that owns the interpreter's whole
   lifetime: nothing else touches Python or waits for the GIL, so the AI can never slow
   the game. **It keeps its own time and is not woken by the game** (user, 2026-10-31): on its timer
