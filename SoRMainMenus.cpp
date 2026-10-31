@@ -4,6 +4,8 @@
 #include "SoRRemoteInput.hpp"
 #include "SoR.hpp"
 
+#include <SDL3/SDL.h>
+
 #include <array>
 #include <cstdint>
 #include <string_view>
@@ -76,6 +78,7 @@ constexpr m_long kBlazePreviewSelected = 0xFFFFBA5Cu;
 // OPTIONS: the third row keeps its place (VRAM $C7A0, column 16 of row 15) and
 // OPTIONS moves two cells down from it, as far as the ROM's rows are apart.
 // Without the AI, the rows are the ROM's: OPTIONS stays on the third.
+// QUIT, which the ROM does not have either, is always the row after OPTIONS.
 // The whole menu then sits 5 tiles left and 2 up of the ROM's place (user), where
 // the wider list is centred better: VDP commands and cursor sprite alike.
 constexpr m_long kMenuShiftVdp      = (2u * 128u + 5u * 2u) << 16;
@@ -83,10 +86,14 @@ constexpr m_word kMenuShiftY        = 16;
 constexpr m_word kMenuCursorX       = 0x00F0 - 40;
 constexpr m_word kCursorAiAssist    = 2;
 constexpr m_word kCursorOptions     = 3;
+constexpr m_word kCursorQuit        = 4;
 constexpr m_long kAiAssistRowVdp    = 0x47A00003u - kMenuShiftVdp;
 constexpr m_long kOptionsRowVdp     = 0x48A00003u - kMenuShiftVdp;
 constexpr m_word kOptionsCursorY    = 0x0108 - kMenuShiftY;
+constexpr m_long kMenuRowVdpStep    = 0x01000000u;
+constexpr m_word kMenuRowCursorStep = 16;
 constexpr std::string_view kAiAssistText = "1 PLAYER AI ASSIST";
+constexpr std::string_view kQuitText     = "QUIT";
 
 constexpr m_long kCursorYTable  = 0x0000162Au;
 constexpr m_long kCursorTiles   = 0x00001622u;
@@ -215,6 +222,9 @@ void StreetsOfRage::init_game_start_screen(m_long entry_) {
         for (const char c : kAiAssistText)
             memory().writeWord(kVdpData, menuGlyph(c));
     }
+    memory().writeLong(kVdpControl, SoRPython::available() ? kOptionsRowVdp + kMenuRowVdpStep : kOptionsRowVdp);
+    for (const char c : kQuitText)
+        memory().writeWord(kVdpData, menuGlyph(c));
 
     memory().writeWord(kPaletteFadeCounter, 0x40);
     cpu().a[6] = memory().readByte(kP2PadMissing) == 0 ? 0x0007267Cu : 0x00072684u;
@@ -273,6 +283,15 @@ void StreetsOfRage::select_menu_resolve_choice(m_long /*entry_*/) {
     traceEnter(0x114Au);
 
     const m_word cursor = memory().readWord(kSelectMenuCursor);
+    // The way closing the window quits. The next frames land here again, until
+    // the host has seen it.
+    if (cursor == kCursorQuit) {
+        SDL_Event event{};
+        event.type = SDL_EVENT_QUIT;
+        SDL_PushEvent(&event);
+        cpu().ssp += 4;
+        return;
+    }
     if (cursor <= kCursorAiAssist) {
         cpu().setDw(0, cursor);
         const bool aiAssist = cursor == kCursorAiAssist;
@@ -564,7 +583,7 @@ void StreetsOfRage::select_menu_cursor_update(m_long /*entry_*/) {
         SOR_CALL_68K(queue_sound_id(), 0x1596u, 0x01069Eu);
         const m_word cursor = memory().readWord(object + 0x40);
         memory().writeWord(object + 0x42, cursor);
-        memory().writeWord(object + 0x40, wrappedStep(cursor, kCursorOptions, (vertical & 0x01u) == 0));
+        memory().writeWord(object + 0x40, wrappedStep(cursor, kCursorQuit, (vertical & 0x01u) == 0));
     }
 
     const m_byte timer = static_cast<m_byte>(memory().readByte(object + 0x0D) - 1);
@@ -588,10 +607,11 @@ void StreetsOfRage::select_menu_cursor_update(m_long /*entry_*/) {
         cursor = kCursorOptions;
     memory().writeWord(object + 0x40, cursor);
 
-    // Without the AI, OPTIONS is on the ROM's third row.
-    const m_word y = cursor == kCursorOptions
-                         ? (ai ? kOptionsCursorY : static_cast<m_word>(memory().readWord(kCursorYTable + 4u) - kMenuShiftY))
-                         : static_cast<m_word>(memory().readWord(kCursorYTable + cursor * 2u) - kMenuShiftY);
+    // Without the AI, OPTIONS is on the ROM's third row, and QUIT follows it.
+    const m_word optionsY = ai ? kOptionsCursorY : static_cast<m_word>(memory().readWord(kCursorYTable + 4u) - kMenuShiftY);
+    const m_word y        = cursor == kCursorQuit      ? static_cast<m_word>(optionsY + kMenuRowCursorStep)
+                            : cursor == kCursorOptions ? optionsY
+                                                       : static_cast<m_word>(memory().readWord(kCursorYTable + cursor * 2u) - kMenuShiftY);
     memory().writeWord(kSpriteTableBuffer, y);
     memory().writeLong(kSpriteTableBuffer + 2u, memory().readLong(kCursorTiles + memory().readByte(object + 0x0A) * 4u));
     memory().writeWord(kSpriteTableBuffer + 6u, kMenuCursorX);

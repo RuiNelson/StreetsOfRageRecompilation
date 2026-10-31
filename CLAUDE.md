@@ -185,6 +185,9 @@ works, llvm-mingw with the NuGet package). Linux is written and not yet tried.
   index 2 skipped. Choosing the row sets `player_mode` to 3 and the flag and starts Python, so
   the mode screen's init clears the flag and each choice sets it; `--ai-assist` forces it through.
   The whole menu sits 5 tiles left and 2 up of the ROM's place (user), rows and cursor sprite.
+  **QUIT** (user, 2026-10-31) is the row after OPTIONS, with or without the AI: cursor 4, the
+  wrap's maximum. Choosing it pushes `SDL_EVENT_QUIT` in `select_menu_resolve_choice`, so it ends
+  the game the way closing the window does.
   On character select the P2 cursor and Blaze's preview do not exist until P1 locks; then P1's
   buttons move a cursor spawned on a free character. They come from P1's `+$54`, not the sampled
   word: the select-screen pass runs every other frame, so a press can be gone from `$FFFC04`
