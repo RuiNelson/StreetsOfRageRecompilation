@@ -207,8 +207,9 @@ void draw(const Menu &m, Canvas &canvas) {
         canvas.text(kValueColumn, screenRow(row), value(m.pending, row), selected);
     }
     const auto lines = help(m, kRowList[static_cast<std::size_t>(m.cursor)]);
-    canvas.text(kLabelColumn, kHelpRow, lines[0], false);
-    canvas.text(kLabelColumn, kHelpRow + 1, lines[1], false);
+    // White: this screen's grey is palette line 1's darkest text, too dark to read a sentence in.
+    canvas.text(kLabelColumn, kHelpRow, lines[0], true);
+    canvas.text(kLabelColumn, kHelpRow + 1, lines[1], true);
 }
 
 } // namespace

@@ -1,5 +1,6 @@
 #include "SoRCheats.hpp"
 #include "SoRControlsMenu.hpp"
+#include "SoRPause.hpp"
 #include "SoRPython.hpp"
 #include "SoRRemoteInput.hpp"
 #include "SoRVideoMenu.hpp"
@@ -235,6 +236,9 @@ void StreetsOfRage::init_game_start_screen(m_long entry_) {
     memory().writeLong(kVdpControl, SoRPython::available() ? kOptionsRowVdp + kMenuRowVdpStep : kOptionsRowVdp);
     for (const char c : kQuitText)
         memory().writeWord(kVdpData, menuGlyph(c));
+
+    const auto art = vdp().stateSnapshot().vram;
+    SoRPause::onModeMenu(art);
 
     memory().writeWord(kPaletteFadeCounter, 0x40);
     cpu().a[6] = memory().readByte(kP2PadMissing) == 0 ? 0x0007267Cu : 0x00072684u;

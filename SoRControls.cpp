@@ -20,13 +20,7 @@ constexpr m_long kIoPlayer1DataPort = 0x00A10003u;
 constexpr m_long kIoPlayer2DataPort = 0x00A10005u;
 constexpr m_long kZ80BusRequest     = 0x00A11100u;
 
-constexpr m_long kStopMusic           = 0xFFFFF002u;
 constexpr m_long kPlaySe              = 0xFFFFF00Au;
-constexpr m_long kPauseTextFlag       = 0xFFFFFA46u;
-constexpr m_long kP1StartButtonBuffer = 0xFFFFFA47u;
-constexpr m_long kP2StartButtonBuffer = 0xFFFFFA48u;
-constexpr m_long kFadeOutFlag         = 0xFFFFFA71u;
-constexpr m_long kPaletteFadeCounter  = 0xFFFFFB0Cu;
 
 constexpr m_long kCharSelectConfirmCount = 0xFFFFF908u;
 constexpr m_long kSelectScreenSubstate   = 0xFFFFFB0Eu;
@@ -588,63 +582,3 @@ void StreetsOfRage::clear_player_input(m_long entry_) {
     return68k(cpu());
 }
 
-void StreetsOfRage::handle_pause_start_input(m_long entry_) {
-    traceEnter(entry_);
-
-    const auto finishWithPauseFlag = [this] {
-        const m_byte pause = memory().readByte(kPauseTextFlag);
-        setMoveByteFlags(cpu(), pause);
-        return68k(cpu());
-    };
-
-    if (memory().readByte(kStopMusic) != 0u) {
-        finishWithPauseFlag();
-        return;
-    }
-
-    cpu().d[7] = memory().readByte(kPauseTextFlag) == 0u ? 3u : 0u;
-
-    bool         pauseRequested = false;
-    const m_byte playerMode     = memory().readByte(kPlayerMode);
-
-    if ((playerMode & 0x01u) != 0u) {
-        const m_byte buffered =
-            static_cast<m_byte>(memory().readByte(kP1StartButtonBuffer) | memory().readByte(kP1ButtonPress));
-        memory().writeByte(kP1StartButtonBuffer, buffered);
-        if ((buffered & kButtonStart) != 0u)
-            pauseRequested = true;
-    }
-
-    if (!pauseRequested && (playerMode & 0x02u) != 0u) {
-        const m_byte buffered =
-            static_cast<m_byte>(memory().readByte(kP2StartButtonBuffer) | memory().readByte(kP2ButtonPress));
-        memory().writeByte(kP2StartButtonBuffer, buffered);
-        if ((buffered & kButtonStart) != 0u)
-            pauseRequested = true;
-    }
-
-    if (pauseRequested) {
-        if (memory().readByte(kDemoMode) != 0u) {
-            const m_byte fade = memory().readByte(kFadeOutFlag);
-            if (fade != 0u) {
-                setMoveByteFlags(cpu(), fade);
-                return68k(cpu());
-                return;
-            }
-
-            setBit(memory(), kDemoMode, 7);
-            memory().writeByte(kFadeOutFlag, 1u);
-            memory().writeWord(kPaletteFadeCounter, 0x0040u);
-            setMoveWordFlags(cpu(), 0x0040u);
-            return68k(cpu());
-            return;
-        }
-
-        memory().writeByte(kPauseTextFlag, cpu().db(7));
-        memory().writeByte(kPlaySe, 0xBDu);
-    }
-
-    memory().writeByte(kP1StartButtonBuffer, 0u);
-    memory().writeByte(kP2StartButtonBuffer, 0u);
-    finishWithPauseFlag();
-}

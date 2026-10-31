@@ -1,6 +1,7 @@
 #include "SoRCheats.hpp"
 #include "SoRControlsConfig.hpp"
 #include "SoRInput.hpp"
+#include "SoRPause.hpp"
 #include "SoRPython.hpp"
 #include "SoRRemoteInput.hpp"
 #include "SoRSoundtrack.hpp"
@@ -171,6 +172,9 @@ int main(int argc, char *argv[]) {
             SoRRemoteInput::forceAiAssist();
             SoRPython::start(sor.memory());
         }
+        sor.vdp().setFrameOverlay([&sor](Framebuffer &framebuffer, int width, int height) {
+            SoRPause::drawOverlay(sor.memory(), framebuffer, width, height);
+        });
         sor.boot();
         SoRPython::stop();
         SoRInput::stop();

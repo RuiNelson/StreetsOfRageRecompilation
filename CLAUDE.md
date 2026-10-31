@@ -35,10 +35,11 @@ Before changing files:
 | `RecompilationEnvironment.*` | Runtime integration and CPU ownership |
 | `SorRuntime.*` | Host orchestration around the recompiled cartridge |
 | `SoRManualFunctions.cpp` | Hand-written implementations of selected ROM routines |
-| `SoRControls.cpp` | Hand-written controller sampling, input remap, OPTIONS controls, character-select input, and pause/Start routines |
+| `SoRControls.cpp` | Hand-written controller sampling, input remap, OPTIONS controls and character-select input |
 | `SoRInput.*` | Keyboard and gamepad input read from SDL by the game, as actions (see **Controls**) |
 | `SoRControlsConfig.*` | `~/.config/StreetsOfRageProject/controls.yaml`: schemes, bindings, gamepad choice, deadzone |
 | `SoRControlsMenu.*` | OPTIONS > CONTROLS, the in-game controls menu (see **Controls**) |
+| `SoRPause.*` | The pause menu, and `$10D2E (handle_pause_start_input)` that runs it (see **The pause menu**) |
 | `SoRVideoConfig.*` | `video.yaml`, next to `controls.yaml`: frame sync, widescreen, fullscreen, integer scaling |
 | `SoRVideoMenu.*` | OPTIONS > VIDEO, the in-game video menu (see **OPTIONS > VIDEO**) |
 | `SoRMenuCanvas.hpp` | What those two menus share: the OPTIONS font, drawing to plane A, held directions |
@@ -229,6 +230,32 @@ The user's decisions are in the workspace `CLAUDE.md`, **OPTIONS > VIDEO and `vi
   (defaults), and speed: 119 fps on VSYNC, 61 on VSYNC HALF, 60 on AUTO, 120 at `--turbo 2` with `vsync` in the file.
   Fullscreen was applied and left through the menu. Not checked: Windows, Linux, a real gamepad or keyboard on
   this screen, Ctrl+F's effect on the screen's DISPLAY row.
+
+## The pause menu
+
+The user's rules are in the workspace `CLAUDE.md`, **The pause menu**.
+
+- `$10D2E (handle_pause_start_input)` still sets `$FFFA46 (pause_text_flag)` to 3 and posts `$BD`, and
+  `game_mode_ingame`'s paused path still draws the ROM's word PAUSE and freezes the game, so autoplay reads a pause as
+  ever, and an AI lets go of the pad. While the flag is set it runs one menu frame on the players' presses (those not in
+  `player_mode`: none; P2 under AI Assist: none). Start resumes, as on the ROM. In a question only the player asked
+  answers, and anyone's Start is a NO, so a seat that cannot answer never holds the game.
+- **Its state is host UI**, in C++ (`menu`, `forfeiting`); the only RAM it writes is what the ROM would: the flag,
+  `play_se`, and the fields below. On resuming it clears `$FFFC05`/`$FFFC09`: the press that chose the entry would
+  otherwise reach the players on that same frame. Seen live: RESUME on the Special button called the police, which
+  also held off the KO for 9 s.
+- **It draws over the finished frame** (`VDP::setFrameOverlay`), not in VDP memory: gameplay leaves no VRAM or sprites it
+  can count on across eight rounds. The font is the mode menu's, copied from VRAM when that screen loads it (colour 1
+  the letter, `$C` its shadow, 2 left see-through). The overlay reads the flag too, so a cold restart hides it.
+- **Forfeiting** writes the continues word 0 and the life byte 1, then `adjust_player_health` with -`$50` on the object,
+  as the time-over does (`$109DE`), and redraws the HUD. `$333E (resolve_player_hit_or_ko)` takes zero health as a KO on
+  the next update, whatever the player was doing, so the rest is the ROM's: `$2B48`, the type `$0F` object, GAME OVER,
+  then the attract sequence, or the other player plays on with `player_mode` updated. `forfeiting` then kills again
+  anyone it sees back on their feet: the ROM's fall (`$358C`) takes no life at zero health and would respawn them.
+- Checked live with remote buttons on macOS: both screens, NO, Start, RESUME; 1 player through GAME OVER to state `$0E`;
+  2 players with P1 only, P2 only, both and neither saying YES, and P2's input ignored on P1's question; AI Assist; a
+  forfeit during a KO under way; widescreen; a cold restart while paused. Not checked: a forfeit while falling into a
+  pit (so `forfeiting`'s second kill has not run live), rounds other than 1, a real gamepad or keyboard, the sounds by ear.
 
 ## ROM and regeneration
 
