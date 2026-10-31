@@ -1,6 +1,6 @@
 # Functions whose declarations/call sites remain generated, but whose bodies
 # are provided by hand-written C++ in SoRManualFunctions.cpp,
-# SoRControls.cpp, SoRInteractions.cpp, SoRMainMenus.cpp, or SoRSound.cpp.
+# SoRControls.cpp, SoRInteractions.cpp, SoRMainMenus.cpp, SoRRNG.cpp, or SoRSound.cpp.
 0003A2 # game_infinite_loop
 003028 # player_normal_attack_input (alt-controls pickup input hook)
 003084 # player_held_object_attack_input (alt-controls pickup input hook)
@@ -85,3 +85,6 @@
 01069E # queue_sound_id
 011B12 # play_level_music
 073298 # sound_ym2612_acquire (host wait instead of BUSREQ/DAC/YM busy-spins)
+
+# Random number generator (SoRRNG.cpp).
+0104D8 # sub_0104d8 (the RNG draw: state at $FFFF40, result in d0.w)
