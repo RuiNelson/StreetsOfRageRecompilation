@@ -395,8 +395,8 @@ and `play.py`; MegaDriveEnvironment keeps its own UI for the sample game).
   players' samples. Sounds: `$B9` move, `$BA` confirm, written to
   `$FFF00A (play_se)` as `handle_pause_start_input` does.
 - Drawing: the OPTIONS font (a text byte is the tile index: `$01`-`$1A`
-  A-Z, `$1B`-`$24` 0-9, `$26` `:`, `$27` `>`, `$29` `.`, `$2A` `,`, `$2C` `'`,
-  `$2D` `"`, `$2E` `?`, `$2F` `!`; no `+ - % /`) into plane A at `$C000`,
+  A-Z, `$1B`-`$24` 0-9, `$26` `-`, `$27` `>`, `$29` `.`, `$2A` `,`, `$2B` `'`,
+  `$2C` `"`, `$2D` `?`, `$2E` `!`, `$2F` `:`; no `+ % /`) into plane A at `$C000`,
   palette line 0 (white) for the selected entry and line 1 (grey) for the
   others: the only two lines with a text colour on this screen. Each frame the
   screen is composed in a 64x28 buffer and only changed cells are written

@@ -29,7 +29,7 @@ inline constexpr int kRepeatDelay = 20;
 inline constexpr int kRepeatRate  = 6;
 
 // The menu font loaded for the title and OPTIONS screens: a text byte is the
-// tile index (the ROM's own strings use these codes, e.g. "A:SPECIAL ATTACK"
+// tile index (the ROM's own strings use these codes, e.g. "A-SPECIAL ATTACK"
 // at $1C9FC).
 inline std::optional<m_byte> glyph(char c) {
     if (c >= 'a' && c <= 'z')
@@ -41,7 +41,7 @@ inline std::optional<m_byte> glyph(char c) {
     switch (c) {
         case ' ':
             return 0x00;
-        case ':':
+        case '-':
             return 0x26;
         case '>':
             return 0x27;
@@ -50,12 +50,14 @@ inline std::optional<m_byte> glyph(char c) {
         case ',':
             return 0x2A;
         case '\'':
-            return 0x2C;
+            return 0x2B;
         case '"':
-            return 0x2D;
+            return 0x2C;
         case '?':
-            return 0x2E;
+            return 0x2D;
         case '!':
+            return 0x2E;
+        case ':':
             return 0x2F;
         default:
             return std::nullopt;
