@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
     std::string   sorAuxAddrFile; // if set, record unknown dispatch targets here
     std::string   sorCallLogFile;
     std::string   frameSync;
-    std::string   languagePin = "jp";
+    std::string   languagePin = "en";
     std::string   videoHz     = "60";
     std::string   soundMode   = "prerendered";
     std::string   soundtrackDir; // default: soundtrack/ next to the ROM
