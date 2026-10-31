@@ -27,7 +27,7 @@ bool available();
 void start(SystemMemory &memory);
 
 /// CPU thread, once per sampled frame: the game as the AI's next tick sees it.
-/// Every kFramesPerTick frames it copies the work RAM; the AI takes the newest
+/// Once kFramesPerTick frames have passed it copies the work RAM; the AI takes the newest
 /// copy whenever it is ready, so a slow tick skips frames and delays nothing.
 void publishFrame(SystemMemory &memory, std::uint64_t frame, bool player2Enhanced);
 

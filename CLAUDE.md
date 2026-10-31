@@ -161,7 +161,7 @@ works, llvm-mingw with the NuGet package). Linux is written and not yet tried.
   and with the modulo nothing was published, the AI saw nothing and its last stick stayed held. Round 4, `--turbo 6`,
   external AI on P1, one run each:
   with the modulo 2,613-6,362 images skipped of 6,109-9,745 ticks, gaps up to 18+ frames, P2 falling 0, 2, 6 and 3
-  times (P1 none); with the distance 59-101 skipped, P2 falling 0 of 4 runs (P1 once, on an `OpenBreakable`). Round 1 at
+  times (P1 none; the last two runs at high thread priority); with the distance 59-101 skipped, P2 falling 0 of 4 runs (P1 once, on an `OpenBreakable`). Round 1 at
   `--turbo 2`: 0 skipped, no life lost, P2's score 36,800. Tick cost was never the cause (mean ~1.9 ms under this load, against
   2.8 ms a frame), nor the thread's priority (`SDL_THREAD_PRIORITY_HIGH` changed nothing). Input is untouched.
 - **The mode's screens** (user: original look, the row after 2 PLAYERS, the player picks
