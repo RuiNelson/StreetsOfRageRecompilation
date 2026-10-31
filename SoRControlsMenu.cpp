@@ -1,18 +1,18 @@
 #include "SoRControlsMenu.hpp"
 
 #include "SoRInput.hpp"
+#include "SoRMenuCanvas.hpp"
 #include "system/memory/SystemMemory.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cstdlib>
-#include <optional>
 #include <string>
 #include <vector>
 
 namespace SoRControlsMenu {
 namespace {
 
+using namespace SoRMenuCanvas;
 using SoRControlsConfig::Action;
 using SoRControlsConfig::ControlsConfig;
 using SoRControlsConfig::GamepadChoice;
@@ -20,80 +20,10 @@ using SoRControlsConfig::PadInput;
 using SoRControlsConfig::Scheme;
 using SoRControlsConfig::SchemeBindings;
 
-constexpr m_long kVdpData    = 0x00C00000u;
-constexpr m_long kVdpControl = 0x00C00004u;
-constexpr m_long kPlaneA     = 0xC000u; // the OPTIONS screen's plane A (its $45A40003-style commands)
-constexpr m_word kGreyText   = 0x2000u; // palette line 1; line 0 is the white of the selected entry
-constexpr m_long kPlaySe     = 0xFFFFF00Au;
-constexpr m_byte kSoundMove  = 0xB9u; // options_row_nav's cursor sound
-constexpr m_byte kSoundPick  = 0xBAu; // the menus' confirm sound
-
-constexpr int kColumns     = 64;
-constexpr int kRows        = 28;
 constexpr int kTitleRow    = 3;
 constexpr int kFirstRow    = 7;
 constexpr int kBackRow     = 19;
 constexpr int kLabelColumn = 4;
-
-constexpr int kRepeatDelay = 20;
-constexpr int kRepeatRate  = 6;
-
-// The menu font loaded for the title and OPTIONS screens: a text byte is the
-// tile index (the ROM's own strings use these codes, e.g. "A:SPECIAL ATTACK"
-// at $1C9FC).
-std::optional<m_byte> glyph(char c) {
-    if (c >= 'a' && c <= 'z')
-        c = static_cast<char>(c - 'a' + 'A');
-    if (c >= 'A' && c <= 'Z')
-        return static_cast<m_byte>(c - 'A' + 0x01);
-    if (c >= '0' && c <= '9')
-        return static_cast<m_byte>(c - '0' + 0x1B);
-    switch (c) {
-        case ' ':
-            return 0x00;
-        case ':':
-            return 0x26;
-        case '>':
-            return 0x27;
-        case '.':
-            return 0x29;
-        case ',':
-            return 0x2A;
-        case '\'':
-            return 0x2C;
-        case '"':
-            return 0x2D;
-        case '?':
-            return 0x2E;
-        case '!':
-            return 0x2F;
-        default:
-            return std::nullopt;
-    }
-}
-
-m_long vramWriteCommand(m_long address) {
-    return 0x40000000u | ((address & 0x3FFFu) << 16) | ((address >> 14) & 0x3u);
-}
-
-m_long cellAddress(int column, int row) {
-    return kPlaneA + static_cast<m_long>(row * kColumns + column) * 2u;
-}
-
-struct Canvas {
-    std::array<m_word, kColumns * kRows> cells{};
-
-    void text(int column, int row, std::string_view value, bool highlighted) {
-        if (row < 0 || row >= kRows)
-            return;
-        for (const char c : value) {
-            if (column >= 0 && column < kColumns)
-                cells[static_cast<std::size_t>(row * kColumns + column)] =
-                    static_cast<m_word>(glyph(c).value_or(0x00) | (highlighted ? 0u : kGreyText));
-            ++column;
-        }
-    }
-};
 
 std::string upper(std::string value) {
     for (char &c : value)
@@ -214,20 +144,6 @@ struct Item {
     int         pad     = -1; // DevicePad: index into the gamepad list
 };
 
-struct Repeat {
-    int held = 0;
-
-    // A press, then repeats while held.
-    bool step(bool down, bool repeats) {
-        if (!down) {
-            held = 0;
-            return false;
-        }
-        ++held;
-        return held == 1 || (repeats && held >= kRepeatDelay && (held - kRepeatDelay) % kRepeatRate == 0);
-    }
-};
-
 struct Menu {
     bool   isOpen = false;
     Screen screen = Screen::Top;
@@ -247,17 +163,12 @@ struct Menu {
     SchemeBindings          pending;
     int                     refusedFrames = 0;
 
-    Canvas shown;
-    bool   shownValid = false;
+    Shown shown;
 };
 
 Menu &menu() {
     static Menu instance;
     return instance;
-}
-
-void playSound(SystemMemory &memory, m_byte id) {
-    memory.writeByte(kPlaySe, id);
 }
 
 std::string deviceChoiceText(const SoRControlsConfig::PlayerConfig &config) {
@@ -619,35 +530,10 @@ void drawScreen(const Menu &m, Canvas &canvas) {
     }
 }
 
-void flush(SystemMemory &memory, Menu &m, const Canvas &canvas) {
-    for (int row = 0; row < kRows; ++row) {
-        int column = 0;
-        while (column < kColumns) {
-            const auto index = static_cast<std::size_t>(row * kColumns + column);
-            if (m.shownValid && canvas.cells[index] == m.shown.cells[index]) {
-                ++column;
-                continue;
-            }
-            memory.writeLong(kVdpControl, vramWriteCommand(cellAddress(column, row)));
-            while (column < kColumns) {
-                const auto i = static_cast<std::size_t>(row * kColumns + column);
-                if (m.shownValid && canvas.cells[i] == m.shown.cells[i])
-                    break;
-                memory.writeWord(kVdpData, canvas.cells[i]);
-                ++column;
-            }
-        }
-    }
-    m.shown      = canvas;
-    m.shownValid = true;
-}
-
 } // namespace
 
 void drawText(SystemMemory &memory, int column, int row, std::string_view text, bool highlighted) {
-    memory.writeLong(kVdpControl, vramWriteCommand(cellAddress(column, row)));
-    for (const char c : text)
-        memory.writeWord(kVdpData, static_cast<m_word>(glyph(c).value_or(0x00) | (highlighted ? 0u : kGreyText)));
+    SoRMenuCanvas::drawText(memory, column, row, text, highlighted);
 }
 
 void drawOptionsRow(SystemMemory &memory, bool highlighted) {
@@ -663,7 +549,6 @@ void open() {
     m             = Menu{};
     m.isOpen      = true;
     m.swallow     = true;
-    m.shownValid  = false;
 }
 
 bool isOpen() {
@@ -721,14 +606,14 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
 
     Canvas canvas;
     if (close) {
-        flush(memory, m, canvas); // clear plane A for the OPTIONS screen
+        flush(memory, m.shown, canvas); // clear plane A for the OPTIONS screen
         m.isOpen = false;
         return Result::Closed;
     }
     if (m.screen != Screen::Bind && m.screen != Screen::Deadzone)
         clampCursor(m, items(m));
     drawScreen(m, canvas);
-    flush(memory, m, canvas);
+    flush(memory, m.shown, canvas);
     return Result::Open;
 }
 

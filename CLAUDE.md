@@ -39,6 +39,9 @@ Before changing files:
 | `SoRInput.*` | Keyboard and gamepad input read from SDL by the game, as actions (see **Controls**) |
 | `SoRControlsConfig.*` | `~/.config/StreetsOfRageProject/controls.yaml`: schemes, bindings, gamepad choice, deadzone |
 | `SoRControlsMenu.*` | OPTIONS > CONTROLS, the in-game controls menu (see **Controls**) |
+| `SoRVideoConfig.*` | `video.yaml`, next to `controls.yaml`: frame sync, widescreen, fullscreen, integer scaling |
+| `SoRVideoMenu.*` | OPTIONS > VIDEO, the in-game video menu (see **OPTIONS > VIDEO**) |
+| `SoRMenuCanvas.hpp` | What those two menus share: the OPTIONS font, drawing to plane A, held directions |
 | `SoRRemoteInput.*` | Remote (autoplay) input as actions through the execution data, and each player's status in the game data (see **Controls**) |
 | `SoRSoundtrack.*` | Pre-rendered soundtrack playback (SDL3_mixer) driven by the ROM's own sound engine |
 | `tools/soundtrack/` | Separate CMake project: the Genesis Plus GX renderer that produces that soundtrack |
@@ -203,6 +206,29 @@ works, llvm-mingw with the NuGet package). Linux is written and not yet tried.
   unnecessary (2026-10-30); three runs each had finished by then, every one clearing round 1
   with no life lost: P2's score 34,500-37,100 embedded, 35,300-40,300 over the socket, a small
   sample. Frames from the join do not compare, because the two join at different times.
+
+## OPTIONS > VIDEO
+
+The user's decisions are in the workspace `CLAUDE.md`, **OPTIONS > VIDEO and `video.yaml`**.
+
+- The row is host UI like CONTROLS: label at plane A row 15, free in the ROM's layout (CONTROLS' block ends at 13,
+  EXIT is at 18, the cheat rows at 21 and 23), with a summary at column 18. It adds OPTIONS sub-states `$2E`
+  (highlight) and `$30` (input), past the end of the ROM's table `$10C4`, so `game_start_screen_update` sends them
+  to `options_highlight_controls` and `options_input_controls` before dispatching, and those routines tell the two
+  rows apart. No new `StreetsOfRage` member: the class is generated. `options_row_nav` puts it between CONTROLS and
+  the next row, cheat rows or not.
+- The screen edits a copy of the live settings, which it reads from the VDP on opening, so it shows what Ctrl+F and
+  the command line did. SAVE AND APPLY writes `video.yaml`; `options_input_controls` then calls `VDP::applyLive`, which
+  waits for the main thread (a fullscreen change can hold the game a moment; nothing is running but this menu),
+  sets the remote flag `GET_FLAGS` 0 and tells `SoRPython`. An attached autoplay re-reads that flag every second.
+- Everything else that depends on widescreen already reads `vdp().widescreen()` live, and OPTIONS is only reachable
+  from the mode menu, so no game is under way when it changes. A cold restart keeps it.
+- Checked live on macOS at 120 Hz by driving it with remote buttons, with `HOME` pointed at a scratch folder: every
+  row and help line, CANCEL, Start, RESET, SAVE, file contents, window and framebuffer size, the row order with and
+  without cheat rows, leaving OPTIONS, a cold restart, a relaunch, every command-line override, a file with bad values
+  (defaults), and speed: 119 fps on VSYNC, 61 on VSYNC HALF, 60 on AUTO, 120 at `--turbo 2` with `vsync` in the file.
+  Fullscreen was applied and left through the menu. Not checked: Windows, Linux, a real gamepad or keyboard on
+  this screen, Ctrl+F's effect on the screen's DISPLAY row.
 
 ## ROM and regeneration
 

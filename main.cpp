@@ -4,12 +4,12 @@
 #include "SoRPython.hpp"
 #include "SoRRemoteInput.hpp"
 #include "SoRSoundtrack.hpp"
+#include "SoRVideoConfig.hpp"
 #include "SoR.hpp"
 #include <CLI/CLI.hpp>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
-#include <map>
 #include <string>
 
 int main(int argc, char *argv[]) {
@@ -18,17 +18,18 @@ int main(int argc, char *argv[]) {
 
     bool          sorDebugFlag       = false;
     bool          debugUtilsFlag     = false;
-    bool          fullScreenFlag     = false;
     bool          silentFlag         = false;
+    bool          fullscreenFlag     = false;
     bool          widescreenFlag     = false;
     bool          integerScalingFlag = false;
+    bool          defaultVideoFlag   = false;
     bool          aiAssistFlag       = false;
     int           remoteAccessPort   = 6969;
     std::uint32_t turboMultiplier    = 0;
     std::string   sorRomPath         = "rom/SOR.bin";
     std::string   sorAuxAddrFile; // if set, record unknown dispatch targets here
     std::string   sorCallLogFile;
-    std::string   frameSync   = "auto";
+    std::string   frameSync;
     std::string   languagePin = "jp";
     std::string   videoHz     = "60";
     std::string   soundMode   = "prerendered";
@@ -45,16 +46,26 @@ int main(int argc, char *argv[]) {
         ->check(CLI::IsMember({"60", "50"}))
         ->group("Game");
 
-    app.add_flag("--fullscreen", fullScreenFlag, "Start in fullscreen")->group("Video");
-    app.add_flag("--widescreen", widescreenFlag, "384x216 (VDP Mode 48, which the hardware lacks) instead of 320x224")
-        ->group("Video");
-    app.add_flag("--integer-scaling", integerScalingFlag, "Scale the picture by whole multiples only")->group("Video");
-    app.add_option("--frame-sync",
-                   frameSync,
-                   "What sets the game's speed. auto: the --hz timer, no tearing, any monitor. "
-                   "vsync, vsync-half, vsync-third: the monitor, every 1, 2 or 3 refreshes")
-        ->capture_default_str()
-        ->check(CLI::IsMember({"auto", "vsync", "vsync-half", "vsync-third"}))
+    // Each wins over video.yaml for this run; OPTIONS > VIDEO can still change it, and saves what it shows.
+    const auto *fullscreenOption = app.add_flag("--fullscreen,!--windowed", fullscreenFlag, "Start in fullscreen, or in a window")
+                                       ->group("Video");
+    const auto *widescreenOption =
+        app.add_flag("--widescreen,!--no-widescreen",
+                     widescreenFlag,
+                     "384x216 (VDP Mode 48, which the hardware lacks) instead of 320x224, or not")
+            ->group("Video");
+    const auto *integerScalingOption =
+        app.add_flag("--integer-scaling,!--no-integer-scaling", integerScalingFlag, "Scale the picture by whole multiples only, or not")
+            ->group("Video");
+    const auto *frameSyncOption = app.add_option("--frame-sync",
+                                                 frameSync,
+                                                 "What sets the game's speed. auto: the --hz timer, no tearing, any monitor. "
+                                                 "vsync, vsync-half, vsync-third: the monitor, every 1, 2 or 3 refreshes")
+                                      ->check(CLI::IsMember({"auto", "vsync", "vsync-half", "vsync-third"}))
+                                      ->group("Video");
+    app.add_flag("--default-video",
+                 defaultVideoFlag,
+                 "Ignore video.yaml for this run: the defaults, and any other video option given. For scripts and measurements")
         ->group("Video");
 
     app.add_flag("--silent", silentFlag, "No audio at all (chip writes are dropped)")->group("Audio");
@@ -92,14 +103,28 @@ int main(int argc, char *argv[]) {
 
     CLI11_PARSE(app, argc, argv);
 
+    SoRVideoConfig::VideoConfig video;
+    if (!defaultVideoFlag)
+        video = SoRVideoConfig::loadOrCreate(SoRVideoConfig::defaultPath());
+    if (fullscreenOption->count() > 0)
+        video.fullscreen = fullscreenFlag;
+    if (widescreenOption->count() > 0)
+        video.widescreen = widescreenFlag;
+    if (integerScalingOption->count() > 0)
+        video.integerScaling = integerScalingFlag;
+    if (frameSyncOption->count() > 0)
+        video.frameSync = *SoRVideoConfig::frameSyncFromKey(frameSync);
+    else if (turboMultiplier > 0)
+        video.frameSync = VDP::InternalTimer; // only the timer can run faster than the monitor
+
     auto configureEnvironment = [&](MegaDriveEnvironment &env) {
         env.setLanguagePin(languagePin == "en" ? MegaDriveEnvironment::LanguagePin::Overseas
                                                : MegaDriveEnvironment::LanguagePin::Japanese);
         env.setVideoStandard(videoHz == "50" ? MegaDriveEnvironment::VideoStandard::Hz50
                                              : MegaDriveEnvironment::VideoStandard::Hz60);
         env.setVDPTurboMultiplier(turboMultiplier);
-        env.setWidescreen(widescreenFlag);
-        env.setIntegerScaling(integerScalingFlag);
+        env.setWidescreen(video.widescreen);
+        env.setIntegerScaling(video.integerScaling);
         if (silentFlag) {
             env.sound().disable();
         } else if (soundMode == "prerendered") {
@@ -117,12 +142,9 @@ int main(int argc, char *argv[]) {
         }
     };
 
-    const std::map<std::string, VDP::Synchronization> frameSyncModes{
-        {"auto", VDP::InternalTimer}, {"vsync", VDP::VSync}, {"vsync-half", VDP::VSync2}, {"vsync-third", VDP::VSync3}};
-
     {
         StreetsOfRage sor(sorRomPath,
-                          frameSyncModes.at(frameSync),
+                          video.frameSync,
                           VDP::Integer,
                           debugUtilsFlag ? static_cast<std::uint16_t>(remoteAccessPort) : 0);
         configureEnvironment(sor);
@@ -133,17 +155,18 @@ int main(int argc, char *argv[]) {
         // Host mode flags for GET_FLAGS; the indices are mirrored by autoplay/src/sor_autoplay/host_flags.py.
         // (Flag 1 was --altControls; each player's scheme is now in the game data, SoRRemoteInput.)
         constexpr std::size_t kFlagWidescreen = 0;
-        sor.remoteAccess().setFlag(kFlagWidescreen, widescreenFlag);
+        sor.remoteAccess().setFlag(kFlagWidescreen, video.widescreen);
         sor.setDebugLog(sorDebugFlag);
         sor.setDebugUtilities(debugUtilsFlag);
-        sor.setStartFullscreen(fullScreenFlag);
+        sor.setStartFullscreen(video.fullscreen);
         if (!sorAuxAddrFile.empty()) {
             sor.setAuxAddrFile(sorAuxAddrFile);
         }
         if (!sorCallLogFile.empty()) {
             sor.setCallLog(sorCallLogFile);
         }
-        SoRPython::configure(aiPath, widescreenFlag, frameSync == "auto" ? turboMultiplier : 0);
+        SoRPython::configure(aiPath, video.widescreen, turboMultiplier);
+        SoRPython::setVideo(video.widescreen, video.frameSync == VDP::InternalTimer);
         if (aiAssistFlag) {
             SoRRemoteInput::forceAiAssist();
             SoRPython::start(sor.memory());

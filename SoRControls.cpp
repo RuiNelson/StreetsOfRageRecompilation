@@ -3,6 +3,7 @@
 #include "SoRInput.hpp"
 #include "SoRPython.hpp"
 #include "SoRRemoteInput.hpp"
+#include "SoRVideoMenu.hpp"
 #include "SoR.hpp"
 
 #include <cstdint>
@@ -259,24 +260,58 @@ void sampleOneJoypadBody(CPU68K &cpu, SystemMemory &memory, const SampledPlayer 
             return;                                                                                                    \
     } while (false)
 
+namespace {
+
+constexpr m_word kOptionsVideoRowInput = 0x30u; // sub-state: past the ROM's table (game_start_screen_update)
+
+SoRVideoConfig::VideoConfig liveVideoConfig(const VDP &vdp) {
+    return {vdp.synchronization(), vdp.widescreen(), vdp.fullscreen(), vdp.integerScaling()};
+}
+
+} // namespace
+
 // $001360 -- OPTIONS sub-state $18: highlight the CONTROLS row (the ROM's
-// CONTROL row, whose A/B/C layouts the bindings replace).
+// CONTROL row, whose A/B/C layouts the bindings replace). Also sub-state $2E,
+// the VIDEO row, which the ROM does not have.
 void StreetsOfRage::options_highlight_controls(m_long /*entry_*/) {
     traceEnter(0x1360u);
-    memory().writeWord(kSelectScreenSubstate, static_cast<m_word>(memory().readWord(kSelectScreenSubstate) + 2));
-    SoRControlsMenu::drawOptionsRow(memory(), true);
+    const m_word substate = memory().readWord(kSelectScreenSubstate);
+    memory().writeWord(kSelectScreenSubstate, static_cast<m_word>(substate + 2));
+    if (static_cast<m_word>(substate + 2) == kOptionsVideoRowInput)
+        SoRVideoMenu::drawOptionsRow(memory(), liveVideoConfig(vdp()), true);
+    else
+        SoRControlsMenu::drawOptionsRow(memory(), true);
     return68k(cpu());
 }
 
 // $001390 -- OPTIONS sub-state $1A: the CONTROLS row. Up/Down leave it as
 // every row does; Punch, Jump or Special opens the CONTROLS menu, which then
 // runs here one frame per call until it closes ($FFFFC8 is never changed).
+// Also sub-state $30, the VIDEO row, the same way with its own menu.
 void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
     traceEnter(0x1390u);
 
-    if (SoRControlsMenu::isOpen()) {
+    const bool videoRow = memory().readWord(kSelectScreenSubstate) == kOptionsVideoRowInput;
+    const auto drawRow  = [&](bool highlighted) {
+        if (videoRow)
+            SoRVideoMenu::drawOptionsRow(memory(), liveVideoConfig(vdp()), highlighted);
+        else
+            SoRControlsMenu::drawOptionsRow(memory(), highlighted);
+    };
+
+    if (videoRow ? SoRVideoMenu::isOpen() : SoRControlsMenu::isOpen()) {
         const auto remote = static_cast<SoRInput::ActionMask>(SoRRemoteInput::actions(0) | SoRRemoteInput::actions(1));
-        if (SoRControlsMenu::frame(memory(), remote) == SoRControlsMenu::Result::Closed) {
+        const bool closed = videoRow ? SoRVideoMenu::frame(memory(), remote) == SoRVideoMenu::Result::Closed
+                                     : SoRControlsMenu::frame(memory(), remote) == SoRControlsMenu::Result::Closed;
+        if (closed) {
+            if (videoRow) {
+                if (const auto chosen = SoRVideoMenu::takeChosen()) {
+                    vdp().applyLive({chosen->frameSync, chosen->widescreen, chosen->integerScaling, chosen->fullscreen});
+                    SoRPython::setVideo(chosen->widescreen, chosen->frameSync == VDP::InternalTimer);
+                    constexpr std::size_t kFlagWidescreen = 0; // main.cpp
+                    remoteAccess().setFlag(kFlagWidescreen, chosen->widescreen);
+                }
+            }
             // Redraw the OPTIONS screen as options_menu_build does, with
             // this row selected.
             cpu().d[0] = 0x100C0B04u;
@@ -291,7 +326,8 @@ void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
                 cpu().d[0] = 0x00000F0Eu;
                 SOR_CONTROLS_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x11C2u, 0x00A8B8u);
             }
-            SoRControlsMenu::drawOptionsRow(memory(), true);
+            SoRControlsMenu::drawOptionsRow(memory(), !videoRow);
+            SoRVideoMenu::drawOptionsRow(memory(), liveVideoConfig(vdp()), videoRow);
         }
         return68k(cpu());
         return;
@@ -301,14 +337,17 @@ void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
     cpu().setFlag(CPU68K::FlagZ, cpu().dw(0) == 0);
     SOR_CONTROLS_CALL_68K(options_row_nav(), 0x1398u, 0x0014F2u);
     if (cpu().ne()) {
-        SoRControlsMenu::drawOptionsRow(memory(), false);
+        drawRow(false);
         return68k(cpu());
         return;
     }
 
     if ((memory().readByte(kP1ButtonPress) & 0x70u) != 0u) {
         memory().writeByte(kPlaySe, 0xBAu);
-        SoRControlsMenu::open();
+        if (videoRow)
+            SoRVideoMenu::open(liveVideoConfig(vdp()), vdp().displayRefreshHz(), isPal50Hz() ? 50 : 60);
+        else
+            SoRControlsMenu::open();
     }
     return68k(cpu());
 }

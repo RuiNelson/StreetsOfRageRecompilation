@@ -46,8 +46,9 @@ private:
 struct State {
     std::filesystem::path   aiPath;
     SystemMemory           *memory     = nullptr;
-    bool                    widescreen = false;
-    double                  tickSeconds = 0.033;
+    std::atomic<bool>       widescreen = false;
+    std::uint32_t           turbo = 0;
+    std::atomic<double>     tickSeconds = 0.033;
     SDL_Thread             *thread     = nullptr;
     std::mutex              mutex;
     std::condition_variable changed;
@@ -280,12 +281,19 @@ void configure(const std::filesystem::path &aiPath, bool widescreen, std::uint32
     std::error_code error;
     const std::filesystem::path absolute = std::filesystem::absolute(aiPath, error);
     shared.aiPath     = error ? aiPath : absolute;
-    shared.widescreen = widescreen;
-    // As autoplay's poll: 33 ms, or 32 ms / turbo (scripts/play.py).
-    shared.tickSeconds = turbo > 0 ? 0.032 / turbo : 0.033;
+    shared.turbo      = turbo;
+    setVideo(widescreen, true);
     if (!available())
         std::fprintf(stderr, "[ai] no Python AI in '%s' (see --ai-path): 1 PLAYER AI ASSIST is hidden\n",
                      shared.aiPath.string().c_str());
+}
+
+void setVideo(bool widescreen, bool timerFrameSync) {
+    State &shared     = state();
+    shared.widescreen = widescreen;
+    // As autoplay's poll: 33 ms, or 32 ms / turbo (scripts/play.py).
+    const std::uint32_t turbo = timerFrameSync ? shared.turbo : 0;
+    shared.tickSeconds        = turbo > 0 ? 0.032 / turbo : 0.033;
 }
 
 bool available() {

@@ -2,6 +2,7 @@
 #include "SoRControlsMenu.hpp"
 #include "SoRPython.hpp"
 #include "SoRRemoteInput.hpp"
+#include "SoRVideoMenu.hpp"
 #include "SoR.hpp"
 
 #include <SDL3/SDL.h>
@@ -94,6 +95,15 @@ constexpr m_long kMenuRowVdpStep    = 0x01000000u;
 constexpr m_word kMenuRowCursorStep = 16;
 constexpr std::string_view kAiAssistText = "1 PLAYER AI ASSIST";
 constexpr std::string_view kQuitText     = "QUIT";
+
+// OPTIONS' VIDEO row, after CONTROLS: sub-states past the ROM's table $10C4
+// (which ends at $2C), with the CONTROLS row's routines.
+constexpr m_word kOptionsControlsHighlight = 0x18;
+constexpr m_word kOptionsControlsInput     = 0x1A;
+constexpr m_word kOptionsLivesHighlight    = 0x1C;
+constexpr m_word kOptionsExitHighlight     = 0x24;
+constexpr m_word kOptionsVideoHighlight    = 0x2E;
+constexpr m_word kOptionsVideoInput        = 0x30;
 
 constexpr m_long kCursorYTable  = 0x0000162Au;
 constexpr m_long kCursorTiles   = 0x00001622u;
@@ -238,13 +248,24 @@ void StreetsOfRage::game_start_screen_update(m_long /*entry_*/) {
     traceEnter(0x108Eu);
 
     const m_word substate = memory().readWord(kSelectScreenSubstate);
-    // Start leaves OPTIONS from any row, except inside the CONTROLS menu,
-    // where it goes back one screen.
-    if (substate >= 0x10 && substate < 0x28 && (memory().readByte(kP1ButtonPress) & 0x80u) != 0 &&
-        !SoRControlsMenu::isOpen()) {
+    // Start leaves OPTIONS from any row, except inside the CONTROLS or VIDEO
+    // menu, where it goes back one screen.
+    const bool optionsRow = (substate >= 0x10 && substate < 0x28) || substate == kOptionsVideoHighlight ||
+                            substate == kOptionsVideoInput;
+    if (optionsRow && (memory().readByte(kP1ButtonPress) & 0x80u) != 0 && !SoRControlsMenu::isOpen() &&
+        !SoRVideoMenu::isOpen()) {
         cpu().d[7] = 0xFFFFFFE1u;
         SOR_CALL_68K(queue_sound_id(), 0x10AEu, 0x01069Eu);
         memory().writeWord(kSelectScreenSubstate, 0x28);
+    }
+
+    if (memory().readWord(kSelectScreenSubstate) == kOptionsVideoHighlight) {
+        options_highlight_controls();
+        return;
+    }
+    if (memory().readWord(kSelectScreenSubstate) == kOptionsVideoInput) {
+        options_input_controls();
+        return;
     }
 
     cpu().a[1] = kSelectScreenJumpTable;
@@ -333,6 +354,9 @@ void StreetsOfRage::options_menu_build(m_long /*entry_*/) {
     cpu().setDw(4, 0x2000u);
     SOR_CALL_68K(options_draw_difficulty(), 0x11A4u, 0x0012E4u);
     SoRControlsMenu::drawOptionsRow(memory(), false);
+    SoRVideoMenu::drawOptionsRow(memory(),
+                                 {vdp().synchronization(), vdp().widescreen(), vdp().fullscreen(), vdp().integerScaling()},
+                                 false);
 
     if (memory().readByte(kCheatFlag) != 0) {
         SOR_CALL_68K(options_draw_lives_digit(), 0x11B2u, 0x0013E6u);
@@ -517,8 +541,9 @@ void StreetsOfRage::options_row_nav(m_long /*entry_*/) {
         return;
     }
 
-    m_word     next = memory().readWord(kSelectScreenSubstate);
-    const bool up   = (vertical & 0x01u) != 0;
+    const m_word current = memory().readWord(kSelectScreenSubstate);
+    m_word       next    = current;
+    const bool   up      = (vertical & 0x01u) != 0;
     cpu().setDb(1, static_cast<m_byte>(vertical & 1u));
     cpu().setFlag(CPU68K::FlagZ, !up);
 
@@ -528,11 +553,18 @@ void StreetsOfRage::options_row_nav(m_long /*entry_*/) {
             next = 0x18;
         if (static_cast<m_byte>(next) < 0x10)
             next = 0x24;
+        // VIDEO sits between CONTROLS and whatever comes after it.
+        if (next == kOptionsControlsHighlight)
+            next = kOptionsVideoHighlight;
+        if (current == kOptionsVideoInput)
+            next = kOptionsControlsHighlight;
     } else {
         next = static_cast<m_word>(next + 2);
-        if (memory().readByte(kCheatFlag) == 0 && static_cast<m_byte>(next) == 0x1C)
-            next = 0x24;
-        if (static_cast<m_byte>(next) >= 0x26)
+        if (current == kOptionsControlsInput)
+            next = kOptionsVideoHighlight;
+        else if (current == kOptionsVideoInput)
+            next = memory().readByte(kCheatFlag) != 0 ? kOptionsLivesHighlight : kOptionsExitHighlight;
+        else if (static_cast<m_byte>(next) >= 0x26)
             next = 0x10;
     }
 

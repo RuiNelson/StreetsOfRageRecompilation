@@ -23,6 +23,9 @@ namespace SoRPython {
 /// Says where the AI's code is. Nothing in it runs yet.
 void configure(const std::filesystem::path &aiPath, bool widescreen, std::uint32_t turbo);
 
+/// OPTIONS > VIDEO changed the picture or the frame sync. --turbo counts only under the timer.
+void setVideo(bool widescreen, bool timerFrameSync);
+
 /// Whether the configured folder holds the AI (the mode's menu row depends on it).
 bool available();
 
