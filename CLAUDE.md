@@ -43,7 +43,7 @@ Before changing files:
 | `SoRVideoConfig.*` | `video.yaml`, next to `controls.yaml`: frame sync, widescreen, fullscreen, integer scaling |
 | `SoRVideoMenu.*` | OPTIONS > VIDEO, the in-game video menu (see **OPTIONS > VIDEO**) |
 | `SoRMenuCanvas.hpp` | What those two menus share: the OPTIONS font, drawing to plane A, held directions |
-| `SoRRNG.cpp` | The game's RNG draw, `$0104D8` (see **Manual subroutines**) |
+| `SoRRNG.cpp` | The game's RNG draw, `$0104D8 (rng_draw)` (see **Manual subroutines**) |
 | `SoRRemoteInput.*` | Remote (autoplay) input as actions through the execution data, and each player's status in the game data (see **Controls**) |
 | `SoRSoundtrack.*` | Pre-rendered soundtrack playback (SDL3_mixer) driven by the ROM's own sound engine |
 | `tools/soundtrack/` | Separate CMake project: the Genesis Plus GX renderer that produces that soundtrack |
@@ -728,7 +728,7 @@ keeping the generated declaration, dispatcher, and call sites intact.
   three NOPs. When the chips are disabled (`--silent`, or the pre-rendered
   soundtrack) it skips the DAC-busy retry: the YM2612 drops every write, so
   there is no Z80 DAC stream to stay clear of.
-- The RNG draw `$0104D8` (`sub_0104d8`, state long at `$FFFF40`, result in `d0.w`,
+- The RNG draw `$0104D8 (rng_draw)` (state long at `$FFFF40 (rng_state)`, result in `d0.w`,
   seed `$2A6D365A` when the state is 0) lives in `SoRRNG.cpp`. It keeps the state
   in work RAM, as `autoplay`'s enemy models expect, and leaves `d0`'s high word,
   `d1`, X and N/Z as the ROM does. Checked against the ROM's instructions on

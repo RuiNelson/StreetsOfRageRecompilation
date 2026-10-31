@@ -613,7 +613,7 @@ through `$19C4C (level_background_effect_init_table)`:
 | 5 | `$19C62 (init_round5_ship_background)` | stream flags, bob oscillator, `$CC` timer, then seed |
 | 7 | `$19D06` | `rts` (state 3 writes its strip each frame; the grid draw uses camera X) |
 
-Separately, `$104D8`'s level init calls `$1119E (init_animated_palette_sequences)`
+Separately, `$104D8 (rng_draw)`'s level init calls `$1119E (init_animated_palette_sequences)`
 and `$112C0 (init_level_index2_background_effect)` (§11.2, §11.7).
 
 ---

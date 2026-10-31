@@ -14,7 +14,7 @@ constexpr m_long kRngSeed  = 0x2A6D365Au; // the state a zero long is replaced b
 } // namespace
 
 // ---------------------------------------------------------------------------
-// $0104D8 — draw: advance the state at $FFFF40 and return the draw in d0.w
+// $0104D8 (rng_draw) — advance the state at $FFFF40 (rng_state) and return the draw in d0.w
 //
 // state = (state == 0 ? $2A6D365A : state); s = state * 41 (mod 2^32), the ROM's asl/add pairs;
 // the new state is (lo(s) + hi(s)) << 16 | lo(s) (all 16-bit sums, wrapping), whose upper word is
@@ -22,7 +22,7 @@ constexpr m_long kRngSeed  = 0x2A6D365Au; // the state a zero long is replaced b
 // Condition codes as left by the ROM: X is add.w's carry, N/Z come from the restored d1,
 // V and C are clear.
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_0104d8(m_long /*entry_*/) {
+void StreetsOfRage::rng_draw(m_long /*entry_*/) {
     traceEnter(0x000104D8u);
     auto &mem = memory();
 

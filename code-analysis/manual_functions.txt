@@ -87,4 +87,4 @@
 073298 # sound_ym2612_acquire (host wait instead of BUSREQ/DAC/YM busy-spins)
 
 # Random number generator (SoRRNG.cpp).
-0104D8 # sub_0104d8 (the RNG draw: state at $FFFF40, result in d0.w)
+0104D8 # rng_draw (state at $FFFF40, result in d0.w)

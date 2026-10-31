@@ -327,6 +327,7 @@ FFFF2C, demo_ai_input_p1, "100% - L - RAM address of P1 demo AI joypad input str
 FFFF30, demo_ai_input_p2, "100% - L - RAM address of P2 demo AI joypad input stream"
 FFFF35, respawn_specials_continue_override, "95% - B - Normally zero with no static writer; respawn grants value+1 specials, while nonzero suppresses continue lives reset and writes ROM[$5970+value] to the player's bonus-life threshold index"
 FFFF38, player_mode_copy, "100% - B - Working copy of PlayerMode (1 = 1P, 3 = 2P)"
+FFFF40, rng_state, "100% - L - State of rng_draw; zero after the boot work-RAM wipe, which rng_draw replaces with $2A6D365A on the first draw"
 
 FFB800, p1_object, "95% - B - Player 1 object RAM slot (state/type byte at base); type 6 = menu/char-select cursor"
 FFB832, p1_health, "100% - W - P1 current health; clamped to 0..$50"

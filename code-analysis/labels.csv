@@ -368,6 +368,7 @@
 000104B2, vdp_copy_long_24, "100% - Cascade entry: 2 longs (a1)+ → (a2) no dest inc; falls through to vdp_copy_long_22 (18 longs total)"
 000104B6, vdp_copy_long_22, "100% - Cascade entry: 8 longs (a1)+ → (a2) no dest inc; falls through to vdp_copy_long_8 (16 longs, one 32-cell name-table row, in total)"
 000104C6, vdp_copy_long_8,  "100% - Cascade entry: 8 longs (a1)+ → (a2) no dest inc; ends with rts"
+000104D8, rng_draw, "100% - The game's random number generator: replaces a zero rng_state with $2A6D365A, multiplies it by 41 (the asl/add pairs, mod 2^32), and stores (lo + hi) << 16 | lo as the new state, where lo and hi are that product's words and the sum wraps at 16 bits. Returns the new state's upper word in d0.w (d0's high word is the old state's), preserves d1, leaves X as the 16-bit add's carry. Callers mask d0 (andi #$03/#$07/#$0F/#$1F/#$3F/#$7F). Native C++ in SoRRNG.cpp"
 
 # Select-screen / OPTIONS / character-select ROM data
 00001060, select_menu_strings, "100% - Mode-select tile strings: 1 PLAYER / 2 PLAYERS / OPTIONS (VDP cmds + font bytes)"

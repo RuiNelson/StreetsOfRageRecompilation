@@ -516,9 +516,9 @@ void StreetsOfRage::jack_retreat_to_screen_edge(m_long /*entry_*/) {
                                                                     : static_cast<m_word>(0x0020u - grow);
         mem.writeWord(enemy + 0x60, static_cast<m_word>(mem.readWord(kCamX) + edge));
 
-        SOR_CALL(sub_0104d8, 0x0000F4EEu, 0x000104D8u);
+        SOR_CALL(rng_draw, 0x0000F4EEu, 0x000104D8u);
         mem.writeWord(enemy + 0x62, mem.readByte(0x0000F53Cu + (cpu().dw(0) & 0x07u)));
-        SOR_CALL(sub_0104d8, 0x0000F502u, 0x000104D8u);
+        SOR_CALL(rng_draw, 0x0000F502u, 0x000104D8u);
         const m_long entry = 0x0000DD68u + 4u * (cpu().dw(0) & 0x03u);
         mem.writeWord(enemy + 0x64, mem.readWord(entry));
         mem.writeWord(enemy + 0x0C, mem.readWord(entry + 2));

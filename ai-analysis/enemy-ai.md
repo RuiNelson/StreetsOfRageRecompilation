@@ -223,7 +223,7 @@ The common engine divides responsibility:
 - contact routine `$AA22` reports interaction kind in `d7`;
 - reaction dispatch uses flags/substate at `$31/$4A/$4B/$50`.
 
-Randomness is explicit rather than ambient. `$0104D8` is used in reaction/landing paths, for example choosing a short recovery animation delay (`(rng & 3)*2+3` at `$9A32`). The code observed here does not support a claim that every attack is probability-driven.
+Randomness is explicit rather than ambient. `$104D8 (rng_draw)` is used in reaction/landing paths, for example choosing a short recovery animation delay (`(rng & 3)*2+3` at `$9A32`). The code observed here does not support a claim that every attack is probability-driven.
 
 Proven difficulty effects are:
 
@@ -932,7 +932,7 @@ The explicit same-type pair roles at boss helper `$17F2E (boss_link_same_type_pa
 
 ## Shared infrastructure and boss boundary
 
-Ordinary enemies and bosses share the 128-byte object format, fixed-point position/velocity, animation engine, collision routine `$AA22`, RNG `$104D8`, player interaction bytes, and some generic physics helpers. They do **not** share one tactical dispatcher.
+Ordinary enemies and bosses share the 128-byte object format, fixed-point position/velocity, animation engine, collision routine `$AA22`, RNG `$104D8 (rng_draw)`, player interaction bytes, and some generic physics helpers. They do **not** share one tactical dispatcher.
 
 Boss type `$30` and types `$55-$58` use byte-sized primary/tactical states, bespoke target selectors, pair/link metadata and multi-object attack choreography. Their code is useful for understanding collision/grab conventions, but it is not evidence for ordinary-enemy archetypes.
 
@@ -1317,7 +1317,7 @@ same helpers:
 
 No boss uses pathfinding. The characteristic behavior comes from distance
 windows, facing tests, animation phase, small counters, and occasional RNG from
-`$104D8`.
+`$104D8 (rng_draw)`.
 
 ```text
 function update_later_boss(boss):
