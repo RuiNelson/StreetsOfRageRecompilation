@@ -175,6 +175,8 @@ works, llvm-mingw with the NuGet package). Linux is written and not yet tried.
 
   Embedded mean tick 1.8-2.2 ms, 363-458 frame-gaps skipped of about 10,000 ticks, 0 failed. Four mode-to-menu cycles at x4:
   a thread each, ended each time, the game healthy. Normal speed not measured.
+  The user, playing it afterwards: better; before, the AI sometimes stayed stuck holding an enemy (2026-10-31; that
+  stall was not traced, so its cause is unconfirmed).
 - **The mode's screens** (user: original look, the row after 2 PLAYERS, the player picks
   their character and then the computer's, "COMPUTER" for "2 PLAYER"). `select_menu_cursor`
   is 0 1 PLAYER, 1 2 PLAYERS, 2 AI ASSIST, 3 OPTIONS (it was 2); the row takes the third row's
