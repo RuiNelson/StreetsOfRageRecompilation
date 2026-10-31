@@ -135,6 +135,10 @@ console drivers, RADV and `tools/link-title.sh`, which refuses any import that w
   script; the AI's other C modules, `fcntl` and `grp`, are optional imports). No PGO: expect about 7% slower ticks. The
   stdlib and `sor_ai` go to `dist-ps5/data-sor/`, for `/data/sor`, where Python writes its `.pyc` files. UTF-8 mode and
   a fixed hash seed, because a title has no locales or random device to count on.
+- The console refuses `fcntl(F_GETFD)` and `F_SETFD` with `EINVAL` (measured on the user's console), so `build-cpython.sh`
+  makes Python's close-on-exec functions no-ops; nothing can exec there.
+- `/data/sor/ai.log` holds every `[ai]` line and Python's tracebacks (descriptor 2), and is readable over FTP. C's
+  `stderr` stays klog's. AI Assist works on the user's console (2026-10-31); ticks not yet measured there.
 - `contentVersion` in `sce_sys/param.json` is `scripts/update_version_everywhere.py`'s, as NN.NNN.NNN (user).
 - `sce_sys/icon0.png` is `prospero_icon.png` (the user's) at 512x512. There is no `pic0.dds` or `pic1.dds` yet.
 - The game and FLAC playback work on the user's console (2026-10-31).

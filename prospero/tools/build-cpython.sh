@@ -24,7 +24,7 @@ mkdir -p "$dir"
 archive="$dir/Python-$version.tar.xz"
 [[ -f $archive ]] || wget -q "https://www.python.org/ftp/python/$version/Python-$version.tar.xz" -O "$archive"
 echo "$hash  $archive" | sha256sum --check --strict --quiet
-if [[ ! -f $source_tree/.ps5 ]]; then
+if [[ ! -f $source_tree/.ps5 || $(<"$source_tree/.ps5") != "$recipe" ]]; then
     rm -rf "$source_tree"
     tar -xf "$archive" -C "$dir"
     # configure only cross-builds for the systems it names. Threads, time and files are FreeBSD's here.
@@ -39,8 +39,17 @@ text = text.replace(marker, "\t*-*-freebsd*)\n\t\t_host_ident=$host_cpu\n\t\t;;\
 # Without _XOPEN_SOURCE: under it, these FreeBSD headers hide C11's static_assert from Python's headers.
 assert "define_xopen_source=yes" in text
 open(path, "w").write(text.replace("define_xopen_source=yes", "define_xopen_source=no"))
+
+# Close-on-exec means nothing where nothing can exec, and the console answers fcntl(F_GETFD)
+# and F_SETFD with EINVAL (measured), which stopped Python at the first file it opened.
+fileutils = path.replace("/configure", "/Python/fileutils.c")
+text = open(fileutils).read()
+for signature in ("get_inheritable(int fd, int raise)\n{\n", "set_inheritable(int fd, int inheritable, int raise, int *atomic_flag_works)\n{\n"):
+    assert signature in text
+    text = text.replace(signature, signature + "    return 0;\n", 1)
+open(fileutils, "w").write(text)
 EOF
-    touch "$source_tree/.ps5"
+    echo "$recipe" > "$source_tree/.ps5"
 fi
 
 # The same version for this machine: a cross build runs it to freeze the core modules.
