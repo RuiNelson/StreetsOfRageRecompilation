@@ -13,13 +13,36 @@
 #include <cstdio>
 #include <filesystem>
 #include <cstring>
+#include <memory>
 #include <string>
 
 #ifdef _WIN32
 #include <windows.h>
 #endif
 
+#ifdef __PROSPERO__
+#include <fstream>
+#include <vector>
+
+extern "C" void ps5_notify(const char *message); // prospero/src/startup.c
+#endif
+
 namespace {
+
+#ifdef __PROSPERO__
+// A title gets no command line: <data>/args.txt holds options for development, one a line.
+std::vector<std::string> consoleArguments(const char *program) {
+    std::vector<std::string> arguments{program};
+    std::ifstream            file(std::string(SoRPlatform::kDataDir) + "/args.txt");
+    for (std::string line; std::getline(file, line);) {
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        if (!line.empty())
+            arguments.push_back(line);
+    }
+    return arguments;
+}
+#endif
 
 // On Windows `sor` is a GUI program (no console window). A console exists only when a debug option or
 // --help/--version asks for output: the parent terminal's if there is one, else a new window.
@@ -49,6 +72,14 @@ void openConsoleIfWanted(int argc, char *argv[]) {
 } // namespace
 
 int main(int argc, char *argv[]) {
+#ifdef __PROSPERO__
+    std::vector<std::string> consoleOptions = consoleArguments(argc > 0 ? argv[0] : "sor");
+    std::vector<char *>      consoleArgv;
+    for (std::string &option : consoleOptions)
+        consoleArgv.push_back(option.data());
+    argc = static_cast<int>(consoleArgv.size());
+    argv = consoleArgv.data();
+#endif
     openConsoleIfWanted(argc, argv);
     CLI::App app{"Streets of Rage"};
     app.set_version_flag("-V,--version", "0.3.1");
@@ -63,7 +94,11 @@ int main(int argc, char *argv[]) {
     bool          aiAssistFlag       = false;
     int           remoteAccessPort   = 6969;
     std::uint32_t turboMultiplier    = 0;
+#ifdef __PROSPERO__
+    std::string   sorRomPath         = std::string(SoRPlatform::kDataDir) + "/SOR.bin";
+#else
     std::string   sorRomPath         = "rom/SOR.bin";
+#endif
     std::string   sorAuxAddrFile; // if set, record unknown dispatch targets here
     std::string   sorCallLogFile;
     std::string   frameSync;
@@ -71,7 +106,11 @@ int main(int argc, char *argv[]) {
     std::string   videoHz     = "60";
     std::string   soundMode   = "prerendered";
     std::string   soundtrackDir; // default: soundtrack/ next to the ROM
+#ifdef __PROSPERO__
+    std::string   aiPath = std::string(SoRPlatform::kDataDir) + "/ai-code";
+#else
     std::string   aiPath = "ai-code";
+#endif
 
     app.add_option("--rom", sorRomPath, "Streets of Rage ROM path")->capture_default_str()->group("Game");
     app.add_option("--lang", languagePin, "Console language: jp=Japanese, en=overseas")
@@ -144,6 +183,15 @@ int main(int argc, char *argv[]) {
 
     CLI11_PARSE(app, argc, argv);
 
+#ifdef __PROSPERO__
+    // Standard error is klog there, which is out of the player's sight.
+    std::error_code romError;
+    if (!std::filesystem::is_regular_file(sorRomPath, romError)) {
+        ps5_notify(("Streets of Rage: copy your ROM to " + sorRomPath +
+                    ". /data needs ShadowMountPlus 1.7beta4 or newer.").c_str());
+        return 0;
+    }
+#else
     // No log output unless a debug option asks for it (--help/--version and parse errors already printed).
     if (!debugUtilsFlag && !sorDebugFlag && sorCallLogFile.empty() && sorAuxAddrFile.empty()) {
 #ifdef _WIN32
@@ -154,6 +202,7 @@ int main(int argc, char *argv[]) {
         std::freopen(kNull, "w", stdout);
         std::freopen(kNull, "w", stderr);
     }
+#endif
 
     SoRVideoConfig::VideoConfig video;
     if (!defaultVideoFlag)
@@ -197,10 +246,12 @@ int main(int argc, char *argv[]) {
     };
 
     {
-        StreetsOfRage sor(sorRomPath,
-                          video.frameSync,
-                          VDP::Integer,
-                          debugUtilsFlag ? static_cast<std::uint16_t>(remoteAccessPort) : 0);
+        // On the heap: it holds the whole emulation environment, which overflowed a 1 MiB main stack on Windows.
+        const auto game = std::make_unique<StreetsOfRage>(sorRomPath,
+                                                          video.frameSync,
+                                                          VDP::Integer,
+                                                          debugUtilsFlag ? static_cast<std::uint16_t>(remoteAccessPort) : 0);
+        StreetsOfRage &sor = *game;
         configureEnvironment(sor);
         // The game reads the keyboard and gamepads itself (controls.yaml);
         // MegaDriveEnvironment keeps only the remote (autoplay) buttons.

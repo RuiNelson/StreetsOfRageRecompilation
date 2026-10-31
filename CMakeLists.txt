@@ -18,8 +18,10 @@ set(CMAKE_LINK_DEPENDS_NO_SHARED ON)
 
 # Build/link MegaDriveEnvironment's FetchContent deps (yaml-cpp, zlib, libpng)
 # as shared libraries for this consumer only.
-set(MEGADRIVE_ENVIRONMENT_SHARED_DEPS ON CACHE BOOL
-    "Build and link yaml-cpp/zlib/libpng as shared libraries" FORCE)
+if(NOT PS5) # a title has only what is linked into it (prospero/cmake/ps5-sor.cmake)
+    set(MEGADRIVE_ENVIRONMENT_SHARED_DEPS ON CACHE BOOL
+        "Build and link yaml-cpp/zlib/libpng as shared libraries" FORCE)
+endif()
 
 include(FetchContent)
 
@@ -57,7 +59,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(SDL3_mixer)
 
 # The Python AI runs inside the game.
-include(cmake/CPythonRuntime.cmake)
+if(NOT PS5)
+    include(cmake/CPythonRuntime.cmake)
+endif()
 
 file(GLOB_RECURSE SOR_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
@@ -67,6 +71,12 @@ list(FILTER SOR_SOURCES EXCLUDE REGEX ".*/build/.*")
 # tools/ holds separate programs, such as the soundtrack renderer.
 list(FILTER SOR_SOURCES EXCLUDE REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/tools/.*")
 list(FILTER SOR_SOURCES EXCLUDE REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/\\.cpython/.*")
+# prospero/ is the PS5's: its platform layer, built by prospero/cmake/ps5-sor.cmake.
+list(FILTER SOR_SOURCES EXCLUDE REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/prospero/.*")
+if(PS5)
+    list(FILTER SOR_SOURCES EXCLUDE REGEX "/SoRPython\\.cpp$")
+    list(APPEND SOR_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/prospero/src/SoRPythonStub.cpp")
+endif()
 
 add_executable(sor ${SOR_SOURCES})
 
@@ -91,7 +101,9 @@ target_link_libraries(sor PRIVATE
     SDL3_mixer::SDL3_mixer
 )
 
-sor_bundle_cpython(sor)
+if(NOT PS5)
+    sor_bundle_cpython(sor)
+endif()
 
 if(MSVC)
     # StreetsOfRage contains the complete emulation environment and is created on

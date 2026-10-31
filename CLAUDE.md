@@ -114,6 +114,22 @@ static there and the C++ runtime is linked in (`-static-libstdc++`), so only
 `SDL3.dll`/`SDL3_mixer.dll` sit next to `sor.exe`. The meta-repository README
 has the complete command. Built and run on a real Windows machine (user, 2026-10-30).
 
+## The PS5 title (`prospero/`, work in progress)
+
+`../scripts/build_ps5.py` builds it in Docker into ignored `dist-ps5/PPSA99872/`, with the build tree in the volume
+`sor-ps5-build`. Under `PS5` (set by the SDK's toolchain) `CMakeLists.txt` drops shared libraries and CPython, and
+`prospero/cmake/ps5-sor.cmake`, included right after `project()`, adds the rest: SDL `release-3.4.10` with griches'
+console drivers, RADV and `tools/link-title.sh`, which refuses any import that would be null at run time.
+
+- The console's files are in `/data/sor` (`SoRPlatform::kDataDir`; user decision, as ProsperoEden's `/data/prosperoeden`),
+  which a title sees only with ShadowMountPlus 1.7beta4 or newer. `args.txt` there holds options, one a line: a title has
+  no command line.
+- A title has no working directory (`src/shims.c` answers `/data/sor`), no `dlopen`, and `access()` always fails.
+- `compat/atomic_ref.hpp` supplies `std::atomic_ref`, which the SDK's libc++ 18 lacks.
+- Until CPython is built for it, `src/SoRPythonStub.cpp` stands in for `SoRPython.cpp` and AI ASSIST is hidden.
+- `sce_sys/icon0.png` is a placeholder and there is no `pic0.dds` or `pic1.dds` yet.
+- Built and linked, not yet run on a console.
+
 ## The Python AI in the process (`SoRPython`, `--ai-path`)
 
 For the **1 PLAYER AI ASSIST** mode, `sor` runs the same Python AI the external
