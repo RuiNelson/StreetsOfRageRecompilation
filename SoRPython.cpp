@@ -71,6 +71,8 @@ struct State {
     FrameImage reading;
     bool       latestIsNew = false;
 
+    std::uint64_t lastPublished = 0; // CPU thread only
+
     std::atomic<std::uint64_t> currentFrame{0};
     std::atomic<bool>          running{false};
 
@@ -315,8 +317,13 @@ void publishFrame(SystemMemory &memory, std::uint64_t frame, bool player2Enhance
     if (!shared.running.load(std::memory_order_acquire))
         return;
     shared.currentFrame.store(frame, std::memory_order_release);
-    if (frame % kFramesPerTick != 0)
+    // Not `frame % kFramesPerTick`: when a frame overruns its time the count
+    // advances by 2 between samples, and it can stay on odd numbers for over a
+    // hundred samples, leaving the AI blind and its last stick held (at --turbo 6,
+    // half the images were lost and P2 walked into round 4's holes).
+    if (frame >= shared.lastPublished && frame - shared.lastPublished < kFramesPerTick)
         return;
+    shared.lastPublished = frame;
     memory.copyToBuffer(kWorkRamBase, shared.filling.ram->data(), static_cast<int>(kWorkRamSize));
     shared.filling.frame           = frame;
     shared.filling.player2Enhanced = player2Enhanced;

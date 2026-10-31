@@ -147,7 +147,7 @@ works, llvm-mingw with the NuGet package). Linux is written and not yet tried.
   game. A failing AI (missing folder, exception, `sys.exit`) is reported on stderr as
   `[ai] ...` and the game goes on. One that does not end is abandoned 3 seconds into quitting.
 - With AI ASSIST on (`SoRRemoteInput::setAiAssist`, the debug flag `--ai-assist`; the menu
-  comes next), `sample_all_joypads` publishes the 64 KiB of work RAM every 2 sampled frames
+  comes next), `sample_all_joypads` publishes the 64 KiB of work RAM once 2 frames have passed since the last image
   (`SoRPython::publishFrame`): the CPU thread fills a spare buffer with no lock and swaps it
   in, and the AI takes the newest, so a slow tick skips frames and delays nothing. The AI
   answers with the same `SORX` documents as a remote client (`sor_host.set_input`), applied by
@@ -155,6 +155,15 @@ works, llvm-mingw with the NuGet package). Linux is written and not yet tried.
   records and physical P2 devices are ignored, while P1 and the observer work as ever.
   `HOST_MODE` in `SORG` tells clients. The flag is host state, not game state, so it is not
   in 68000 RAM, and the game sees an ordinary 2-player game.
+- **That cadence is a distance, not `frame % 2`** (user, watching `--turbo 6`: P2 kept falling into round 4's
+  holes while P1, on the external autoplay, never did). When a frame overruns its time the frame count advances by
+  2 between samples (about half the samples at x6), so it can stay on odd numbers: 121 samples in a row were measured,
+  and with the modulo nothing was published, the AI saw nothing and its last stick stayed held. Round 4, `--turbo 6`,
+  external AI on P1, one run each:
+  with the modulo 2,613-6,362 images skipped of 6,109-9,745 ticks, gaps up to 18+ frames, P2 falling 0, 2, 6 and 3
+  times (P1 none); with the distance 59-101 skipped, P2 falling 0 of 4 runs (P1 once, on an `OpenBreakable`). Round 1 at
+  `--turbo 2`: 0 skipped, no life lost, P2's score 36,800. Tick cost was never the cause (mean ~1.9 ms under this load, against
+  2.8 ms a frame), nor the thread's priority (`SDL_THREAD_PRIORITY_HIGH` changed nothing). Input is untouched.
 - **The mode's screens** (user: original look, the row after 2 PLAYERS, the player picks
   their character and then the computer's, "COMPUTER" for "2 PLAYER"). `select_menu_cursor`
   is 0 1 PLAYER, 1 2 PLAYERS, 2 AI ASSIST, 3 OPTIONS (it was 2); the row takes the third row's
