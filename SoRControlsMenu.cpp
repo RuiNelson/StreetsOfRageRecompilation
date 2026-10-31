@@ -2,6 +2,7 @@
 
 #include "SoRInput.hpp"
 #include "SoRMenuCanvas.hpp"
+#include "SoRPlatform.hpp"
 #include "system/memory/SystemMemory.hpp"
 
 #include <algorithm>
@@ -198,7 +199,8 @@ std::vector<Item> items(const Menu &m) {
             list.push_back({ItemId::Scheme, "SCHEME", std::string(schemeName(player.scheme))});
             list.push_back({ItemId::Device, "DEVICE", deviceChoiceText(player)});
             list.push_back({ItemId::BindGamepad, "BIND GAMEPAD", pad ? pad->name : "NO GAMEPAD", pad.has_value()});
-            list.push_back({ItemId::BindKeyboard, "BIND KEYBOARD", hasKbd ? "" : "NO KEYBOARD", hasKbd});
+            if (!SoRPlatform::consoleMenus())
+                list.push_back({ItemId::BindKeyboard, "BIND KEYBOARD", hasKbd ? "" : "NO KEYBOARD", hasKbd});
             list.push_back({ItemId::Deadzone,
                             "JOYSTICK DEADZONE",
                             pad ? std::to_string(player.deadzonePercent) : "NO GAMEPAD",

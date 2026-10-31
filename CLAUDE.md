@@ -43,6 +43,7 @@ Before changing files:
 | `SoRVideoConfig.*` | `video.yaml`, next to `controls.yaml`: frame sync, widescreen, fullscreen, integer scaling |
 | `SoRVideoMenu.*` | OPTIONS > VIDEO, the in-game video menu (see **OPTIONS > VIDEO**) |
 | `SoRMenuCanvas.hpp` | What those two menus share: the OPTIONS font, drawing to plane A, held directions |
+| `SoRPlatform.hpp` | `consoleMenus()`: the PS5's menus, on with `__PROSPERO__` or `--console-menus` (workspace `CLAUDE.md`, **PS5 menus**) |
 | `SoRRNG.cpp` | The game's RNG draw, `$0104D8 (rng_draw)` (see **Manual subroutines**) |
 | `SoRRemoteInput.*` | Remote (autoplay) input as actions through the execution data, and each player's status in the game data (see **Controls**) |
 | `SoRSoundtrack.*` | Pre-rendered soundtrack playback (SDL3_mixer) driven by the ROM's own sound engine |

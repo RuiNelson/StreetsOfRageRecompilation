@@ -2,6 +2,7 @@
 #include "SoRControlsConfig.hpp"
 #include "SoRInput.hpp"
 #include "SoRPause.hpp"
+#include "SoRPlatform.hpp"
 #include "SoRPython.hpp"
 #include "SoRRemoteInput.hpp"
 #include "SoRSoundtrack.hpp"
@@ -136,6 +137,10 @@ int main(int argc, char *argv[]) {
                    "On an indirect dispatch to an unknown address, append it to this file and exit (42) "
                    "instead of aborting: the discovery loop")
         ->group("Development");
+    app.add_flag("--console-menus",
+                 SoRPlatform::consoleMenusFlag(),
+                 "The PS5's menus (no BIND KEYBOARD, no DISPLAY) and always fullscreen, to test them on the desktop")
+        ->group("Development");
 
     CLI11_PARSE(app, argc, argv);
 
@@ -163,6 +168,8 @@ int main(int argc, char *argv[]) {
         video.frameSync = *SoRVideoConfig::frameSyncFromKey(frameSync);
     else if (turboMultiplier > 0)
         video.frameSync = VDP::InternalTimer; // only the timer can run faster than the monitor
+    if (SoRPlatform::consoleMenus())
+        video.fullscreen = true;
 
     auto configureEnvironment = [&](MegaDriveEnvironment &env) {
         env.setLanguagePin(languagePin == "en" ? MegaDriveEnvironment::LanguagePin::Overseas
