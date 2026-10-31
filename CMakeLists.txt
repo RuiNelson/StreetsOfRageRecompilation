@@ -59,9 +59,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(SDL3_mixer)
 
 # The Python AI runs inside the game.
-if(NOT PS5)
-    include(cmake/CPythonRuntime.cmake)
-endif()
+include(cmake/CPythonRuntime.cmake)
 
 file(GLOB_RECURSE SOR_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
@@ -73,10 +71,6 @@ list(FILTER SOR_SOURCES EXCLUDE REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/tools/.*")
 list(FILTER SOR_SOURCES EXCLUDE REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/\\.cpython/.*")
 # prospero/ is the PS5's: its platform layer, built by prospero/cmake/ps5-sor.cmake.
 list(FILTER SOR_SOURCES EXCLUDE REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/prospero/.*")
-if(PS5)
-    list(FILTER SOR_SOURCES EXCLUDE REGEX "/SoRPython\\.cpp$")
-    list(APPEND SOR_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/prospero/src/SoRPythonStub.cpp")
-endif()
 
 add_executable(sor ${SOR_SOURCES})
 
@@ -101,9 +95,7 @@ target_link_libraries(sor PRIVATE
     SDL3_mixer::SDL3_mixer
 )
 
-if(NOT PS5)
-    sor_bundle_cpython(sor)
-endif()
+sor_bundle_cpython(sor)
 
 if(MSVC)
     # StreetsOfRage contains the complete emulation environment and is created on

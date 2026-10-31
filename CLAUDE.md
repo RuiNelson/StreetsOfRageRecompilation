@@ -117,19 +117,25 @@ has the complete command. Built and run on a real Windows machine (user, 2026-10
 ## The PS5 title (`prospero/`, work in progress)
 
 `../scripts/build_ps5.py` builds it in Docker into ignored `dist-ps5/PPSA99872/`, with the build tree in the volume
-`sor-ps5-build`. Under `PS5` (set by the SDK's toolchain) `CMakeLists.txt` drops shared libraries and CPython, and
+`sor-ps5-build`. Under `PS5` (set by the SDK's toolchain) `CMakeLists.txt` drops shared libraries, and
 `prospero/cmake/ps5-sor.cmake`, included right after `project()`, adds the rest: SDL `release-3.4.10` with griches'
 console drivers, RADV and `tools/link-title.sh`, which refuses any import that would be null at run time.
 
 - The console's files are in `/data/sor` (`SoRPlatform::kDataDir`; user decision, as ProsperoEden's `/data/prosperoeden`),
   which a title sees only with ShadowMountPlus 1.7beta4 or newer. `args.txt` there holds options, one a line: a title has
   no command line.
-- **The ROM, the pre-rendered soundtrack and the AI's files are obligatory** (user): without any of them `main.cpp`
+- **The ROM, the pre-rendered soundtrack, the AI's files and the stdlib are obligatory** (user): without any of them `main.cpp`
   sends a notification saying what to copy where and the title closes, even with `--silent` or `--sound emulated` in
   `args.txt`. There is no fallback to emulated sound or a game without AI on the console.
 - A title has no working directory (`src/shims.c` answers `/data/sor`), no `dlopen`, and `access()` always fails.
 - `compat/atomic_ref.hpp` supplies `std::atomic_ref`, which the SDK's libc++ 18 lacks.
-- Until CPython is built for it, `src/SoRPythonStub.cpp` stands in for `SoRPython.cpp` and AI ASSIST is hidden.
+- **Python on the console is static** (a title cannot load a module). `tools/build-cpython.sh` cross-builds the pinned
+  version into the volume: configure is patched to accept FreeBSD as a cross target, `tools/cpython-config.site` answers
+  no for what a title cannot import, and only the extension modules `sor_ai` imports are compiled in (`keep` in that
+  script; the AI's other C modules, `fcntl` and `grp`, are optional imports). No PGO: expect about 7% slower ticks. The
+  stdlib and `sor_ai` go to `dist-ps5/data-sor/`, for `/data/sor`, where Python writes its `.pyc` files. UTF-8 mode and
+  a fixed hash seed, because a title has no locales or random device to count on.
+- `contentVersion` in `sce_sys/param.json` is `scripts/update_version_everywhere.py`'s, as NN.NNN.NNN (user).
 - `sce_sys/icon0.png` is `prospero_icon.png` (the user's) at 512x512. There is no `pic0.dds` or `pic1.dds` yet.
 - The game and FLAC playback work on the user's console (2026-10-31).
 

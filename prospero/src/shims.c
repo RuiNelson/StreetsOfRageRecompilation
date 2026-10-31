@@ -326,3 +326,27 @@ ps5dl_realpath(const char *path, char *resolved)
    memcpy(resolved, out, length + 1);
    return resolved;
 }
+
+/* FLT_ROUNDS, for sys.float_info: the console never leaves round-to-nearest. */
+int
+ps5dl___flt_rounds(void)
+{
+   return 1;
+}
+
+/* os.times and time's process clock ask for it whatever configure found; no module exports it. */
+long
+ps5dl_times(void *buffer)
+{
+   (void)buffer;
+   errno = ENOSYS;
+   return -1;
+}
+
+/* os.umask has no configure check; no module exports it, and a title's files keep what it asks for. */
+unsigned
+ps5dl_umask(unsigned mask)
+{
+   (void)mask;
+   return 022;
+}

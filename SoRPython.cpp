@@ -1,4 +1,5 @@
 #include "SoRPython.hpp"
+#include "SoRPlatform.hpp"
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
@@ -204,20 +205,47 @@ void reportPythonError() {
     std::fprintf(stderr, "[ai] the Python AI failed; the game goes on without it\n");
 }
 
-bool initializeInterpreter(const std::filesystem::path &aiPath) {
+// Where the stdlib is: beside the executable, or on the console in its data folder (a title's own is read-only,
+// and Python writes .pyc files beside the sources). Empty if the executable's folder is unknown.
+std::filesystem::path pythonHome() {
+#ifdef __PROSPERO__
+    return std::filesystem::path(SoRPlatform::kDataDir) / "python";
+#else
     const char *basePath = SDL_GetBasePath();
-    if (basePath == nullptr) {
+    return basePath != nullptr ? std::filesystem::path(basePath) / "python" : std::filesystem::path();
+#endif
+}
+
+std::filesystem::path stdlibFolder(const std::filesystem::path &home) {
+#ifdef _WIN32
+    return home / "Lib";
+#else
+    return home / "lib" / ("python" + std::to_string(PY_MAJOR_VERSION) + "." + std::to_string(PY_MINOR_VERSION));
+#endif
+}
+
+bool initializeInterpreter(const std::filesystem::path &aiPath) {
+    const std::filesystem::path home = pythonHome();
+    if (home.empty()) {
         std::fprintf(stderr, "[ai] cannot find the executable's folder: %s\n", SDL_GetError());
         return false;
     }
-    const std::filesystem::path home = std::filesystem::path(basePath) / "python";
+    const std::filesystem::path stdlib = stdlibFolder(home);
 #ifdef _WIN32
-    const std::filesystem::path stdlib     = home / "Lib";
     const std::filesystem::path extensions = home / "DLLs";
 #else
-    const std::filesystem::path stdlib =
-        home / "lib" / ("python" + std::to_string(PY_MAJOR_VERSION) + "." + std::to_string(PY_MINOR_VERSION));
     const std::filesystem::path extensions = stdlib / "lib-dynload";
+#endif
+
+#ifdef __PROSPERO__
+    // UTF-8 whatever the console's libc says of locales.
+    PyPreConfig preconfig;
+    PyPreConfig_InitIsolatedConfig(&preconfig);
+    preconfig.utf8_mode = 1;
+    if (PyStatus status = Py_PreInitialize(&preconfig); PyStatus_Exception(status)) {
+        std::fprintf(stderr, "[ai] cannot start Python: %s\n", status.err_msg != nullptr ? status.err_msg : "unknown");
+        return false;
+    }
 #endif
 
     if (PyImport_AppendInittab("sor_host", initHostModule) == -1) {
@@ -229,6 +257,11 @@ bool initializeInterpreter(const std::filesystem::path &aiPath) {
     PyConfig_InitIsolatedConfig(&config);
     config.site_import              = 0;
     config.module_search_paths_set  = 1;
+#ifdef __PROSPERO__
+    // No random device to count on in a title; the AI hashes nothing an attacker chooses.
+    config.use_hash_seed = 1;
+    config.hash_seed     = 0;
+#endif
     const auto succeeded            = [&config](PyStatus status) {
         if (!PyStatus_Exception(status))
             return true;
@@ -275,6 +308,10 @@ int interpreterThread(void * /*unused*/) {
 } // namespace
 
 namespace SoRPython {
+
+std::filesystem::path standardLibrary() {
+    return stdlibFolder(pythonHome());
+}
 
 void configure(const std::filesystem::path &aiPath, bool widescreen, std::uint32_t turbo) {
     State &shared = state();

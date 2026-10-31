@@ -208,6 +208,10 @@ int main(int argc, char *argv[]) {
         ps5_notify(("Streets of Rage: copy the AI's files to " + aiPath + "." + kAdvice).c_str());
         return 0;
     }
+    if (missing(SoRPython::standardLibrary() / "os.py")) {
+        ps5_notify(("Streets of Rage: copy Python's standard library to " + SoRPython::standardLibrary().string() + "." + kAdvice).c_str());
+        return 0;
+    }
 #else
     // No log output unless a debug option asks for it (--help/--version and parse errors already printed).
     if (!debugUtilsFlag && !sorDebugFlag && sorCallLogFile.empty() && sorAuxAddrFile.empty()) {

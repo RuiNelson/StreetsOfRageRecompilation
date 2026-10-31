@@ -78,7 +78,7 @@ experimental=()
 [[ -f $sdk/target/lib/libc++experimental.a ]] && experimental=("$sdk/target/lib/libc++experimental.a")
 # libc names no module a title loads exports, which the libraries linked in call:
 # src/shims.c answers each as ps5dl_<name>, kept local like the recipe's own bound names.
-shims=(isatty getresuid getresgid dl_iterate_phdr fchown fork vfork setsid pathconf getnameinfo gai_strerror lstat tmpfile clock_gettime execlp getcwd realpath)
+shims=(isatty getresuid getresgid dl_iterate_phdr fchown fork vfork setsid pathconf getnameinfo gai_strerror lstat tmpfile clock_gettime execlp getcwd realpath __flt_rounds times umask)
 { printf '{\n    local:\n'; printf '        %s;\n' "${shims[@]}"; printf '};\n'; } > "$work/link/shims-local.map"
 for name in "${shims[@]}"; do
     radv_link_flags+=("--defsym=$name=ps5dl_$name")

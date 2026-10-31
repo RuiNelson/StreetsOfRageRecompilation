@@ -12,6 +12,20 @@ set(SOR_CPYTHON_VERSION 3.15.2)
 set(SOR_CPYTHON_SHA256 8b5536d280142ecf6cdfe15d12a21ba1c65e300bbf7b28a8d0cdb849575797de)
 string(REGEX MATCH "^[0-9]+\\.[0-9]+" SOR_CPYTHON_ABI "${SOR_CPYTHON_VERSION}")
 
+# A PS5 title cannot load a library: prospero/tools/build-cpython.sh makes a static one, with the
+# extension modules in it, and scripts/build_ps5.py copies the stdlib to /data/sor/python.
+if(PS5)
+    add_library(SoR::CPython STATIC IMPORTED)
+    set_target_properties(SoR::CPython PROPERTIES
+        IMPORTED_LOCATION "${SOR_CPYTHON_PS5_DIR}/target-build/libpython${SOR_CPYTHON_ABI}.a"
+        INTERFACE_INCLUDE_DIRECTORIES "${SOR_CPYTHON_PS5_DIR}/Python-${SOR_CPYTHON_VERSION}/Include;${SOR_CPYTHON_PS5_DIR}/target-build"
+    )
+    function(sor_bundle_cpython target)
+        target_link_libraries(${target} PRIVATE SoR::CPython)
+    endfunction()
+    return()
+endif()
+
 set(SOR_CPYTHON_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.cpython/${SOR_CPYTHON_VERSION}-${CMAKE_SYSTEM_PROCESSOR}")
 set(SOR_CPYTHON_STAMP "${SOR_CPYTHON_ROOT}/install.complete")
 if(WIN32)
