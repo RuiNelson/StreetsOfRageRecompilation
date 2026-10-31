@@ -6,6 +6,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3_mixer/SDL_mixer.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <fstream>
@@ -38,8 +39,8 @@ constexpr m_byte kFadeSteps   = 0x10u;
 constexpr double kFadeStepDb  = 0.75;
 constexpr int    kSampleRate  = 48000;
 // Paused, the music goes on (user: under the pause menu), with the FM stem down
-// by this and the DAC+PSG stem untouched.
-constexpr double kPausedFmDb  = 6.0;
+// by this and the DAC+PSG stem untouched, reached a fade step per tick, both ways.
+constexpr double kPausedFmDb  = 9.0;
 
 struct Sound {
     bool                  present   = false;
@@ -64,6 +65,7 @@ std::map<m_long, MIX_Track *> sfxTracks; // keyed by the SFX channel block it ar
 m_byte picked      = 0;
 bool   trace       = false; // SOR_SOUNDTRACK_TRACE=1: log every engine event
 float  musicGain   = 1.0f;
+double pausedDb    = 0.0; // the FM stem's attenuation for the pause, on its way to or from kPausedFmDb
 m_byte lastStop    = 0; // stop_music at the previous tick
 
 bool play(MIX_Track *track, const Sound &sound) {
@@ -91,6 +93,7 @@ void playMusic(m_byte id) {
     const Sound &sound = sounds[id];
     stopMusic();
     musicGain = 1.0f;
+    pausedDb  = 0.0;
     MIX_SetTrackGain(musicTrack, musicGain);
     if (!sound.present)
         return;
@@ -199,7 +202,8 @@ void followEngine(SystemMemory &memory) {
     // render plays on.
     const m_byte gate   = memory.readByte(kEngineGate);
     const bool   paused = gate != 0 && (gate & 0x80u) == 0;
-    const float  gain   = static_cast<float>(std::pow(10.0, -(kFadeStepDb * step + (paused ? kPausedFmDb : 0.0)) / 20.0));
+    pausedDb            = paused ? std::min(pausedDb + kFadeStepDb, kPausedFmDb) : std::max(pausedDb - kFadeStepDb, 0.0);
+    const float  gain   = static_cast<float>(std::pow(10.0, -(kFadeStepDb * step + pausedDb) / 20.0));
     if (gain != musicGain) {
         musicGain = gain;
         if (trace)
