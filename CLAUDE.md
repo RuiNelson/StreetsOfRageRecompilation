@@ -124,11 +124,14 @@ console drivers, RADV and `tools/link-title.sh`, which refuses any import that w
 - The console's files are in `/data/sor` (`SoRPlatform::kDataDir`; user decision, as ProsperoEden's `/data/prosperoeden`),
   which a title sees only with ShadowMountPlus 1.7beta4 or newer. `args.txt` there holds options, one a line: a title has
   no command line.
+- **The ROM, the pre-rendered soundtrack and the AI's files are obligatory** (user): without any of them `main.cpp`
+  sends a notification saying what to copy where and the title closes, even with `--silent` or `--sound emulated` in
+  `args.txt`. There is no fallback to emulated sound or a game without AI on the console.
 - A title has no working directory (`src/shims.c` answers `/data/sor`), no `dlopen`, and `access()` always fails.
 - `compat/atomic_ref.hpp` supplies `std::atomic_ref`, which the SDK's libc++ 18 lacks.
 - Until CPython is built for it, `src/SoRPythonStub.cpp` stands in for `SoRPython.cpp` and AI ASSIST is hidden.
-- `sce_sys/icon0.png` is a placeholder and there is no `pic0.dds` or `pic1.dds` yet.
-- Built and linked, not yet run on a console.
+- `sce_sys/icon0.png` is `prospero_icon.png` (the user's) at 512x512. There is no `pic0.dds` or `pic1.dds` yet.
+- The game and FLAC playback work on the user's console (2026-10-31).
 
 ## The Python AI in the process (`SoRPython`, `--ai-path`)
 

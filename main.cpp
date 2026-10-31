@@ -183,12 +183,29 @@ int main(int argc, char *argv[]) {
 
     CLI11_PARSE(app, argc, argv);
 
+    const auto soundtrackDirectory = [&]() -> std::filesystem::path {
+        return soundtrackDir.empty() ? std::filesystem::path(sorRomPath).parent_path() / "soundtrack"
+                                     : std::filesystem::path(soundtrackDir);
+    };
+
 #ifdef __PROSPERO__
-    // Standard error is klog there, which is out of the player's sight.
-    std::error_code romError;
-    if (!std::filesystem::is_regular_file(sorRomPath, romError)) {
-        ps5_notify(("Streets of Rage: copy your ROM to " + sorRomPath +
-                    ". /data needs ShadowMountPlus 1.7beta4 or newer.").c_str());
+    // Nothing here is optional on the console, whatever the options say. Standard error is klog
+    // there, out of the player's sight, so the player is told in a notification.
+    const auto missing = [](const std::filesystem::path &file) {
+        std::error_code error;
+        return !std::filesystem::is_regular_file(file, error);
+    };
+    const char *const kAdvice = " /data needs ShadowMountPlus 1.7beta4 or newer.";
+    if (missing(sorRomPath)) {
+        ps5_notify(("Streets of Rage: copy your ROM to " + sorRomPath + "." + kAdvice).c_str());
+        return 0;
+    }
+    if (missing(soundtrackDirectory() / "manifest.tsv")) {
+        ps5_notify(("Streets of Rage: copy the pre-rendered soundtrack to " + soundtrackDirectory().string() + "." + kAdvice).c_str());
+        return 0;
+    }
+    if (missing(std::filesystem::path(aiPath) / "sor_ai" / "embedded.py")) {
+        ps5_notify(("Streets of Rage: copy the AI's files to " + aiPath + "." + kAdvice).c_str());
         return 0;
     }
 #else
@@ -220,6 +237,7 @@ int main(int argc, char *argv[]) {
     if (SoRPlatform::consoleMenus())
         video.fullscreen = true;
 
+    bool soundtrackFailed = false;
     auto configureEnvironment = [&](MegaDriveEnvironment &env) {
         env.setLanguagePin(languagePin == "en" ? MegaDriveEnvironment::LanguagePin::Overseas
                                                : MegaDriveEnvironment::LanguagePin::Japanese);
@@ -231,17 +249,17 @@ int main(int argc, char *argv[]) {
         if (silentFlag) {
             env.sound().disable();
         } else if (soundMode == "prerendered") {
-            const std::filesystem::path directory = soundtrackDir.empty()
-                                                        ? std::filesystem::path(sorRomPath).parent_path() / "soundtrack"
-                                                        : std::filesystem::path(soundtrackDir);
+            const std::filesystem::path directory = soundtrackDirectory();
             // The engine still runs; only the chip output is replaced.
-            if (SoRSoundtrack::open(directory))
+            if (SoRSoundtrack::open(directory)) {
                 env.sound().disable();
-            else
+            } else {
+                soundtrackFailed = true;
                 std::fprintf(stderr,
                              "No pre-rendered soundtrack in %s (run scripts/render_soundtrack.py); "
                              "emulating the sound chips\n",
                              directory.string().c_str());
+            }
         }
     };
 
@@ -253,6 +271,12 @@ int main(int argc, char *argv[]) {
                                                           debugUtilsFlag ? static_cast<std::uint16_t>(remoteAccessPort) : 0);
         StreetsOfRage &sor = *game;
         configureEnvironment(sor);
+#ifdef __PROSPERO__
+        if (soundtrackFailed) { // the manifest is there, but unreadable or the audio output is not
+            ps5_notify("Streets of Rage: the pre-rendered soundtrack could not be opened. Render it and copy it again.");
+            return 0;
+        }
+#endif
         // The game reads the keyboard and gamepads itself (controls.yaml);
         // MegaDriveEnvironment keeps only the remote (autoplay) buttons.
         sor.controllers().setPhysicalInputEnabled(false);
