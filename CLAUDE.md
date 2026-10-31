@@ -117,7 +117,7 @@ has the complete command. Built and run on a real Windows machine (user, 2026-10
 ## The PS5 title (`prospero/`, work in progress)
 
 `../scripts/build_ps5.py` builds it in Docker into ignored `dist-ps5/PPSA99872/`, with the build tree in the volume
-`sor-ps5-build`. Under `PS5` (set by the SDK's toolchain) `CMakeLists.txt` drops shared libraries, and
+`sor-ps5-build`; `../scripts/deploy_ps5.py` copies it to a console. Under `PS5` (set by the SDK's toolchain) `CMakeLists.txt` drops shared libraries, and
 `prospero/cmake/ps5-sor.cmake`, included right after `project()`, adds the rest: SDL `release-3.4.10` with griches'
 console drivers, RADV and `tools/link-title.sh`, which refuses any import that would be null at run time.
 
