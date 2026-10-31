@@ -24,10 +24,6 @@ constexpr std::size_t kThreadStackBytes = 16u * 1024u * 1024u;
 
 constexpr auto kStopTimeout = std::chrono::seconds(3);
 
-// One AI tick per two game frames, as `autoplay --lockstep` and its 33 ms poll
-// at normal speed. In game frames, so it follows --turbo by itself.
-constexpr std::uint64_t kFramesPerTick = 2;
-
 constexpr m_long      kWorkRamBase = 0xFF0000u;
 constexpr std::size_t kWorkRamSize = 0x10000u;
 
@@ -46,32 +42,28 @@ private:
     PyObject *object_;
 };
 
-struct FrameImage {
-    std::uint64_t                     frame           = 0;
-    bool                              player2Enhanced = false;
-    std::array<m_byte, kWorkRamSize> *ram             = new std::array<m_byte, kWorkRamSize>;
-};
-
 // Outlives everything: an AI that never ends is abandoned still using it.
 struct State {
     std::filesystem::path   aiPath;
     SystemMemory           *memory     = nullptr;
     bool                    widescreen = false;
+    double                  tickSeconds = 0.033;
     SDL_Thread             *thread     = nullptr;
     std::mutex              mutex;
     std::condition_variable changed;
     bool                    stopRequested = false;
     bool                    finished      = false;
+    bool                    abandoned     = false; // one that did not end still uses all this
 
-    // The CPU thread fills `filling` with no lock and swaps it with `latest`;
-    // the AI swaps `latest` with `reading`. The lock only covers the swaps, so
-    // neither thread ever holds the other up for longer than that.
-    FrameImage filling;
-    FrameImage latest;
-    FrameImage reading;
-    bool       latestIsNew = false;
-
-    std::uint64_t lastPublished = 0; // CPU thread only
+    // The AI asks for the memory (under the lock) and waits; the CPU thread
+    // copies it on its next sampled frame, with no lock, and answers. The AI
+    // reads the image only once answered and asks again only after that, so
+    // the two never touch it at once.
+    std::atomic<bool>                 frameRequested{false};
+    bool                              frameAnswered   = false;
+    std::uint64_t                     imageFrame      = 0;
+    bool                              player2Enhanced = false;
+    std::array<m_byte, kWorkRamSize> *image           = new std::array<m_byte, kWorkRamSize>;
 
     std::atomic<std::uint64_t> currentFrame{0};
     std::atomic<bool>          running{false};
@@ -94,9 +86,10 @@ PyObject *hostStopRequested(PyObject * /*module*/, PyObject * /*unused*/) {
     return PyBool_FromLong(shared.stopRequested);
 }
 
-// wait_frame(timeout_seconds) -> (frame, work RAM bytes, P2 on ENHANCED 6): the
-// newest image the AI has not had yet, or None after the timeout or on a stop.
-PyObject *hostWaitFrame(PyObject * /*module*/, PyObject *argument) {
+// request_frame(timeout_seconds) -> (frame, work RAM bytes, P2 on ENHANCED 6):
+// asks for the memory and waits for the game's next sampled frame to give it.
+// None after the timeout or on a stop.
+PyObject *hostRequestFrame(PyObject * /*module*/, PyObject *argument) {
     const double seconds = PyFloat_AsDouble(argument);
     if (seconds == -1.0 && PyErr_Occurred())
         return nullptr;
@@ -104,22 +97,26 @@ PyObject *hostWaitFrame(PyObject * /*module*/, PyObject *argument) {
     bool   ready  = false;
     Py_BEGIN_ALLOW_THREADS
     std::unique_lock lock(shared.mutex);
+    shared.frameAnswered = false;
+    shared.frameRequested.store(true, std::memory_order_release);
     shared.changed.wait_for(lock, std::chrono::duration<double>(seconds), [&shared] {
-        return shared.latestIsNew || shared.stopRequested;
+        return shared.frameAnswered || shared.stopRequested;
     });
-    if (shared.latestIsNew && !shared.stopRequested) {
-        std::swap(shared.latest, shared.reading);
-        shared.latestIsNew = false;
-        ready              = true;
-    }
+    shared.frameRequested.store(false, std::memory_order_release);
+    ready = shared.frameAnswered && !shared.stopRequested;
     Py_END_ALLOW_THREADS
     if (!ready)
         Py_RETURN_NONE;
     return Py_BuildValue("(Ky#O)",
-                         static_cast<unsigned long long>(shared.reading.frame),
-                         reinterpret_cast<const char *>(shared.reading.ram->data()),
+                         static_cast<unsigned long long>(shared.imageFrame),
+                         reinterpret_cast<const char *>(shared.image->data()),
                          static_cast<Py_ssize_t>(kWorkRamSize),
-                         shared.reading.player2Enhanced ? Py_True : Py_False);
+                         shared.player2Enhanced ? Py_True : Py_False);
+}
+
+// tick_seconds() -> how long a tick of the AI's own timer lasts.
+PyObject *hostTickSeconds(PyObject * /*module*/, PyObject * /*unused*/) {
+    return PyFloat_FromDouble(state().tickSeconds);
 }
 
 // current_frame() -> the game's uptime in frames, now.
@@ -174,7 +171,8 @@ PyObject *hostLog(PyObject * /*module*/, PyObject *argument) {
 
 PyMethodDef kHostMethods[] = {
     {"stop_requested", hostStopRequested, METH_NOARGS, "True once the game asks the AI to end."},
-    {"wait_frame", hostWaitFrame, METH_O, "The newest (frame, work RAM, P2 enhanced) not yet had, or None."},
+    {"request_frame", hostRequestFrame, METH_O, "Ask for (frame, work RAM, P2 enhanced) and wait for it, or None."},
+    {"tick_seconds", hostTickSeconds, METH_NOARGS, "How long a tick of the AI's own timer lasts."},
     {"current_frame", hostCurrentFrame, METH_NOARGS, "The game's uptime in frames, now."},
     {"read_memory", hostReadMemory, METH_VARARGS, "Bytes from the live bus: read_memory(address, length)."},
     {"set_input", hostSetInput, METH_O, "An input document for the game."},
@@ -277,12 +275,14 @@ int interpreterThread(void * /*unused*/) {
 
 namespace SoRPython {
 
-void configure(const std::filesystem::path &aiPath, bool widescreen) {
+void configure(const std::filesystem::path &aiPath, bool widescreen, std::uint32_t turbo) {
     State &shared = state();
     std::error_code error;
     const std::filesystem::path absolute = std::filesystem::absolute(aiPath, error);
     shared.aiPath     = error ? aiPath : absolute;
     shared.widescreen = widescreen;
+    // As autoplay's poll: 33 ms, or 32 ms / turbo (scripts/play.py).
+    shared.tickSeconds = turbo > 0 ? 0.032 / turbo : 0.033;
     if (!available())
         std::fprintf(stderr, "[ai] no Python AI in '%s' (see --ai-path): 1 PLAYER AI ASSIST is hidden\n",
                      shared.aiPath.string().c_str());
@@ -295,9 +295,16 @@ bool available() {
 
 void start(SystemMemory &memory) {
     State &shared = state();
-    if (shared.thread != nullptr || !available())
+    if (shared.thread != nullptr || shared.abandoned || !available())
         return;
     shared.memory = &memory;
+    {
+        const std::lock_guard lock(shared.mutex);
+        shared.stopRequested = false;
+        shared.finished      = false;
+        shared.frameAnswered = false;
+        shared.inputIsNew    = false;
+    }
     const SDL_PropertiesID properties = SDL_CreateProperties();
     SDL_SetPointerProperty(properties, SDL_PROP_THREAD_CREATE_ENTRY_FUNCTION_POINTER,
                            reinterpret_cast<void *>(interpreterThread));
@@ -312,25 +319,20 @@ void start(SystemMemory &memory) {
     shared.running.store(true, std::memory_order_release);
 }
 
-void publishFrame(SystemMemory &memory, std::uint64_t frame, bool player2Enhanced) {
+void serveFrame(SystemMemory &memory, std::uint64_t frame, bool player2Enhanced) {
     State &shared = state();
     if (!shared.running.load(std::memory_order_acquire))
         return;
     shared.currentFrame.store(frame, std::memory_order_release);
-    // Not `frame % kFramesPerTick`: when a frame overruns its time the count
-    // advances by 2 between samples, and it can stay on odd numbers for over a
-    // hundred samples, leaving the AI blind and its last stick held (at --turbo 6,
-    // half the images were lost and P2 walked into round 4's holes).
-    if (frame >= shared.lastPublished && frame - shared.lastPublished < kFramesPerTick)
+    if (!shared.frameRequested.load(std::memory_order_acquire))
         return;
-    shared.lastPublished = frame;
-    memory.copyToBuffer(kWorkRamBase, shared.filling.ram->data(), static_cast<int>(kWorkRamSize));
-    shared.filling.frame           = frame;
-    shared.filling.player2Enhanced = player2Enhanced;
+    memory.copyToBuffer(kWorkRamBase, shared.image->data(), static_cast<int>(kWorkRamSize));
     {
         const std::lock_guard lock(shared.mutex);
-        std::swap(shared.filling, shared.latest);
-        shared.latestIsNew = true;
+        shared.imageFrame      = frame;
+        shared.player2Enhanced = player2Enhanced;
+        shared.frameAnswered   = true;
+        shared.frameRequested.store(false, std::memory_order_release);
     }
     shared.changed.notify_all();
 }
@@ -362,6 +364,7 @@ void stop() {
     } else {
         std::fprintf(stderr, "[ai] the Python AI did not end in time; abandoning it\n");
         SDL_DetachThread(shared.thread);
+        shared.abandoned = true;
     }
     shared.thread = nullptr;
 }

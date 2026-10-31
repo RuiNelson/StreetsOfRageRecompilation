@@ -139,7 +139,12 @@ works, llvm-mingw with the NuGet package). Linux is written and not yet tried.
   field. So the Builder's shortcut, which opens `play.py`, needs nothing of its own.
 - `SoRPython` runs one thread (SDL, 16 MiB of stack) that owns the interpreter's whole
   lifetime: nothing else touches Python or waits for the GIL, so the AI can never slow
-  the game. It is isolated: search paths are `--ai-path` (default `ai-code` in the CWD)
+  the game. **It keeps its own time and is not woken by the game** (user, 2026-10-31): on its timer
+  (33 ms, or 32 ms / `--turbo`: autoplay's poll, `sor_host.tick_seconds`) it asks for the memory,
+  waits for it, ticks and sleeps what is left. **It lives from choosing the mode until the mode
+  menu is back**, whose init stops it (a fresh interpreter next time; `--ai-assist` keeps it
+  running through the menu). The stop blocks the CPU thread only on that screen. It is isolated:
+  search paths are `--ai-path` (default `ai-code` in the CWD)
   and the bundled stdlib; the system Python and `PYTHON*` play no part. Code from that
   folder runs only once `SoRPython::start` is called: never at launch, except with the
   debug flag `--ai-assist`.
@@ -147,23 +152,29 @@ works, llvm-mingw with the NuGet package). Linux is written and not yet tried.
   game. A failing AI (missing folder, exception, `sys.exit`) is reported on stderr as
   `[ai] ...` and the game goes on. One that does not end is abandoned 3 seconds into quitting.
 - With AI ASSIST on (`SoRRemoteInput::setAiAssist`, the debug flag `--ai-assist`; the menu
-  comes next), `sample_all_joypads` publishes the 64 KiB of work RAM once 2 frames have passed since the last image
-  (`SoRPython::publishFrame`): the CPU thread fills a spare buffer with no lock and swaps it
-  in, and the AI takes the newest, so a slow tick skips frames and delays nothing. The AI
+  comes next), `sample_all_joypads` calls `SoRPython::serveFrame`: when the AI has asked, the
+  CPU thread copies the 64 KiB of work RAM with no lock and answers; otherwise the call costs one
+  atomic read, and a slow tick delays nothing. The AI
   answers with the same `SORX` documents as a remote client (`sor_host.set_input`), applied by
   `SoRRemoteInput::update` to a P2 of its own. P2 then plays from those alone: a client's P2
   records and physical P2 devices are ignored, while P1 and the observer work as ever.
   `HOST_MODE` in `SORG` tells clients. The flag is host state, not game state, so it is not
   in 68000 RAM, and the game sees an ordinary 2-player game.
-- **That cadence is a distance, not `frame % 2`** (user, watching `--turbo 6`: P2 kept falling into round 4's
-  holes while P1, on the external autoplay, never did). When a frame overruns its time the frame count advances by
+- **Why no image pushed by the game on a frame count** (user, watching `--turbo 6`: P2 kept falling into round
+  4's holes while P1, on the external autoplay, never did). When a frame overruns its time the frame count advances by
   2 between samples (about half the samples at x6), so it can stay on odd numbers: 121 samples in a row were measured,
-  and with the modulo nothing was published, the AI saw nothing and its last stick stayed held. Round 4, `--turbo 6`,
-  external AI on P1, one run each:
-  with the modulo 2,613-6,362 images skipped of 6,109-9,745 ticks, gaps up to 18+ frames, P2 falling 0, 2, 6 and 3
-  times (P1 none; the last two runs at high thread priority); with the distance 59-101 skipped, P2 falling 0 of 4 runs (P1 once, on an `OpenBreakable`). Round 1 at
-  `--turbo 2`: 0 skipped, no life lost, P2's score 36,800. Tick cost was never the cause (mean ~1.9 ms under this load, against
-  2.8 ms a frame), nor the thread's priority (`SDL_THREAD_PRIORITY_HIGH` changed nothing). Input is untouched.
+  and `frame % 2` published nothing, the AI saw nothing and its last stick stayed held. Round 4, `--turbo 6`,
+  external AI on P1: with the modulo 2,613-6,362 images skipped, P2 falling 0, 2, 6 and 3 times (P1 none), and a higher
+  thread priority changed nothing; tick cost was never the cause. On the AI's own timer, three runs each, P2 embedded
+  against P2 on the socket (P1 on the socket in both):
+
+  | P2 | round 4 cleared | lives lost P1 / P2 | P2 falls | P2 score |
+  | --- | --- | --- | --- | --- |
+  | embedded | 3 of 3 | 0/0, 0/0, 0/0 | 0 | 40,800, 46,100, 47,100 |
+  | socket | 2 of 3 | 0/0, 2/2, 1/1 | 0 | 42,800, 12,000 (cut at 75 s), 45,900 |
+
+  Embedded mean tick 1.8-2.2 ms, 363-458 frame-gaps skipped of about 10,000 ticks, 0 failed. Four mode-to-menu cycles at x4:
+  a thread each, ended each time, the game healthy. Normal speed not measured.
 - **The mode's screens** (user: original look, the row after 2 PLAYERS, the player picks
   their character and then the computer's, "COMPUTER" for "2 PLAYER"). `select_menu_cursor`
   is 0 1 PLAYER, 1 2 PLAYERS, 2 AI ASSIST, 3 OPTIONS (it was 2); the row takes the third row's

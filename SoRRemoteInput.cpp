@@ -266,6 +266,9 @@ ActionMask actions(int player) {
 
 void setAiAssist(bool enabled) {
     state().aiAssist.store(enabled, std::memory_order_release);
+    // The next AI is a new interpreter, whose sequence numbers start over.
+    if (!enabled)
+        state().aiPlayer = Player{};
 }
 
 bool aiAssist() {

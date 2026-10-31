@@ -510,7 +510,7 @@ void StreetsOfRage::sample_all_joypads(m_long entry_) {
     const SampledPlayer player1 = samplePlayer(0);
     const SampledPlayer player2 = samplePlayer(1);
     if (SoRRemoteInput::aiAssist() && memory().readByte(kDemoMode) == 0)
-        SoRPython::publishFrame(memory(), gameUptimeFrames(), player2.enhanced);
+        SoRPython::serveFrame(memory(), gameUptimeFrames(), player2.enhanced);
 
     memory().writeWord(kZ80BusRequest, 0x0100u);
     cpu().a[1] = kIoPlayer1DataPort;

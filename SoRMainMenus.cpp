@@ -189,6 +189,9 @@ void StreetsOfRage::init_game_start_screen(m_long entry_) {
     memory().writeWord(kSelectScreenSubstate, 0);
     // Chosen anew here (select_menu_resolve_choice).
     SoRRemoteInput::setAiAssist(false);
+    // The AI's thread ends here, back at the mode menu (--ai-assist keeps it).
+    if (!SoRRemoteInput::aiAssist())
+        SoRPython::stop();
     cpu().d[1] = 0;
     cpu().a[1] = kP1Object;
     SOR_CALL_68K(memfill_long_128(), 0x1010u, 0x0103D0u);

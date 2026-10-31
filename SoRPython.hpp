@@ -10,26 +10,29 @@ class SystemMemory;
 // cmake/CPythonRuntime.cmake puts next to the executable.
 //
 // One thread owns the interpreter's whole lifetime: it initializes it, runs
-// sor_ai.embedded.run and finalizes it. No other thread ever touches Python or
-// waits for the GIL, so however long the AI takes, the game does not slow down.
+// sor_ai.embedded.run and finalizes it. It keeps its own time: on its own timer
+// it asks for the memory, waits for it, ticks and sleeps, as autoplay does over
+// its socket. It lives from choosing the mode until the mode menu is back. No
+// other thread ever touches Python or waits for the GIL, so however long the AI
+// takes, the game does not slow down.
 // The interpreter is isolated: its only search paths are the bundled stdlib and
 // the AI's directory, and the system Python and the PYTHON* variables play no
 // part. An AI that fails is reported on stderr and the game goes on without it.
 namespace SoRPython {
 
 /// Says where the AI's code is. Nothing in it runs yet.
-void configure(const std::filesystem::path &aiPath, bool widescreen);
+void configure(const std::filesystem::path &aiPath, bool widescreen, std::uint32_t turbo);
 
 /// Whether the configured folder holds the AI (the mode's menu row depends on it).
 bool available();
 
-/// Starts the thread, once; the configured code runs only from this call on.
+/// Starts the thread unless it is running; the configured code runs only from
+/// this call on. A fresh interpreter each time.
 void start(SystemMemory &memory);
 
-/// CPU thread, once per sampled frame: the game as the AI's next tick sees it.
-/// Once kFramesPerTick frames have passed it copies the work RAM; the AI takes the newest
-/// copy whenever it is ready, so a slow tick skips frames and delays nothing.
-void publishFrame(SystemMemory &memory, std::uint64_t frame, bool player2Enhanced);
+/// CPU thread, once per sampled frame: when the AI has asked for the memory,
+/// copies the work RAM and answers. Otherwise it costs one atomic read.
+void serveFrame(SystemMemory &memory, std::uint64_t frame, bool player2Enhanced);
 
 /// CPU thread: the input document the AI sent since the last call, if any.
 bool takeInput(std::vector<std::uint8_t> &document);
