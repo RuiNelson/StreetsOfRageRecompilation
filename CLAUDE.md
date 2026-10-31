@@ -142,11 +142,11 @@ works, llvm-mingw with the NuGet package). Linux is written and not yet tried.
   the game. It is isolated: search paths are `--ai-path` (default `ai-code` in the CWD)
   and the bundled stdlib; the system Python and `PYTHON*` play no part. Code from that
   folder runs only once `SoRPython::start` is called: never at launch, except with the
-  debug flag `--aiAssist`.
+  debug flag `--ai-assist`.
 - It calls `sor_ai.embedded.run(sor_host)`; the module `sor_host` is the AI's view of the
   game. A failing AI (missing folder, exception, `sys.exit`) is reported on stderr as
   `[ai] ...` and the game goes on. One that does not end is abandoned 3 seconds into quitting.
-- With AI ASSIST on (`SoRRemoteInput::setAiAssist`, the debug flag `--aiAssist`; the menu
+- With AI ASSIST on (`SoRRemoteInput::setAiAssist`, the debug flag `--ai-assist`; the menu
   comes next), `sample_all_joypads` publishes the 64 KiB of work RAM every 2 sampled frames
   (`SoRPython::publishFrame`): the CPU thread fills a spare buffer with no lock and swaps it
   in, and the AI takes the newest, so a slow tick skips frames and delays nothing. The AI
@@ -161,7 +161,7 @@ works, llvm-mingw with the NuGet package). Linux is written and not yet tried.
   place and OPTIONS moves two cells down. Without the AI (`SoRPython::available()`: no
   `sor_ai/embedded.py` in `--ai-path`, or the Windows stub) the screen is the ROM's: three rows,
   index 2 skipped. Choosing the row sets `player_mode` to 3 and the flag and starts Python, so
-  the mode screen's init clears the flag and each choice sets it; `--aiAssist` forces it through.
+  the mode screen's init clears the flag and each choice sets it; `--ai-assist` forces it through.
   The whole menu sits 5 tiles left and 2 up of the ROM's place (user), rows and cursor sprite.
   On character select the P2 cursor and Blaze's preview do not exist until P1 locks; then P1's
   buttons move a cursor spawned on a free character. They come from P1's `+$54`, not the sampled
@@ -539,7 +539,7 @@ exactly as the ROM does at every exit: `update_player_object` skips the player's
 `../docs/WidescreenLogBook.md`.
 
 **Round 2 reset in widescreen (fixed).** The console restarted ~110 s into round 2 (4 of 4 runs; plain never).
-Found with `--callLog` (a second `entry,000200`), a backtrace at the second `init()` and dumps of the object
+Found with `--call-log` (a second `entry,000200`), a backtrace at the second `init()` and dumps of the object
 table. The ROM itself resets: `prepare_next_spawn_section` (`$810`) scans the first 32 object slots and
 `jmp init`s (`$884`) when an ordinary enemy's `+$0E` tile word has no palette line 1 or 2, i.e. when it has
 never run its first animation. Round 2's wave 3 spawns a Jack with `+$40` bit 7 set -- `$A59C` activates such an
@@ -567,7 +567,7 @@ analysis).
 
 ### Recording with `sor`
 
-`--callLog PATH` optionally records emulated 68000 subroutine entries and
+`--call-log PATH` optionally records emulated 68000 subroutine entries and
 `bsr`/`jsr` calls as typed CSV with the columns
 `event,source,callsite,target`. A `call` event contains the original ROM
 source-subroutine entry, instruction address, and exact destination. An
@@ -578,7 +578,7 @@ logging is disabled and the entry/call hooks only perform a null check.
 Generated and hand-written subroutines must trace their true dynamic entry.
 
 ```bash
-./build/sor --rom rom/SOR.bin --callLog ../calls.csv
+./build/sor --rom rom/SOR.bin --call-log ../calls.csv
 ```
 
 Do not launch or leave the game unbounded for analysis unless asked; follow
@@ -668,7 +668,7 @@ Boot defects can spin forever and SDL windows may outlive plain `SIGTERM`. On
 systems with GNU `timeout`, always use a kill grace period:
 
 ```bash
-timeout -k 3 20 ../scripts/run.py rom/SOR.bin --debug
+timeout -k 3 20 ../scripts/run.py rom/SOR.bin --debug-log
 ```
 
 MegaDriveEnvironment runtime diagnostics are owned by the sibling

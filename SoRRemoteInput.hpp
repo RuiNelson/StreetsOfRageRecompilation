@@ -57,7 +57,7 @@ ActionMask actions(int player);
 void setAiAssist(bool enabled);
 bool aiAssist();
 
-/// --aiAssist: on whatever the mode screen says, for measuring without the menu.
+/// --ai-assist: on whatever the mode screen says, for measuring without the menu.
 void forceAiAssist();
 
 } // namespace SoRRemoteInput

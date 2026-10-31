@@ -9,10 +9,11 @@
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
+#include <map>
 #include <string>
 
 int main(int argc, char *argv[]) {
-    CLI::App app{"MegaDrive Environment"};
+    CLI::App app{"Streets of Rage"};
     app.set_version_flag("-V,--version", "0.1.0");
 
     bool          sorDebugFlag       = false;
@@ -22,65 +23,72 @@ int main(int argc, char *argv[]) {
     bool          widescreenFlag     = false;
     bool          integerScalingFlag = false;
     bool          aiAssistFlag       = false;
-    int           sorVSyncMode       = 0; // 0 = internal timer (default); 1/2/3 = VSync/VSync2/VSync3
     int           remoteAccessPort   = 6969;
     std::uint32_t turboMultiplier    = 0;
     std::string   sorRomPath         = "rom/SOR.bin";
     std::string   sorAuxAddrFile; // if set, record unknown dispatch targets here
     std::string   sorCallLogFile;
+    std::string   frameSync   = "auto";
     std::string   languagePin = "jp";
     std::string   videoHz     = "60";
     std::string   soundMode   = "prerendered";
     std::string   soundtrackDir; // default: soundtrack/ next to the ROM
     std::string   aiPath = "ai-code";
 
-    app.add_flag("--silent", silentFlag, "Disable audio output entirely (chip writes are dropped)");
+    app.add_option("--rom", sorRomPath, "Streets of Rage ROM path")->capture_default_str()->group("Game");
+    app.add_option("--lang", languagePin, "Console language: jp=Japanese, en=overseas")
+        ->capture_default_str()
+        ->check(CLI::IsMember({"jp", "en"}))
+        ->group("Game");
+    app.add_option("--hz", videoHz, "Console video frequency: 60=NTSC, 50=PAL")
+        ->capture_default_str()
+        ->check(CLI::IsMember({"60", "50"}))
+        ->group("Game");
+
+    app.add_flag("--fullscreen", fullScreenFlag, "Start in fullscreen")->group("Video");
+    app.add_flag("--widescreen", widescreenFlag, "384x216 (VDP Mode 48, which the hardware lacks) instead of 320x224")
+        ->group("Video");
+    app.add_flag("--integer-scaling", integerScalingFlag, "Scale the picture by whole multiples only")->group("Video");
+    app.add_option("--frame-sync",
+                   frameSync,
+                   "What sets the game's speed. auto: the --hz timer, no tearing, any monitor. "
+                   "vsync, vsync-half, vsync-third: the monitor, every 1, 2 or 3 refreshes")
+        ->capture_default_str()
+        ->check(CLI::IsMember({"auto", "vsync", "vsync-half", "vsync-third"}))
+        ->group("Video");
+
+    app.add_flag("--silent", silentFlag, "No audio at all (chip writes are dropped)")->group("Audio");
     app.add_option("--sound",
                    soundMode,
-                   "Audio source: prerendered (the tools/soundtrack FLAC renders; emulated when they are "
-                   "missing) or emulated (YM2612, PSG and Z80 DAC in real time)")
+                   "Audio source. prerendered: the soundtrack's FLAC renders, emulated when they are missing. "
+                   "emulated: YM2612, PSG and Z80 DAC in real time")
         ->capture_default_str()
-        ->check(CLI::IsMember({"prerendered", "emulated"}));
-    app.add_option("--soundtrack", soundtrackDir, "Pre-rendered soundtrack directory (default: soundtrack next to the ROM)");
-    app.add_option("--lang", languagePin, "Console language pin: jp=low/Japanese, en=high/overseas")
-        ->capture_default_str()
-        ->check(CLI::IsMember({"jp", "en"}));
-    app.add_option("--hz", videoHz, "Console video frequency pin: 60=low/NTSC, 50=high/PAL")
-        ->capture_default_str()
-        ->check(CLI::IsMember({"60", "50"}));
-    app.add_flag("--debug", sorDebugFlag, "Log CPU/VDP state once per second");
-    app.add_flag("--debugUtils", debugUtilsFlag, "Enable debug hotkeys, cheats and remote access");
-    app.add_flag("--fullScreen", fullScreenFlag, "Start the game in fullscreen");
-    app.add_flag("--widescreen",
-                 widescreenFlag,
-                 "Use VDP Mode 48 (48x27 tiles, 384x216) instead of Mode 40; a host-only mode the hardware lacks");
-    app.add_flag("--integerScaling",
-                 integerScalingFlag,
-                 "Scale the picture by whole multiples only (320x224 in 1920x1080 is drawn 4x at 1280x896)");
-    app.add_option("--vsync",
-                   sorVSyncMode,
-                   "Frame sync — 0=automatic: internal timer from --hz, no tearing, any monitor (default), "
-                   "1=VSync, 2=VSync2 (½ rate), 3=VSync3 (⅓ rate)")
-        ->capture_default_str()
-        ->check(CLI::Range(0, 3));
-    app.add_option("--rom", sorRomPath, "Streets of Rage ROM path")->capture_default_str();
-    app.add_option("--port", remoteAccessPort, "With --debugUtils: remote access TCP port (0 disables)")
-        ->capture_default_str()
-        ->check(CLI::Range(0, 65535));
-    app.add_option("--turbo", turboMultiplier, "With --vsync 0: run the internal VDP at 60 Hz times this multiplier")
-        ->check(CLI::Range(1u, 4'294'967'295u));
-    app.add_option("--auxAddrFile",
-                   sorAuxAddrFile,
-                   "On an indirect dispatch to an unknown address, append it to "
-                   "this aux file and exit (42) instead of aborting — for the discovery loop");
-    app.add_option("--callLog",
-                   sorCallLogFile,
-                   "Write every 68000 subroutine entry and call to this typed CSV file "
-                   "(event, source, callsite, target)");
+        ->check(CLI::IsMember({"prerendered", "emulated"}))
+        ->group("Audio");
+    app.add_option("--soundtrack", soundtrackDir, "Pre-rendered soundtrack folder (default: soundtrack next to the ROM)")
+        ->group("Audio");
 
-    app.add_option("--ai-path", aiPath, "Directory holding the Python AI's code (the sor_ai package)")
-        ->capture_default_str();
-    app.add_flag("--aiAssist", aiAssistFlag, "Debug: P2 is the Python AI from launch, whichever mode is chosen");
+    app.add_option("--ai-path", aiPath, "Folder holding the Python AI's code (the sor_ai package)")
+        ->capture_default_str()
+        ->group("AI");
+    app.add_flag("--ai-assist", aiAssistFlag, "P2 is the Python AI from launch, whichever mode is chosen")->group("AI");
+
+    app.add_flag("--debug-utils", debugUtilsFlag, "Debug hotkeys, cheats and remote access")->group("Development");
+    app.add_option("--port", remoteAccessPort, "With --debug-utils: remote access TCP port (0 disables)")
+        ->capture_default_str()
+        ->check(CLI::Range(0, 65535))
+        ->group("Development");
+    app.add_option("--turbo", turboMultiplier, "With --frame-sync auto: run at 60 Hz times this multiplier")
+        ->check(CLI::Range(1u, 4'294'967'295u))
+        ->group("Development");
+    app.add_flag("--debug-log", sorDebugFlag, "Log CPU and VDP state once per second")->group("Development");
+    app.add_option("--call-log", sorCallLogFile, "Write every 68000 subroutine entry and call to this CSV file")
+        ->group("Development");
+    app.add_option("--aux-addr-file",
+                   sorAuxAddrFile,
+                   "On an indirect dispatch to an unknown address, append it to this file and exit (42) "
+                   "instead of aborting: the discovery loop")
+        ->group("Development");
 
     CLI11_PARSE(app, argc, argv);
 
@@ -109,9 +117,12 @@ int main(int argc, char *argv[]) {
         }
     };
 
+    const std::map<std::string, VDP::Synchronization> frameSyncModes{
+        {"auto", VDP::InternalTimer}, {"vsync", VDP::VSync}, {"vsync-half", VDP::VSync2}, {"vsync-third", VDP::VSync3}};
+
     {
         StreetsOfRage sor(sorRomPath,
-                          static_cast<VDP::Synchronization>(sorVSyncMode),
+                          frameSyncModes.at(frameSync),
                           VDP::Integer,
                           debugUtilsFlag ? static_cast<std::uint16_t>(remoteAccessPort) : 0);
         configureEnvironment(sor);
