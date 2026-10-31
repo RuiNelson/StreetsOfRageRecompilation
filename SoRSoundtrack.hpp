@@ -20,7 +20,8 @@ class SystemMemory;
 //   voice, which the Z80 keeps streaming);
 // - $73066 sound_fade_music, called right after the queue every engine tick:
 //   start what was picked, follow the $E0 fade (the music's DAC+PSG stem stops
-//   at once, its FM stem steps down) and the engine gate.
+//   at once, its FM stem steps down) and the engine gate (paused, the music
+//   plays on with its FM stem 6 dB down).
 namespace SoRSoundtrack {
 
 /// Opens the audio device and loads `directory/manifest.tsv`. Returns false

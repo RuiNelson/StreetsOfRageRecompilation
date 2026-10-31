@@ -535,11 +535,17 @@ test. Loop starts range from 6 s (`$8A`) to 147 s (`$84`).
 | --- | --- |
 | `$72D08 (sound_process_queue)` | Replicate the ROM's pick: each `play_se` slot with bit 7 and priority (`$72824 (sound_priority_table)`, ID - `$81`) at least the running one replaces `$FFF009 (sound_pending_id)` |
 | `$72F8A (sound_reset_all)` | Stop music and effects; a PCM voice keeps playing, as the Z80 keeps streaming it. Reached by every music start, `$E1`, `$E3`, `$E4`+, and the end of a fade |
-| `$73066 (sound_fade_music)` | Right after the queue each tick: start the pick (music: both stems streamed from disk and started under one mixer lock, sharing the loop; effect predecoded on one track per SFX channel block, header byte 3 through `$72E74`; voice on one PCM track), `$E2` stops the effects on `$FFF1F0`/`$FFF220`; when `stop_music` leaves 0 (`$7302E` armed the fade) stop the DAC+PSG stem at once; set the FM stem's gain from `stop_music` (15 steps of 0.75 dB, then the reset); pause both stems while `$FFF007 (sound_engine_gate)` is positive |
+| `$73066 (sound_fade_music)` | Right after the queue each tick: start the pick (music: both stems streamed from disk and started under one mixer lock, sharing the loop; effect predecoded on one track per SFX channel block, header byte 3 through `$72E74`; voice on one PCM track), `$E2` stops the effects on `$FFF1F0`/`$FFF220`; when `stop_music` leaves 0 (`$7302E` armed the fade) stop the DAC+PSG stem at once; set the FM stem's gain from `stop_music` (15 steps of 0.75 dB, then the reset); take 6 dB off the FM stem while `$FFF007 (sound_engine_gate)` is positive |
 
 `$BD` is the pause jingle (`handle_pause_start_input`): its sequence starts with
 `$F9`, which sets the gate to `$01` (music keyed off and frozen) or, when set,
 to `$80` (released on the next tick), so pausing and unpausing both post `$BD`.
+**Paused, the renders do not stop** (user, 2026-10-31): the music plays on under the pause menu, with the FM stem 6 dB
+down and the DAC+PSG stem as it is. The engine's channels still freeze as on hardware, since its fields are the game's,
+and only the output differs; `--sound emulated` keeps the ROM's silence. Checked with an `SDL_AUDIO_DRIVER=disk` capture
+of round 1 through a 5 s pause, fitted against the stems every 0.1 s: FM 1.0000 and DAC+PSG 1.0000 before, 0.5012 and
+1.0000 during (residual ~1e-13, once the jingle's 0.5 s is over), 1.000 and 1.000 after, on the same stem offset
+throughout, so the music never lost its place. Not heard by ear.
 Left as a known difference: at the fade start the hardware lets a DPCM drum
 sample that is already streaming play out (at most ~0.2 s); the DAC+PSG stem
 stops at once.

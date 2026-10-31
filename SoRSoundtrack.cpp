@@ -37,6 +37,9 @@ constexpr m_long kFadeMusicEntry    = 0x00073066u;
 constexpr m_byte kFadeSteps   = 0x10u;
 constexpr double kFadeStepDb  = 0.75;
 constexpr int    kSampleRate  = 48000;
+// Paused, the music goes on (user: under the pause menu), with the FM stem down
+// by this and the DAC+PSG stem untouched.
+constexpr double kPausedFmDb  = 6.0;
 
 struct Sound {
     bool                  present   = false;
@@ -59,7 +62,6 @@ std::map<m_long, MIX_Track *> sfxTracks; // keyed by the SFX channel block it ar
 
 // CPU-thread state between the queue entry and the next fade-music entry.
 m_byte picked      = 0;
-bool   musicPaused = false;
 bool   trace       = false; // SOR_SOUNDTRACK_TRACE=1: log every engine event
 float  musicGain   = 1.0f;
 m_byte lastStop    = 0; // stop_music at the previous tick
@@ -78,7 +80,6 @@ bool play(MIX_Track *track, const Sound &sound) {
 void stopMusic() {
     MIX_StopTrack(musicTrack, 0);
     MIX_StopTrack(cutTrack, 0);
-    musicPaused = false;
 }
 
 bool streamFrom(MIX_Track *track, const std::filesystem::path &file) {
@@ -191,31 +192,19 @@ void followEngine(SystemMemory &memory) {
             Logger::log("[soundtrack] fade: DAC and PSG cut");
     }
     lastStop = stop;
-    const int    step = stop == 0 ? 0 : kFadeSteps - std::min(stop, kFadeSteps);
-    const float  gain = static_cast<float>(std::pow(10.0, -kFadeStepDb * step / 20.0));
+    const int step = stop == 0 ? 0 : kFadeSteps - std::min(stop, kFadeSteps);
+    // A positive gate (sequence command $F9, the pause jingle $BD) keys the
+    // music off and freezes its channels, and bit 7 then releases it. Only the
+    // chips stop for that: the engine's fields do as on hardware, while the
+    // render plays on.
+    const m_byte gate   = memory.readByte(kEngineGate);
+    const bool   paused = gate != 0 && (gate & 0x80u) == 0;
+    const float  gain   = static_cast<float>(std::pow(10.0, -(kFadeStepDb * step + (paused ? kPausedFmDb : 0.0)) / 20.0));
     if (gain != musicGain) {
         musicGain = gain;
         if (trace)
             Logger::log("[soundtrack] music gain %.3f", static_cast<double>(gain));
         MIX_SetTrackGain(musicTrack, gain);
-    }
-    // A positive gate (sequence command $F9) keys the music off and freezes
-    // its channels while effects keep running; bit 7 then releases it.
-    const m_byte gate   = memory.readByte(kEngineGate);
-    const bool   paused = gate != 0 && (gate & 0x80u) == 0;
-    if (paused != musicPaused) {
-        musicPaused = paused;
-        if (trace)
-            Logger::log("[soundtrack] music %s", paused ? "paused" : "resumed");
-        MIX_LockMixer(mixer);
-        if (paused) {
-            MIX_PauseTrack(musicTrack);
-            MIX_PauseTrack(cutTrack);
-        } else {
-            MIX_ResumeTrack(musicTrack);
-            MIX_ResumeTrack(cutTrack);
-        }
-        MIX_UnlockMixer(mixer);
     }
 }
 
