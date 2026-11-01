@@ -1,6 +1,7 @@
 # Functions whose declarations/call sites remain generated, but whose bodies
 # are provided by hand-written C++ in SoRManualFunctions.cpp,
-# SoRControls.cpp, SoRInteractions.cpp, SoRMainMenus.cpp, SoRObjectRoutines.cpp, SoRRNG.cpp, or SoRSound.cpp.
+# SoRControls.cpp, SoRInteractions.cpp, SoRMainMenus.cpp, SoRObjectRoutines.cpp,
+# SoRBossRoutines.cpp, SoRRNG.cpp, or SoRSound.cpp.
 0003A2 # game_infinite_loop
 003028 # player_normal_attack_input (alt-controls pickup input hook)
 003084 # player_held_object_attack_input (alt-controls pickup input hook)
@@ -97,3 +98,28 @@
 00ABF8 # sub_00abf8 (box overlap with both shape ids given)
 006ACA # queue_object_sound_id (jmp queue_sound_id)
 0035D6 # jmp queue_sound_id
+
+# Callees of those ports (SoRObjectRoutines.cpp).
+000E46 # find_free_object_slot
+006ABC # sub_006abc (animation 0 with +$01 bit 6; also entered at $6AC2 and $6AC4)
+00B196 # init_object_animation_state_and_advance 
+00B1A2 # init_object_animation_frame
+00B1D6 # sub_00b1d6
+00B228 # clear the object's velocities
+
+# Bespoke boss routines (SoRBossRoutines.cpp).
+012A4E # bespoke_boss_target_signs
+012A78 # bespoke_boss_range_test
+0154E0 # contact reaction of a bespoke boss
+01550E # reaction 1
+015560 # reaction 2
+01559A # reaction 3
+0155BE # reaction 4 and 5
+015604 # recoil
+015632 # damage and recoil
+01566E # bounce toward the target
+01569C # pair follows the boss
+0156E0 # facing from the X velocity
+01572A # animation start and facing
+01573C # pair animation
+01577C # pair animation and bounce
