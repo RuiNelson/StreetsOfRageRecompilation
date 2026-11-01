@@ -45,6 +45,7 @@ Before changing files:
 | `SoRMenuCanvas.hpp` | What those two menus share: the OPTIONS font, drawing to plane A, held directions |
 | `SoRPlatform.hpp` | `consoleMenus()`: the PS5's menus, on with `__PROSPERO__` or `--console-menus` (workspace `CLAUDE.md`, **PS5 menus**) |
 | `SoRRNG.cpp` | The game's RNG draw, `$0104D8 (rng_draw)` (see **Manual subroutines**) |
+| `SoRObjectRoutines.cpp` | The small object routines the other ports call: floor probe `$AD2A`/`$AD30`, velocity step `$B20E`, box tests `$AB24`/`$ABF8`, sound trampolines `$6ACA`/`$35D6` |
 | `SoRRemoteInput.*` | Remote (autoplay) input as actions through the execution data, and each player's status in the game data (see **Controls**) |
 | `SoRSoundtrack.*` | Pre-rendered soundtrack playback (SDL3_mixer) driven by the ROM's own sound engine |
 | `tools/soundtrack/` | Separate CMake project: the Genesis Plus GX renderer that produces that soundtrack |
@@ -771,6 +772,18 @@ keeping the generated declaration, dispatcher, and call sites intact.
   `d1`, X and N/Z as the ROM does. Checked against the ROM's instructions on
   200,000 states, and live: the states in a gameplay session follow the ROM's
   sequence.
+- **A manual routine calls only manual routines** (user, 2026-11-01): when a port needs a
+  generated callee, reimplement the callee (`SoRObjectRoutines.cpp` holds those so far) rather than
+  calling into generated code. Still generated and called from manual code: the `SOR_CALL`s in
+  `SoRWidescreenArena.cpp` (`is_nonordinary_enemy_type`, `bespoke_boss_range_test`, `$154E0`, `$1569C`, `$1566E`,
+  `$1577C`, `$96C0`, `$A9BA`, `$F482`, `ordinary_enemy_approach_point`, `$A56C`, `$6ABC`, `$B228`, `$2EE8`, `$2DE6`, `$4104`,
+  `find_free_object_slot`, `$105CE`) and the `dispatch($2EE8)`/`dispatch($2DE6)` calls in `SoRInteractions.cpp`.
+- A reimplemented leaf is checked against the generated body by fuzzing: a scratch copy of the tree with the old manual
+  list and the new file renamed (`*_NEW`) beside it, random registers, objects and tables, comparing every register, the
+  CCR (X included), `ssp` and the object memory. `SoRObjectRoutines.cpp`: 120,000 cases, no difference. A lockstep RAM
+  trace of two runs of the same binary is not deterministic (the host differs from the boot logo on), so it cannot compare builds.
+- A routine that a hand-written port called through a grouped generated function (`player_hold_crossover_update(0x35D6)`
+  after `$26E2` was labelled) is a different root: look the entry up in the ASM, not the group's name.
 - Preserve 68000-visible register, memory, flag, stack, and control-flow
   effects expected by callers.
 - Base behavior on `output/sor.asm`, analysis data, and bounded runtime

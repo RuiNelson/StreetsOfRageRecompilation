@@ -1,6 +1,6 @@
 # Functions whose declarations/call sites remain generated, but whose bodies
 # are provided by hand-written C++ in SoRManualFunctions.cpp,
-# SoRControls.cpp, SoRInteractions.cpp, SoRMainMenus.cpp, SoRRNG.cpp, or SoRSound.cpp.
+# SoRControls.cpp, SoRInteractions.cpp, SoRMainMenus.cpp, SoRObjectRoutines.cpp, SoRRNG.cpp, or SoRSound.cpp.
 0003A2 # game_infinite_loop
 003028 # player_normal_attack_input (alt-controls pickup input hook)
 003084 # player_held_object_attack_input (alt-controls pickup input hook)
@@ -88,3 +88,12 @@
 
 # Random number generator (SoRRNG.cpp).
 0104D8 # rng_draw (state at $FFFF40, result in d0.w)
+
+# Object routines the hand-written ports call (SoRObjectRoutines.cpp): a manual routine calls only manual routines.
+00AD2A # probe_floor_at_object
+00AD30 # probe_floor_at_object_offset
+00B20E # integrate_object_velocity (also owns the $B21E entry)
+00AB24 # test_shape_box_overlap
+00ABF8 # sub_00abf8 (box overlap with both shape ids given)
+006ACA # queue_object_sound_id (jmp queue_sound_id)
+0035D6 # jmp queue_sound_id
