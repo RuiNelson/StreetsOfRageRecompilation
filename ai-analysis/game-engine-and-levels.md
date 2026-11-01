@@ -282,9 +282,9 @@ They select round sections at `$1C1D4`, `$1C202`, `$1C230`, `$1C25E`,
 
 Each section starts with word offsets to wave descriptors. The first descriptor
 is special: `$E5C (start_round_setup)` reads a longword spawn-stream pointer and a word
-geometry selector before passing the remaining six bytes to `$F46`. Later wave
+geometry selector before passing the remaining six bytes to `$F46 (load_resource_descriptor_palettes)`. Later wave
 loads at `$5F4 (init_level_state)` use the offset indexed by `wave + 1` and pass it directly to
-`$F46`; those entries are six-byte resource descriptors.
+`$F46 (load_resource_descriptor_palettes)`; those entries are six-byte resource descriptors.
 
 The decoded index arrays are:
 
@@ -305,7 +305,7 @@ semantic meaning of every repeated descriptor field remains uncertain.
 
 ### 4.4 Six-byte resource descriptor
 
-`sub_00000F46` proves that the descriptor is six bytes, but it does not expose a
+`$F46 (load_resource_descriptor_palettes)` proves that the descriptor is six bytes, but it does not expose a
 simple six-field structure. Its accesses are overlapping:
 
 ```text
@@ -877,7 +877,7 @@ entirely by data. The engine is data-driven, but not data-only.
 | round 8 reverses camera-boundary direction | `$1957E..$195D0`, second half of `$195D8 (wave_camera_boundary_table)` | 100% |
 | `$FFFF04 (wave)` is a camera/resource phase index | `$5F4 (init_level_state)`, `$E98`, `$18F32 (advance_round7_vertical_wave)`, `$19570 (advance_wave_camera_boundary)` | 100% |
 | `$FFFB1E (active_progression_entity_count)` counts progression-gating entities | increments `$C60/$CC0`, decrements `$92F0/$9D8C`, zero tests in pipeline | 99% |
-| all semantics of each six-byte resource descriptor | overlapping decoder `$F46` | 75% |
+| all semantics of each six-byte resource descriptor | overlapping decoder `$F46 (load_resource_descriptor_palettes)` | 75% |
 | exact semantic name of every `$FFFA05 (level_spawn_flow_flags)` bit | many distributed producers/consumers | 75% |
 | repeated round-7 descriptor offsets encode vertical phases | ROM table plus round-7 camera exceptions | 70% |
 | incremental Nemesis queue holds eight records | `$8454 (queue_nemesis_art_cues)` append scan and fixed 12-longword shift at `$8592` | 100% |
@@ -913,7 +913,7 @@ recorded in `labels.csv`.
 
 ## 12. Remaining uncertainties and useful next experiments
 
-1. **Resource descriptor field names.** `$F46` combines nibbles, table families,
+1. **Resource descriptor field names.** `$F46 (load_resource_descriptor_palettes)` combines nibbles, table families,
    and overlapping words. Runtime logging of calls to `$10538/$1053E` would
    distinguish palette lists, tile art, and mappings precisely.
 2. **Round 7 repeated descriptor offsets.** A trace of `$FFFF04 (wave)`, pipeline state,

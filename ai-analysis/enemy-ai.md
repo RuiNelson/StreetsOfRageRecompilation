@@ -247,7 +247,7 @@ independent implementations.
 A small number of state handlers across the whole ROM (six, found by
 searching every `jsr $00AD04` call site) perform a **direct, explicit**
 collision test against the current target's cached body box, independent of
-the generic per-frame `$AAA0 (resolve_enemy_player_contact)`/`$AB24` pipeline every object goes through
+the generic per-frame `$AAA0 (resolve_enemy_player_contact)`/`$AB24 (test_shape_box_overlap)` pipeline every object goes through
 regardless of state:
 
 ```text
@@ -316,7 +316,7 @@ sign chosen by comparing the enemy's own position against the target's
 the same state) — i.e. "move toward the target," not a fixed vector. This
 state never calls `$AD04` and its own animation carries no long-reach
 shape; the hit, when it lands, is decided by the generic per-frame
-`$AAA0 (resolve_enemy_player_contact)`/`$AB24` pipeline testing Signal's *ordinary* body box once the
+`$AAA0 (resolve_enemy_player_contact)`/`$AB24 (test_shape_box_overlap)` pipeline testing Signal's *ordinary* body box once the
 slide's own velocity has carried it into the player, not by an extended
 attack box being tested from a stationary origin.
 
@@ -617,8 +617,8 @@ has already run:
   not scrolled that far. `+$18`/`+$24` are **not touched again** on that
   path -- the elevation integration
   (`+$24 += $1.2000` 16.16 accel per update, `+$18 += +$24`, then
-  `sub_0000AD2A`'s floor probe -- the same "what floor is at this point"
-  primitive `hazards.py` documents at `sub_0000AD30`, called here with a
+  `$AD2A (probe_floor_at_object)`'s floor probe -- the same "what floor is at this point"
+  primitive `hazards.py` documents at `$AD30 (probe_floor_at_object_offset)`, called here with a
   zero offset, i.e. exactly at the object's own position) only runs once
   that camera test passes, and only then does the object land: `+$18` snaps
   to the probed surface and the state advances to `$0E` the moment the
@@ -1029,15 +1029,15 @@ real, single ROM object type, not two different things sharing a number.
   lane straight into its own `+$14` (the aim: a straight shot down the
   target's lane *at the instant it arms*, not a homing one); and sets a
   fixed spawn height `+$18 = $00A8`. It also plays a queued sound
-  (`sub_00006ACA` is `jmp (queue_sound_id).l`) and sets outgoing damage
+  (`$6ACA (queue_object_sound_id)` is `jmp (queue_sound_id).l`) and sets outgoing damage
   `+$34 = 3`. **Not fully pinned down:** no instruction in this state's own
   disassembly writes `+$30` away from 0, so which exact ROM code advances
   the state was not identified in this pass -- confirmed live instead (next
   section): a hidden, unarmed table reliably becomes a visible, moving one
   within a handful of frames of the actor closing in.
 - **State 1 -- flight** (`$75E6 (round8_table_state1_flight)`): two
-  instructions, `sub_0000B20E` (the generic mover: adds `+$1C/+$20/+$24`
-  into `+$10/+$14/+$18` every tick) then `sub_00007392`, a hit-check shared
+  instructions, `$B20E (integrate_object_velocity)` (the generic mover: adds `+$1C/+$20/+$24`
+  into `+$10/+$14/+$18` every tick) then `$7392 (prop_hit_reaction)`, a hit-check shared
   by several breakable/prop types. That routine explicitly special-cases
   type `$45` twice: once to gate its own alternate hit-reaction path behind
   a nonzero `+$40` (only an *armed* table gets it -- a variant-0 static one
@@ -2468,7 +2468,7 @@ function state1_active(boss):
 ```
 
 The twins build their boxes from the **player** shape table `$1ABA8 (player_shape_table)`
-(`sub_0000AB24` switches tables for type `$58`): they are Blaze's sprites,
+(`$AB24 (test_shape_box_overlap)` switches tables for type `$58`): they are Blaze's sprites,
 and several ids are hers. Their set, `$2DD70 (onihime_yasha_animation_set)`, right-facing members (the
 left-facing member follows with the mirrored ids; frame durations in
 updates, 0 = static):

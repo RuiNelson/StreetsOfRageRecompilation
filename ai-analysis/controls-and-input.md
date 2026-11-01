@@ -398,7 +398,7 @@ integrates position once with the launch velocities.
 | Blaze | 2 | `$FFF68000` | **−9.5** px/update |
 
 Negative Z velocity raises the character (object `+$18` decreases). Positive Z
-velocity falls toward the floor sample from `$AD2A`.
+velocity falls toward the floor sample from `$AD2A (probe_floor_at_object)`.
 
 ### Free flight
 
@@ -525,7 +525,7 @@ hostiles the arc will damage**, not only primary-target distance bands.
 
 ### Partner vault high jump (related)
 
-From a partner hold, `$2FE4` can enter higher jump actions (`$76` / `$80`
+From a partner hold, `$2FE4 (player_hold_crossover_start)` can enter higher jump actions (`$76` / `$80`
 family). That path is a co-op boost, not the ordinary ground C→B kick, but the
 airborne attack edge rule is the same once free flight is reached.
 
@@ -586,7 +586,7 @@ Souther (autoplay's `tools/souther_hold_lab.py`).
 one also changes the reaction code it hands the held body (`$08` to `$0C`),
 and against a later boss it is the heavy hit that knocks him away and ends
 the hold (see `enemy-ai.md`). Bit 6 survives only actions `$60`, `$6A` and
-`$6C` -- `sub_3936` masks `+$58` through the byte table at `$394E` on every
+`$6C` -- `$3936 (player_action_change_mask_state_bits)` masks `+$58` through the byte table at `$394E` on every
 action change -- so the walk before a grab, a crossover, or any other action
 restarts the chain at one.
 
@@ -599,8 +599,8 @@ the release the player's facing bit flips (`bchg #0,+$30`), `+$4C`/`+$7D`
 clear, and the action becomes walk `$02` (armed: `$30`). A held later boss
 reads the cleared `+$7D` through `$17CF2 (later_boss_held_dispatch)` and goes straight back to primary 1.
 
-**One crossover per hold.** `sub_2FE4` turns a C edge into crossover `$76`
-from the front hold and `$80` from the back hold. `sub_26E2` finishes it on
+**One crossover per hold.** `$2FE4 (player_hold_crossover_start)` turns a C edge into crossover `$76`
+from the front hold and `$80` from the back hold. `$26E2 (player_hold_crossover_update)` finishes it on
 animation frame 6, landing in `$66` from `$76` or `$60` from `$80` (the
 `$AD18` probe at frame 3 can swap the two families). The same frame sets
 `+$4B` bit 7, and only a fresh grab (`$3266`) clears it; a crossover that finds
@@ -754,6 +754,6 @@ while the main pause path only considers players whose bits are already set in
 | `$25DE` / `$291E` / `$29D0` | Ordinary throw choreography `$84` → launch `$72`. |
 | `$284A` / `$28A2` / `$2AA4` | Special throw releases that arm `+$45` into `$5C`. |
 | `$34CA` | Shared launch into action `$5C` with `vz = $FFFB0000`. |
-| `$2FE4` | Partner-hold C → vault jump `$76`/`$80`. |
+| `$2FE4 (player_hold_crossover_start)` | Partner-hold C → vault jump `$76`/`$80`. |
 | `$10D2E (handle_pause_start_input)` | Start buffering, pause toggle, and demo abort. |
 | `$115CC (update_join_and_continue_hud)` | Inactive-player Start join and continue HUD path. |

@@ -216,12 +216,12 @@ Effect 3 at `$6A2A (apply_extra_special_pickup)` deliberately points `a6` one by
 
 ### Score items
 
-Effects 4 and 5 select an end pointer at `$FFFF0C` for P1 or `$FFFF14` for P2 and call the three-byte packed-BCD score adder at `$10DA6`:
+Effects 4 and 5 select an end pointer at `$FFFF0C` for P1 or `$FFFF14` for P2 and call the three-byte packed-BCD score adder at `$10DA6 (add_bcd_score_value)`:
 
 - effect 4 uses table index `$0E`, packed value `$00003000`: 3,000 points;
 - effect 5 uses table index `$0A`, packed value `$00010000`: 10,000 points.
 
-`$10DA6` performs three chained `ABCD` operations and saturates an overflow at `$999900`. Score ownership again follows the collector object address (`$FFB800 (p1_object)` means P1; otherwise P2). These awards can immediately trigger the independent extra-life threshold check at `$4D60 (update_score_hud_and_check_extra_life)` on a subsequent player update.
+`$10DA6 (add_bcd_score_value)` performs three chained `ABCD` operations and saturates an overflow at `$999900`. Score ownership again follows the collector object address (`$FFB800 (p1_object)` means P1; otherwise P2). These awards can immediately trigger the independent extra-life threshold check at `$4D60 (update_score_hud_and_check_extra_life)` on a subsequent player update.
 
 ## Weapon ownership and interaction protocol
 
@@ -354,8 +354,8 @@ pepper hits; Jack `$27` \(H=9\) dies in 2 / 3 / 5.
 ### Throw spawn and velocities
 
 Coordinate convention: object `+$18` (Z) **increases downward** toward the
-floor. Ground test `$AD2A` is on-floor when `Z ≥ floor_height(map cell)`.
-Upward motion uses **negative** Z velocity. Integration is `$B20E`
+floor. Ground test `$AD2A (probe_floor_at_object)` is on-floor when `Z ≥ floor_height(map cell)`.
+Upward motion uses **negative** Z velocity. Integration is `$B20E (integrate_object_velocity)`
 (`X += vx; Y += vy; Z += vz` as 16.16 longs).
 
 Only **knife** and **pepper** are attack-thrown (`$21E6 (player_release_thrown_weapon)` → command 3). Bottle is
@@ -749,7 +749,7 @@ void apply_pickup_effect(Player *p, unsigned effect) {
 | `$6AF4 (phone_booth_dispatcher)` | Type-$11 intact telephone-booth and fragment dispatcher. |
 | `$6B34 (shatter_phone_booth)` | Shatter the telephone booth and emit up to ten glass/booth fragments. |
 | `$6C84 (breakable_type19_dispatcher)` | Type-$19 breakable/bouncing prop dispatcher. |
-| `$10DA6 (sub_00010DA6)` | Add three-byte packed-BCD score value. |
+| `$10DA6 (add_bcd_score_value)` | Add three-byte packed-BCD score value. |
 | `$10DCA (add_bcd_resource_value)` | Add one-byte packed-BCD life/special value using predecrement. |
 
 ## Code-label confirmation audit
@@ -786,7 +786,7 @@ dispatcher and remains correctly listed below.
 | Shards non-damaging | **Closed** | `$61BE (bottle_shard_dispatcher)` no `+$34` / no `$95CE` |
 | `+$51` ∈ {0,1,2,3} | **Closed** | Static writers |
 | Adam/Blaze long-weapon reach | Deferred | Unmeasured; not required for base model |
-| Hang-time per map cell | Deferred | Launch law fixed; `$AD2A` floor varies |
+| Hang-time per map cell | Deferred | Launch law fixed; `$AD2A (probe_floor_at_object)` floor varies |
 | Booth/crate reward producer | Open | Outside `$11`/`$19` handlers |
 
 Companion matrices and formulas:

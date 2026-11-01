@@ -127,7 +127,7 @@ Knife launcher `$5D84 (launch_released_weapon)` and pepper `$62DA
 | Z spawn delta | `+$10` (16) | `+$10` (16) |
 
 Coordinate convention for `+$18` (Z): **increases downward** (toward the floor).
-Ground test `$AD2A` reports “on floor” when `Z ≥ floor_height(map cell)`.
+Ground test `$AD2A (probe_floor_at_object)` reports “on floor” when `Z ≥ floor_height(map cell)`.
 Jump/upward motion uses **negative** Z velocity (e.g. pepper `vz = −3`).
 
 ### 4.3 Throw velocities (integer high word of 16.16 longs)
@@ -137,7 +137,7 @@ Jump/upward motion uses **negative** Z velocity (e.g. pepper `vz = −3`).
 | Knife | `±16` px/frame | `0` | impact/fall `+$8800` ≈ 0.53125 px/fr² |
 | Pepper | `±6` px/frame | `−3` (up) | flight `+$A800` ≈ 0.65625 px/fr² |
 
-Position integration (`$B20E`): `X += vx; Y += vy; Z += vz` (16.16).
+Position integration (`$B20E (integrate_object_velocity)`): `X += vx; Y += vy; Z += vz` (16.16).
 
 ### 4.4 Launch geometry (ROM + live, final)
 

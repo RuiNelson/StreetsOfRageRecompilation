@@ -34,7 +34,7 @@ P1 is always the object at `$FFB800 (p1_object)`; P2 is always at `$FFB880 (p2_o
 | `+$00` | byte | Object type/lifecycle. `1` is an active playable character; `15` is the dead/game-over/continue object. | High: `$2B48 (resolve_player_death)`, `$5434`-`$56xx`. |
 | `+$01` | byte | General object flags (visibility/activity/collision bits). | High at bit level; not all bits named. |
 | `+$08` | word | Animation/action selector. Its low bits also encode facing/variant information in several routines. | High. |
-| `+$0A` | byte | Current animation frame. | High: incremented by `sub_39E8`; used by hit tables. |
+| `+$0A` | byte | Current animation frame. | High: incremented by `$39E8 (player_step_animation_frame)`; used by hit tables. |
 | `+$0D` | byte | Current frame duration. | High. |
 | `+$10` | word/fixed pair | World X position (the surrounding long also carries fractional precision). | High. |
 | `+$14` | word/fixed pair | Ground-plane Y position. | High. |
@@ -202,17 +202,17 @@ Several hurt/throw paths call `$351E (apply_player_damage)` only when the releva
 
 ### Falls and out-of-bounds deaths
 
-`sub_358C` treats a player whose height/position field reaches `$01C0` as having fallen out of the playable area. If health is still nonzero it deducts a life through the same death bookkeeping used by KO, then resolves respawn/game-over. In level index 7 the same boundary instead starts a fade, reflecting Round 8's special ending/arena flow.
+`$358C (player_fall_out_of_arena_check)` treats a player whose height/position field reaches `$01C0` as having fallen out of the playable area. If health is still nonzero it deducts a life through the same death bookkeeping used by KO, then resolves respawn/game-over. In level index 7 the same boundary instead starts a fade, reflecting Round 8's special ending/arena flow.
 
 ## KO, life deduction, and respawn
 
 There are three distinct moments:
 
 1. **Fatal hit:** health reaches zero; `$333E/$33E4` starts the fatal launch/animation.
-2. **Life deduction:** the death animation reaches the routine at `$2AE0`, which calls `$3448`.
+2. **Life deduction:** the death animation reaches the routine at `$2AE0`, which calls `$3448 (player_lose_life)`.
 3. **Respawn or game-over resolution:** `$2B48 (resolve_player_death)` examines the now-decremented life counter.
 
-`sub_3448` selects the byte immediately before the player's special counter. Because lives and specials are adjacent (`$FFFF20/$FFFF21` and `$FFFF23/$FFFF24`), this is the life byte. It invokes the BCD arithmetic helper at `$10DCA (add_bcd_resource_value)` with table entry `$0C`, whose packed value is `$99999999`; one `ABCD` operation therefore subtracts one from the one-byte packed-BCD life counter. It also refreshes the lives/special HUD.
+`$3448 (player_lose_life)` selects the byte immediately before the player's special counter. Because lives and specials are adjacent (`$FFFF20/$FFFF21` and `$FFFF23/$FFFF24`), this is the life byte. It invokes the BCD arithmetic helper at `$10DCA (add_bcd_resource_value)` with table entry `$0C`, whose packed value is `$99999999`; one `ABCD` operation therefore subtracts one from the one-byte packed-BCD life counter. It also refreshes the lives/special HUD.
 
 `$2B48 (resolve_player_death)` then behaves as follows:
 
@@ -499,7 +499,7 @@ adjust_player_health: health = clamp(health - damage, 0, 80), redraw bar
                             death animation completes
                                   |
                                   v
-                         sub_3448: lives -= 1 (BCD)
+                         $3448 (player_lose_life): lives -= 1 (BCD)
                                   |
                  +----------------+----------------+
                  |                                 |

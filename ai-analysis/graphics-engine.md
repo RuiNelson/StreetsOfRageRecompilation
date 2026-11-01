@@ -734,7 +734,7 @@ right. The pairing is visible in the shape ids the two members select: in
 `$1FC70 (garcia_animation_set)`, animation 10 uses attack shape `$12`
 (X offset 0, width 40) where animation 11 uses `$13` (X offset −40, width
 40), and the same holds for `$14`/`$15` and `$18`/`$19`. That is the
-separate forward/backward shape record pair described for `$AB24`, selected
+separate forward/backward shape record pair described for `$AB24 (test_shape_box_overlap)`, selected
 here by the animation data rather than by a mirroring step at collision
 time.
 

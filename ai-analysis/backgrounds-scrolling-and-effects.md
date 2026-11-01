@@ -265,7 +265,7 @@ the level load. It first stores two per-level table pointers from `$19C04
 (level_collision_class_table_offsets)` into `$FFFC34
 (collision_class_attribute_table_ptr)` and `$FFFC38
 (collision_class_height_table_ptr)`. Rounds 1-5 share one pair; Rounds 6, 7,
-and 8 each have their own. The collision query near `$AD30` reads a nibble from
+and 8 each have their own. The collision query near `$AD30 (probe_floor_at_object_offset)` reads a nibble from
 `$FFA000 (level_collision_class_map)`, using `$FFE02E
 (primary_plane_blockmap_stride)` as its row stride. It returns the class byte
 only when the height is at least the class word. The visual map and the
