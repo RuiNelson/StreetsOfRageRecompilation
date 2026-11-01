@@ -107,8 +107,13 @@ void draw(const Menu &m, Canvas &canvas) {
 } // namespace
 
 void drawOptionsRow(SystemMemory &memory, bool highlighted) {
-    const int row = 16; // free in the ROM's layout: VIDEO is at 15, EXIT at 18
+    const int row = 17; // free in the ROM's layout: VIDEO is at 15
     drawText(memory, kLabelColumn, row, "QUALITY-OF-LIFE", highlighted);
+}
+
+void drawExitRow(SystemMemory &memory, bool highlighted) {
+    const int row = 19; // the ROM's bundles $0A and $10 put it at 18, against the row above
+    drawText(memory, kLabelColumn, row, "EXIT", highlighted);
 }
 
 void open() {

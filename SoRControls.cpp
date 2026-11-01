@@ -317,7 +317,7 @@ void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
             }
             // Redraw the OPTIONS screen as options_menu_build does, with
             // this row selected.
-            cpu().d[0] = 0x100C0B04u;
+            cpu().d[0] = 0x000C0B04u;
             SOR_CONTROLS_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1190u, 0x00A8B8u);
             cpu().setDw(4, 0x2000u);
             SOR_CONTROLS_CALL_68K(options_draw_sound_name(0x11D6u), 0x119Cu, 0x0011D6u);
@@ -332,6 +332,7 @@ void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
             SoRControlsMenu::drawOptionsRow(memory(), !videoRow && !qolRow);
             SoRVideoMenu::drawOptionsRow(memory(), liveVideoConfig(vdp()), videoRow);
             SoRQolMenu::drawOptionsRow(memory(), qolRow);
+            SoRQolMenu::drawExitRow(memory(), false);
         }
         return68k(cpu());
         return;

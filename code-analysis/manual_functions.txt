@@ -29,6 +29,9 @@
 # --qol cam (SoRManualFunctions.cpp): the camera's follow zone moves under the option.
 018F5C # compute_camera_follow_x_velocity
 
+# OPTIONS' EXIT row, one row lower for QUALITY-OF-LIFE (SoRMainMenus.cpp, with its neighbours).
+0014BC # options_highlight_exit
+
 # Widescreen arena (SoRWidescreenArena.cpp): ports whose screen-edge constants widen with --widescreen.
 0043AA # clamp_players_to_gameplay_bounds
 000C60 # spawn_single_object

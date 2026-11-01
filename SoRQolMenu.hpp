@@ -17,6 +17,9 @@ namespace SoRQolMenu {
 /// The OPTIONS screen's QUALITY-OF-LIFE row.
 void drawOptionsRow(SystemMemory &memory, bool highlighted);
 
+/// The OPTIONS screen's EXIT row, one row below the ROM's to make room for this one.
+void drawExitRow(SystemMemory &memory, bool highlighted);
+
 void open();
 bool isOpen();
 

@@ -357,8 +357,7 @@ void StreetsOfRage::options_menu_build(m_long /*entry_*/) {
     // the CONTROLS row (SoRControlsMenu), drawn below.
     cpu().d[0] = 0x000C0504u;
     SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1190u, 0x00A8B8u);
-    cpu().d[0] = 0x10u;
-    SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x1198u, 0x00A8B8u);
+    SoRQolMenu::drawExitRow(memory(), false);
     SOR_CALL_68K(options_draw_sound_name(), 0x119Cu, 0x0011D4u);
 
     cpu().setDw(4, 0x2000u);
@@ -514,14 +513,19 @@ void StreetsOfRage::options_input_level(m_long /*entry_*/) {
     options_draw_level_digit();
 }
 
+void StreetsOfRage::options_highlight_exit(m_long /*entry_*/) {
+    traceEnter(0x14BCu);
+    memory().writeWord(kSelectScreenSubstate, static_cast<m_word>(memory().readWord(kSelectScreenSubstate) + 2));
+    SoRQolMenu::drawExitRow(memory(), true);
+    cpu().ssp += 4;
+}
+
 void StreetsOfRage::options_input_exit(m_long /*entry_*/) {
     traceEnter(0x14CAu);
 
     SOR_CALL_68K(options_row_nav(), 0x14CEu, 0x0014F2u);
     if (cpu().ne()) {
-        cpu().d[0] = 0x10u;
-        cpu().setNZClearVC(0x10u, 0x80000000u);
-        SOR_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x14E8u, 0x00A8B8u);
+        SoRQolMenu::drawExitRow(memory(), false);
         cpu().ssp += 4;
         return;
     }
