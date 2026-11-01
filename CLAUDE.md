@@ -42,6 +42,7 @@ Before changing files:
 | `SoRPause.*` | The pause menu, and `$10D2E (handle_pause_start_input)` that runs it (see **The pause menu**) |
 | `SoRVideoConfig.*` | `video.yaml`, next to `controls.yaml`: frame sync, widescreen, fullscreen, integer scaling |
 | `SoRVideoMenu.*` | OPTIONS > VIDEO, the in-game video menu (see **OPTIONS > VIDEO**) |
+| `SoRPoliceCall.cpp` | `--qol police`: camera back $200 (`$192A4`), vehicle started $100 nearer or it is culled and the call never ends; types $05, $0D, $0E and $29 update twice, the shake and a later boss's wait are set when they start. Round 7 keeps the ROM's camera. Its dispatchers still jump through the state tables into generated states; the states themselves are not ported |
 | `SoRQolConfig.*`, `SoRQolMenu.*` | `qol.yaml` and OPTIONS > QUALITY-OF-LIFE (sub-states `$32`/`$34`). `cam` moves the follow zone of `$18F5C` (`SoRManualFunctions.cpp`): 30% of the visible screen, 70% on round 8, the ROM's on round 7's elevator; 32 px between a lead and a second player, as in the ROM. The row is at 17, and EXIT moved from 18 to 19 (user): the host draws it, not bundles `$0A`/`$10`. `grab` (`SoRObjectRoutines.cpp`): `$3504` keeps the weapon when +$7D is 2 or 3 with a player in +$7E, and `$3936` turns the ROM's unarmed way out of a hold (action `$02`) into armed `$30` |
 | `SoRMenuCanvas.hpp` | What those two menus share: the OPTIONS font, drawing to plane A, held directions |
 | `SoRPlatform.hpp` | `consoleMenus()`: the PS5's menus, on with `__PROSPERO__` or `--console-menus` (workspace `CLAUDE.md`, **PS5 menus**) |

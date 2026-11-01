@@ -11,6 +11,7 @@ namespace SoRQolConfig {
 struct QolConfig {
     bool rollCameraEarlier     = false; // --qol cam
     bool friendGrabKeepsWeapon = false; // --qol grab
+    bool shortPoliceCall       = false; // --qol police
 
     bool operator==(const QolConfig &) const = default;
 };
