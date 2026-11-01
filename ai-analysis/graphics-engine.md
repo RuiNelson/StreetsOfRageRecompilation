@@ -1197,3 +1197,13 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$125FA (load_tilemap_bundle_2_trampoline)` | load_vdp_tilemap_bundle with d0 = 2 |
 | `$12604 (load_tilemap_bundle_8_trampoline)` | load_vdp_tilemap_bundle with d0 = 8 |
 | `$1BDC (char_select_preview_jump_reaction)` | Runs the preview jump when +$5C is set, plays $A6, and lands back on the floor when it ends |
+| `$B736 (story_resolve_palette_list)` | Resolves palette list d0 in a6 through the offset table at $3F29C |
+| `$B7F8 (titlescreen_clear_plane_c000)` | Sets the VDP address to $C000 and writes 128 blocks of zero through vdp_fill_long |
+| `$B9BA (story_draw_tilemap_asset)` | Draws asset d7 of the table at $3F5B6: source, VRAM address, width and height, adding d6 to each word and d4 to the address per row |
+| `$10CA8 (hud_tick_round_timer)` | Decrements round_timer_bcd and draws it; at zero raises time_over_flag, sets time_over_sequence_flags to 3 and posts sound $E1 |
+| `$10CE6 (hud_draw_bcd_digit_tiles)` | Writes one BCD digit as two stacked tiles from base d6, the lower one a row further down |
+| `$10F30 (copy_status_tile_blocks)` | With d6 = 3 falls into copy_status_tile_blocks_d6 |
+| `$10F32 (copy_status_tile_blocks_d6)` | For each index at a3 copies d6+1 tiles from a4 through the tile index table at $6EE52 |
+| `$10F6A (status_screen_filter_nibble)` | Keeps nibble values 1, $C and $D and turns any other into 0 |
+| `$11090 (hud_write_plate_row)` | Writes three longs of the plate row at $110A8 and five of d1 to the data port at a2 |
+| `$12888 (top10_draw_two_row_glyph)` | Draws one character as two stacked tiles from a byte holding two nibbles; $FF is the blank |

@@ -21,7 +21,7 @@ Primary evidence:
 | Pepper throw / smoke | `$6256 (pepper_spray_weapon_dispatcher)`, `$62DA (throw_pepper_spray)`, `$6312`, `$6372 (emit_pepper_smoke_sequence)` |
 | Pickup search box | `$3136 (find_close_interaction_target)` |
 | Attacker registration | `$95CE (register_enemy_attacker)` / `$95E8 (unregister_enemy_attacker)` (`$FFFB22 (enemy_attacker_count)` list) |
-| Box test | `$ABA4 (resolve_enemy_registered_attacker_contact)` / `$ABF8 (test_attacker_shape_box_overlap)` / `$AC78`, shapes `$1A68E` |
+| Box test | `$ABA4 (resolve_enemy_registered_attacker_contact)` / `$ABF8 (test_attacker_shape_box_overlap)` / `$AC78 (test_axis_overlap_two_shapes)`, shapes `$1A68E` |
 | Enemy damage application | `$9B88 (ordinary_enemy_apply_contact_damage)` |
 | Enemy HP / contact damage | `$26FCE (ordinary_enemy_combat_value_table)` |
 

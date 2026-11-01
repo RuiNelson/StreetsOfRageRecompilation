@@ -951,6 +951,8 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$18824 (vblank_round_clear_draw_tally_request)` | Consumes round_clear_tally_draw_request and draws one of the tally rows through the table at $18840 |
 | `$18A02 (vblank_round_clear_dispatch_request)` | Consumes round_clear_vblank_request and runs its entry of the table at $18A1E |
 | `$18A96 (vblank_round_clear_draw_player_scores)` | Draws the score digits of the active players, by player_mode through the table at $18AB4 |
+| `$12766 (high_score_clear_player_new_flags)` | Clears the player bit (7 for P1, 6 for P2) in all ten top10_score_table entries and returns d0 = 0 |
+| `$127BA (sort_top10_score_table)` | Sorts the twelve-byte entries of top10_score_table by score, ignoring the two flag bits, then by the fields at +$0A and +$04 |
 
 ## Object type map
 

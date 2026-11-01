@@ -834,3 +834,5 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$7DF0 (round7_fixed_type52_dispatcher)` | Type $52: state table $7DF8; seeded in level index 6 |
 | `$7E20 (round7_fixed_type53_dispatcher)` | Type $53: state table $7E28; seeded in level index 6 |
 | `$7424 (thrown_prop_contact_reaction)` | Contact response of a thrown prop: reaction 1 on the object hit, except that type $45 with +$40 clear only clears +$7E and +$7C on it |
+| `$708A (object_type17_palette_cycle)` | Every four calls steps type17_palette_cycle_index through five palette lists from the table at $70BA |
+| `$7BCE (object_type42_contact_reaction)` | resolve_object_contact, then by result: 3 clears +$7E and +$7C on the other object, 1 sets its +$7D to 1 |

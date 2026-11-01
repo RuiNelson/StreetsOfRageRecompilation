@@ -116,6 +116,7 @@
 0001077C, game_mode_levelstart, "100% - Updates the level-start / intro sequence (game_state=0x2A)"
 
 # Story / campaign progression
+00001C2E, char_select_start_preview_animation, "95% - Starts the animation d0 of the preview object, loads its frame timer and sets +$51 to request the art upload"
 00000FE2, char_select_init_animation_trampoline, "100% - jmp object_init_animation_from_zero"
 0000B42E, intro_load_scene_assets, "90% - Resets the VDP, clears the blockmap RAM, sets the story VDP registers, decompresses six Kosinski story assets and uploads the tiles"
 0000B558, titlescreen_load_scene, "85% - Loads the title assets, uploads the tiles at VDP $0620, loads seven palette lists and positions the cameras"
@@ -269,6 +270,16 @@
 00000D70, write_art, "100% - Queues art for DMA upload; sets/clears bits in status_bitfield_1"
 
 # Graphics engine: object rendering, palettes, camera streaming, and VBlank upload
+0000B736, story_resolve_palette_list, "85% - Resolves palette list d0 in a6 through the offset table at $3F29C"
+0000B7F8, titlescreen_clear_plane_c000, "90% - Sets the VDP address to $C000 and writes 128 blocks of zero through vdp_fill_long"
+0000B9BA, story_draw_tilemap_asset, "95% - Draws asset d7 of the table at $3F5B6: source, VRAM address, width and height, adding d6 to each word and d4 to the address per row"
+00010CA8, hud_tick_round_timer, "95% - Decrements round_timer_bcd and draws it; at zero raises time_over_flag, sets time_over_sequence_flags to 3 and posts sound $E1"
+00010CE6, hud_draw_bcd_digit_tiles, "100% - Writes one BCD digit as two stacked tiles from base d6, the lower one a row further down"
+00010F30, copy_status_tile_blocks, "85% - With d6 = 3 falls into copy_status_tile_blocks_d6"
+00010F32, copy_status_tile_blocks_d6, "85% - For each index at a3 copies d6+1 tiles from a4 through the tile index table at $6EE52"
+00010F6A, status_screen_filter_nibble, "90% - Keeps nibble values 1, $C and $D and turns any other into 0"
+00011090, hud_write_plate_row, "85% - Writes three longs of the plate row at $110A8 and five of d1 to the data port at a2"
+00012888, top10_draw_two_row_glyph, "85% - Draws one character as two stacked tiles from a byte holding two nibbles; $FF is the blank"
 0001A0D6, upload_player_art_dma_one_player, "95% - Consumes +$51 of one player art record and DMAs the upper and lower art from player_art_dma_upper_table"
 00001844, char_select_upload_preview_art_dma_one, "95% - Character-select version of upload_player_art_dma_one_player"
 000190EA, camera_update_parallax_strip_rows, "80% - Scales the camera delta by each strip ratio of a camera record for the scroll rows"
@@ -383,6 +394,13 @@
 0001A53E, player_art_dma_lower_table, "100% - Six-byte VDP DMA parameter records selected by object+$53 for the lower player sprite-art region"
 
 # Sound / Music (68000 sequencer + Z80 DAC)
+00072BC8, sound_store_sequence_ptr_and_reset_modulation, "95% - Stores a4 in +$04 and, unless the channel is tied (bit 5), runs sound_reset_modulation"
+00072BD4, sound_reset_modulation, "100% - With modulation on (bit 3) reloads delay, rate, step and count from +$16-+$1A and clears +$22"
+00072C64, sound_fm_load_and_write_frequency, "100% - Loads +$10 and adds the modulation offset when bits 3 and 5 are set, then sound_fm_write_frequency adds the detune and writes it"
+0007326E, sound_ym2612_write_channel_guarded, "100% - Writes d0 and d1 to the channel register under the bus request unless the channel is muted (bit 0)"
+0007354A, sound_fm_write_register_with_carrier_volume, "90% - Writes a voice register, adding the channel volume to the total level of carrier operators"
+00073964, sound_psg_load_and_write_frequency, "100% - Unless muted or resting loads +$10, adds modulation and detune and writes the PSG period"
+00073A42, sound_psg_silence_channel, "100% - Sets the key-off bit and writes full attenuation, and for the noise channel also to $FF"
 00072BFE, sound_fm_check_note_cutoff, "90% - At the note cutoff point keys the channel off and leaves the channel update, unless the next sequence byte is $FD"
 000738BC, sound_psg_check_note_cutoff, "90% - PSG version of sound_fm_check_note_cutoff"
 00072B5E, sound_fm_read_next_note, "100% - Reads sequence commands and the next note or rest for an FM channel"
@@ -474,6 +492,8 @@
 00019848, load_level_graphics_maps_and_camera, "100% - Loads the per-level mixed-codec graphics/maps package, builds plane data, and initializes both camera structures"
 
 # Level engine, spawn pipeline, and camera progression
+00012766, high_score_clear_player_new_flags, "95% - Clears the player bit (7 for P1, 6 for P2) in all ten top10_score_table entries and returns d0 = 0"
+000127BA, sort_top10_score_table, "100% - Sorts the twelve-byte entries of top10_score_table by score, ignoring the two flag bits, then by the fields at +$0A and +$04"
 00012832, init_top10_score_table, "100% - Enigma-decodes the default ten-entry table at $12842 into top10_score_table at power-on"
 00018324, round_clear_add_bonus_repeated, "95% - Adds the score table entry d0 to the total at a4 d6 times through add_bcd_score_value"
 00018824, vblank_round_clear_draw_tally_request, "85% - Consumes round_clear_tally_draw_request and draws one of the tally rows through the table at $18840"
@@ -498,6 +518,10 @@
 0001C378, level_resource_table, "100% - Eight six-byte records: resource-list pointer plus two parameters, indexed by level"
 
 # Player health, lives, combat, and police specials
+00003B12, player_load_frame_extents, "85% - Copies +$02 and +$03 from the current animation frame record, from the other pair of bytes when the frame word has bit 15 set"
+00003B4E, player_resolve_lane_wall, "85% - With lane velocity and outside level index 6 probes the floor and, when blocked through the table at $3B74, undoes the lane move and clears +$20"
+00003BAE, test_solid_object_collision, "90% - Tests a0 against one solid object with the X box chosen by its type from the table at $3C6A; a player ignores a moving type $45"
+00003C92, player_resolve_side_wall, "85% - Probes the floor 8 px ahead of the X velocity and acts through the table at $3CAE; $3CB6 restores X and lane from player_transform_snapshot_cursor"
 00005620, hud_clear_p1_status_rows, "90% - Fills the two window-plane HUD rows at $FF600A and $FF605A with blank tile $6D7; hud_clear_p2_status_rows is the same on the right side"
 000106DA, player_queue_character_ko_voice, "90% - Plays the voice selected by character +$50 from table $106E6"
 000039C6, player_tick_temporary_state_timer, "95% - While +$59 bit 0 is set counts +$5C down; at 0 clears +$58 bits 4-5 and +$59 bit 0"
@@ -604,6 +628,8 @@
 0000B3C0, police_special_enemy_sweep_trampoline, "100% - Object table trampoline for type $29; jumps to police_special_enemy_sweep_update"
 
 # Items, weapons, and breakable props
+0000708A, object_type17_palette_cycle, "90% - Every four calls steps type17_palette_cycle_index through five palette lists from the table at $70BA"
+00007BCE, object_type42_contact_reaction, "85% - resolve_object_contact, then by result: 3 clears +$7E and +$7C on the other object, 1 sets its +$7D to 1"
 00007424, thrown_prop_contact_reaction, "80% - Contact response of a thrown prop: reaction 1 on the object hit, except that type $45 with +$40 clear only clears +$7E and +$7C on it"
 000068E2, points_3000_pickup_dispatcher, "100% - Type $3F: 3,000-point pickup wrapper"
 00006904, points_10000_pickup_dispatcher, "100% - Type $40: 10,000-point pickup wrapper"
@@ -677,6 +703,9 @@
 0000B3BA, object_type54_dispatcher, "100% - Object type $54 primary-state dispatcher; initializes and coordinates a multi-slot linked segmented effect object"
 
 # Ordinary enemy AI (object types $20-$2A)
+0000AA34, test_contact_attackers_and_players, "100% - Tests a0 first against enemy_attacker_list and then against the active players; the contact test of resolve_object_contact"
+0000AC78, test_axis_overlap_two_shapes, "95% - Tests one axis between two shape records; d7 = 1 on overlap"
+0000E7B0, signal_type24_contact_wrapper, "95% - Signal contact: a target in action $5C sends him to state $0D; his own box on a free player at a height within 8 is his hold, state $0C"
 000092F0, release_progression_entity, "100% - Decrements active_progression_entity_count, gives back a deferred spawn credit and the art residency counts, and ends the section flags when the count reaches 0"
 0000B228, object_clear_velocity, "100% - Clears +$1C, +$20 and +$24"
 0000B818, clear_p1_and_object_slots, "100% - Fills 41 blocks of 128 bytes from p1_object with zero"
@@ -778,6 +807,8 @@
 00027032, ordinary_enemy_animation_set_pointer_table, "100% - L[11] - Animation/behavior resource pointer selected by ordinary type $20-$2A"
 
 # Bosses and final encounter
+0001572A, abadede_set_animation_and_facing, "95% - Stores d1 in +$0E, starts animation d0 from +$04 and syncs the facing with abadede_sync_facing_from_velocity"
+000178D0, bongo_place_flame, "100% - Places the flame 20 px ahead of him on his side, 4 lanes down, and sets its height from his frame"
 000145C4, abadede_find_partner, "100% - Scans the first 32 object slots for another type $30 and stores it in +$52, or 0"
 00015604, abadede_start_knockback, "95% - Sets the upward velocity, the X velocity and the +$5E drag away from the attacker in +$5C"
 00015878, later_boss_start_action_unmirrored_side, "85% - Sets the facing bit when +$60 is clear and starts the type-indexed animation; the opposite of later_boss_start_action_mirrored"

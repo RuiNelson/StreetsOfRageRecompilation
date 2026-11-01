@@ -527,3 +527,10 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$73102 (sound_fm_silence_channel)` | Keys the channel off, sets total level $7F and release rate $F on its four operators |
 | `$736DA (sound_fm_apply_carrier_volume)` | Writes the channel volume to the carrier operators chosen by the algorithm mask table $73728 |
 | `$73142 (sound_ym2612_silence_all_fm)` | Keys off all six FM channels and sets total level $7F on every operator |
+| `$72BC8 (sound_store_sequence_ptr_and_reset_modulation)` | Stores a4 in +$04 and, unless the channel is tied (bit 5), runs sound_reset_modulation |
+| `$72BD4 (sound_reset_modulation)` | With modulation on (bit 3) reloads delay, rate, step and count from +$16-+$1A and clears +$22 |
+| `$72C64 (sound_fm_load_and_write_frequency)` | Loads +$10 and adds the modulation offset when bits 3 and 5 are set, then sound_fm_write_frequency adds the detune and writes it |
+| `$7326E (sound_ym2612_write_channel_guarded)` | Writes d0 and d1 to the channel register under the bus request unless the channel is muted (bit 0) |
+| `$7354A (sound_fm_write_register_with_carrier_volume)` | Writes a voice register, adding the channel volume to the total level of carrier operators |
+| `$73964 (sound_psg_load_and_write_frequency)` | Unless muted or resting loads +$10, adds modulation and detune and writes the PSG period |
+| `$73A42 (sound_psg_silence_channel)` | Sets the key-off bit and writes full attenuation, and for the noise channel also to $FF |

@@ -642,3 +642,4 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$B42E (intro_load_scene_assets)` | Resets the VDP, clears the blockmap RAM, sets the story VDP registers, decompresses six Kosinski story assets and uploads the tiles |
 | `$B558 (titlescreen_load_scene)` | Loads the title assets, uploads the tiles at VDP $0620, loads seven palette lists and positions the cameras |
 | `$3F284 (story_scene_set_vdp_registers)` | Writes VDP registers $0B, $05, $0D and $10 for the story scenes |
+| `$1C2E (char_select_start_preview_animation)` | Starts the animation d0 of the preview object, loads its frame timer and sets +$51 to request the art upload |

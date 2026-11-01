@@ -397,6 +397,10 @@ FFFF4A, top10_score_table, "95% - Ten-entry high-score table decoded by init_top
 FFFA4F, round_clear_vblank_request, "80% - B - One-shot request consumed by vblank_round_clear_dispatch_request"
 FFFA50, round_clear_tally_draw_request, "85% - B - One-shot request consumed by vblank_round_clear_draw_tally_request"
 
+FFFA49, time_over_sequence_flags, "90% - B - Set to 3 by hud_tick_round_timer; game_mode_ingame takes the time-over path while nonzero and consumes bit 1"
+FFFA5E, type17_palette_cycle_index, "95% - B - Step 0-4 of object_type17_palette_cycle"
+FFFA5F, type17_palette_cycle_timer, "95% - B - Countdown of object_type17_palette_cycle, reloaded with 3"
+
 ; --- Identified from the call map: ROM tables ---
 0032F2, player_hold_reaction_table, "95% - B[] - Action-indexed reaction written to +$7D by player_write_hold_reaction"
 003664, player_action_velocity_table_ptrs, "95% - L[] - Character-indexed pointers to the action velocity bytes read by player_load_action_velocity"
@@ -409,3 +413,7 @@ FFFA50, round_clear_tally_draw_request, "85% - B - One-shot request consumed by 
 0106E6, player_ko_voice_table, "90% - B[4] - Character-indexed voice ids read by player_queue_character_ko_voice"
 016564, later_boss_score_table, "95% - B[] - Type-indexed score entries read by later_boss_award_score"
 0168A4, later_boss_type_offset_table, "85% - B[] - Type-indexed signed pairs read by later_boss_load_type_offsets"
+003C6A, solid_object_box_table, "85% - B[] - Type-selected X boxes read by test_solid_object_collision"
+03F29C, story_palette_list_offset_table, "85% - W[] - Offsets to the palette lists read by story_resolve_palette_list"
+03F5B6, story_tilemap_asset_table, "95% - 8-byte records - Source pointer, VRAM address, width and height read by story_draw_tilemap_asset"
+06EE52, status_tile_index_table, "85% - B[] - Four-byte tile index groups read by copy_status_tile_blocks_d6"

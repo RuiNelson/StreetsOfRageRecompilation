@@ -708,7 +708,7 @@ first), `$991A (ordinary_enemy_begin_knockdown)` knockdown (`$D948` for `$20`/`$
 
 ### Contact, in the order the ROM tests it
 
-`$A9BA (ordinary_enemy_contact_dispatch)` calls `$AA22 (resolve_object_contact)`, whose `$AA34` first walks the registered attackers at
+`$A9BA (ordinary_enemy_contact_dispatch)` calls `$AA22 (resolve_object_contact)`, whose `$AA34 (test_contact_attackers_and_players)` first walks the registered attackers at
 `$FFFB22 (enemy_attacker_count)` (up to five: thrown bodies, a swung or thrown weapon) through
 `$ABA4 (resolve_enemy_registered_attacker_contact)` -- the attacker's `+$02` box on this enemy's `+$03` body is code 5,
 this enemy's box on the attacker's body code 4 (both only with this enemy's
@@ -814,7 +814,7 @@ out of reach of the player's punch (Blaze 18-68).
 
 ### Signal `$24`: his touch is his hold
 
-`$E7B0` wraps every state's contact: the target in action `$5C` sends him to
+`$E7B0 (signal_type24_contact_wrapper)` wraps every state's contact: the target in action `$5C` sends him to
 `$0D` (stand); his own box on the player -- `$3D` (-11..+11) on every frame he
 stands or walks -- is, with the player holding nobody and the heights within
 8, his hold on the player (`+$7D` = 2, state `$0C`, `$E6F2`: the player is
@@ -881,7 +881,7 @@ front within 144 px and 12 lanes, else it is thrown -- and `$44` (animation
 `$38`) for the bottle. `$5E2E (update_held_weapon)`'s player-holder path places the weapon from
 `$5FC8` (per animation pair, per character, per frame: X, Z and a collision
 bit) and, on frames with the bit, registers it (`$95CE (register_enemy_attacker)`) so every enemy's
-`$AA34` meets it first:
+`$AA34 (test_contact_attackers_and_players)` meets it first:
 
 | Weapon | Live frame's origin (Axel / Adam / Blaze) | Box | Damage |
 | --- | --- | --- | --- |
@@ -1493,7 +1493,7 @@ axes compare inclusively (`$AB88 (test_axis_overlap_from_shape)`), so lanes 16 a
 that meets his leaning body -- 22 px out on frames 1-2, 40 px on frames 3-6
 -- therefore takes the hold through a kick already on its frames.
 
-Whether any of that is tested at all is read off the *player*. `$AA34`
+Whether any of that is tested at all is read off the *player*. `$AA34 (test_contact_attackers_and_players)`
 skips a player whose `+$59` bit 1 is set -- every hit reaction sets it
 (`$333E (resolve_player_hit_or_ko)`, `$33EC`, `$3468`, `$34CA`) and the floor
 landing `$3F24` clears it, so a knocked-down player is not kicked again --
@@ -2232,7 +2232,7 @@ launch aims at the target's lane and the acceleration carries him past it.
 `$1781E (bongo_spawn_flame)` takes the first free slot after his, copies his `+$4A` into its
 `+$34` (32 on Normal), links both `+$6E` through `$17238
 (boss_link_child_object)` (flags `+$01` = `$0C`: animated, never culled)
-and starts animation `$38`. `$178D0` places it 20 px ahead of him on his
+and starts animation `$38`. `$178D0 (bongo_place_flame)` places it 20 px ahead of him on his
 facing, his lane + 4, and `$33`/`$34` above his height (his frame 0 or
 not). Its update:
 
@@ -2256,7 +2256,7 @@ never entered -- a holder is hit like anyone else.
 His update's `$17B52 (later_boss_contact_test)` runs first: the player's attack box (a walking box
 included) against his body -- the grab (code 3) when the player's `+$34` is
 clear, `+$4C` clear and heights within 8. The flame's test in the same pass
-then sees the grab's code in the player's `+$7C` and `$AA34` tests nothing.
+then sees the grab's code in the player's `+$7C` and `$AA34 (test_contact_attackers_and_players)` tests nothing.
 The hold is the shared `$17D54`/`$17D7C` (front at `$17D76`'s 32 px out,
 facing the holder; back at `$17DB0`'s 32 px, facing away). An **igniting**
 flame keeps being placed on him through the hold, so a front grab inside the
@@ -2958,7 +2958,7 @@ lockstep):
   four updates a frame -- and a player's hit reaction is shorter than the gap
   between them: caught inside it, a player takes two to four in a row.
 - A thrown body goes on the list at `$FFFB24 (enemy_attacker_list)` (`$95CE (register_enemy_attacker)`; `$95E8 (unregister_enemy_attacker)` takes it off
-  on landing), which every ordinary enemy tests first (`$AA34`): a thrown Mr.
+  on landing), which every ordinary enemy tests first (`$AA34 (test_contact_attackers_and_players)`): a thrown Mr.
   X knocks a Garcia down, and a thrown Garcia knocks Mr. X down. A held Mr. X
   struck that way (codes 2 and 5 in `$13598 (mr_x_held_read_holder)`) loses a
   point and is knocked down out of the hold.
@@ -3189,6 +3189,9 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$92F0 (release_progression_entity)` | Decrements active_progression_entity_count, gives back a deferred spawn credit and the art residency counts, and ends the section flags when the count reaches 0 |
 | `$B228 (object_clear_velocity)` | Clears +$1C, +$20 and +$24 |
 | `$B818 (clear_p1_and_object_slots)` | Fills 41 blocks of 128 bytes from p1_object with zero |
+| `$AA34 (test_contact_attackers_and_players)` | Tests a0 first against enemy_attacker_list and then against the active players; the contact test of resolve_object_contact |
+| `$AC78 (test_axis_overlap_two_shapes)` | Tests one axis between two shape records; d7 = 1 on overlap |
+| `$E7B0 (signal_type24_contact_wrapper)` | Signal contact: a target in action $5C sends him to state $0D; his own box on a free player at a height within 8 is his hold, state $0C |
 
 ## Boss helpers identified from the call map
 
@@ -3230,3 +3233,5 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$15888 (later_boss_start_base_action)` | later_boss_start_action_mirrored with action 0 |
 | `$16542 (later_boss_award_score)` | Reads the score from the type-indexed table $16564 and adds it to the player in +$70 through add_bcd_score_value |
 | `$16886 (later_boss_load_type_offsets)` | Loads a signed pair from the type-indexed table $168A4 into d1 and d2 |
+| `$1572A (abadede_set_animation_and_facing)` | Stores d1 in +$0E, starts animation d0 from +$04 and syncs the facing with abadede_sync_facing_from_velocity |
+| `$178D0 (bongo_place_flame)` | Places the flame 20 px ahead of him on his side, 4 lanes down, and sets its height from his frame |

@@ -176,7 +176,7 @@ void StreetsOfRage::abadede_sync_linked_sprite(m_long /*entry_*/) {
 // ---------------------------------------------------------------------------
 // $01572A: animation set a1 at timer d1 for the object, then its facing ($156E0).
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_01572a(m_long /*entry_*/) {
+void StreetsOfRage::abadede_set_animation_and_facing(m_long /*entry_*/) {
     traceEnter(0x0001572Au);
     auto &c   = cpu();
     auto &mem = memory();
@@ -202,7 +202,7 @@ void StreetsOfRage::abadede_init_linked_sprite_pose(m_long /*entry_*/) {
     tst(c, 0x225Cu, 16);
     c.d[0] = 6;
     tst(c, 6, 32);
-    SOR_CALL(sub_01572a, 0x00015746u, 0x0001572Au);
+    SOR_CALL(abadede_set_animation_and_facing, 0x00015746u, 0x0001572Au);
     c.ssp -= 4;
     mem.writeLong(c.ssp, c.a[0]);
     c.a[0] = sext16(mem.readWord(c.a[0] + 0x50u));

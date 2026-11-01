@@ -51,7 +51,7 @@ P1 is always the object at `$FFB800 (p1_object)`; P2 is always at `$FFB880 (p2_o
 | `+$51` | byte | Animation/object interaction gate, also used to reserve a grabbed target. | Medium-high. |
 | `+$54` | word | Remapped held/pressed input pair; byte `+$55` is the edge/press byte used by action tests. | High. |
 | `+$56` | byte | Deferred/fallback incoming damage when the attacker's live `+$34` cannot be used. | High. |
-| `+$58`, `+$59` | bytes | Player action, combo, invulnerability, and transition flags. `+$59` bit 1 is the hit-reaction bit: every hit reaction sets it (`$333E (resolve_player_hit_or_ko)`, `$33EC`, `$3468`, `$34CA`) and the floor landing `$3F24` clears it; while it is set `$AA34` tests no enemy contact on the player and a later boss's `$179F8 (later_boss_target_unavailable)` counts the player as unavailable (`enemy-ai.md`, Antonio). | Medium; `+$59` bit 1 high (writers, readers and a lockstep trace), the other bits need names per state. |
+| `+$58`, `+$59` | bytes | Player action, combo, invulnerability, and transition flags. `+$59` bit 1 is the hit-reaction bit: every hit reaction sets it (`$333E (resolve_player_hit_or_ko)`, `$33EC`, `$3468`, `$34CA`) and the floor landing `$3F24` clears it; while it is set `$AA34 (test_contact_attackers_and_players)` tests no enemy contact on the player and a later boss's `$179F8 (later_boss_target_unavailable)` counts the player as unavailable (`enemy-ai.md`, Antonio). | Medium; `+$59` bit 1 high (writers, readers and a lockstep trace), the other bits need names per state. |
 | `+$5A`, `+$5B` | bytes | Saved animation frame and duration during an interrupted/continued action. | High. |
 | `+$5C` | byte | Short timer used by attack/combo and temporary-state logic. | Medium. |
 | `+$5E` | word | Pointer to the object currently grabbed/held. | High. |
@@ -624,3 +624,7 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$5976 (object_queue_sound_trampoline)` | jmp queue_sound_id, used by the police and pickup objects |
 | `$5620 (hud_clear_p1_status_rows)` | Fills the two window-plane HUD rows at $FF600A and $FF605A with blank tile $6D7; hud_clear_p2_status_rows is the same on the right side |
 | `$106DA (player_queue_character_ko_voice)` | Plays the voice selected by character +$50 from table $106E6 |
+| `$3B12 (player_load_frame_extents)` | Copies +$02 and +$03 from the current animation frame record, from the other pair of bytes when the frame word has bit 15 set |
+| `$3B4E (player_resolve_lane_wall)` | With lane velocity and outside level index 6 probes the floor and, when blocked through the table at $3B74, undoes the lane move and clears +$20 |
+| `$3BAE (test_solid_object_collision)` | Tests a0 against one solid object with the X box chosen by its type from the table at $3C6A; a player ignores a moving type $45 |
+| `$3C92 (player_resolve_side_wall)` | Probes the floor 8 px ahead of the X velocity and acts through the table at $3CAE; $3CB6 restores X and lane from player_transform_snapshot_cursor |
