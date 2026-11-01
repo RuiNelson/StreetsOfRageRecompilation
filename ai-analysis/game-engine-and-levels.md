@@ -695,7 +695,7 @@ Bit 0 of `$FFFA0D (wave_advance_pending)` is the common “advance camera/wave p
 - scripted object completion paths;
 - the art/flow sequencer after a phase is ready;
 - particular entity/controller types such as the destructible/scripted objects
-  at `$7678` and `$7E42`.
+  at `$7678 (final_section_type46_state1)` and `$7E42 (round7_fixed_type53_state1)`.
 
 It is consumed with `bclr`, so it is an edge-like request rather than a durable
 mode. The ordinary camera machine (`$19570 (advance_wave_camera_boundary)`) consumes it for most rounds; round
@@ -961,7 +961,7 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | Type | Handler |
 | --- | --- |
 | `$01` | `$1C44 (update_player_object)` |
-| `$04` | `$8E2C` |
+| `$04` | `$8E2C (object_type04_dispatcher)` |
 | `$05` | `$597C (police_vehicle_dispatcher)` |
 | `$06` | `$18D4 (char_select_cursor_dispatcher)` |
 | `$07` | `$1A12 (char_select_character_preview_dispatcher)` |
@@ -983,7 +983,7 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$17` | `$6F7C (object_type17_dispatcher)` |
 | `$18` | `$70C4 (object_type18_dispatcher)` |
 | `$19` | `$6C84 (breakable_type19_dispatcher)` |
-| `$1A` | `$77B6` |
+| `$1A` | `$77B6 (object_type1a_dispatcher)` |
 | `$1B` | `$7370 (object_type1b_dispatcher)` |
 | `$1C` | `$7448 (object_type1c_dispatcher)` |
 | `$1D` | `$746A (object_type1d_dispatcher)` |
@@ -1069,15 +1069,15 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$7D` | `$D548 (presentation_type7d_dispatcher)` |
 | `$7E` | `$C36E (presentation_type7e_region_select)` |
 | `$7F` | `$D5C8 (presentation_type7f_palette_fade_signal_dispatcher)` |
-| `$80` | `$C89C` |
-| `$81` | `$C492` |
+| `$80` | `$C89C (presentation_type80_dispatcher)` |
+| `$81` | `$C492 (presentation_type81_dispatcher)` |
 | `$82` | `$C114 (presentation_type82_dispatcher)` |
 | `$83` | `$C17C (presentation_type83_dispatcher)` |
 | `$84` | `$BF76 (presentation_type84_dispatcher)` |
 | `$85` | `$BEBA (presentation_type85_dispatcher)` |
 | `$86` | `$BF00 (presentation_type86_dispatcher)` |
 | `$87` | `$BBEE (presentation_type87_dispatcher)` |
-| `$88` | `$C8F2` |
+| `$88` | `$C8F2 (presentation_type88_dispatcher)` |
 | `$89` | `$BC5C (presentation_type89_dispatcher)` |
 | `$8A` | `$BCA2 (presentation_type8a_dispatcher)` |
 | `$8B` | `$BD10 (presentation_type8b_dispatcher)` |
@@ -1088,3 +1088,114 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$97` | `$17858 (bongo_flame_update)` |
 | `$98` | `$16C60 (souther_claw_type98_update)` |
 | `$99` | `$16C24 (souther_afterimage_type99_update)` |
+
+## Object state tables
+
+Each object update hands `+$30` to `$B186 (dispatch_object_primary_state_table)` (absolute words) or `$12B3C (dispatch_presentation_object_state_table)` (offsets from the table). A name of the form `<object>_stateN` comes from the table alone: the binding is certain and the role is unread. A handler reached from several states lists them all in its name.
+
+| Object | Table | States |
+| --- | --- | --- |
+| continue_object | `$5236 (continue_object_state_table)` | 3 |
+| high_score_name_entry | `$56EE (high_score_name_entry_state_table)` | 3 |
+| police_vehicle | `$5984 (police_vehicle_state_table)` | 13 |
+| bottle_weapon | `$6126 (bottle_weapon_state_table)` | 6 |
+| p2_police_bombardment | `$640A (p2_police_bombardment_state_table)` | 6 |
+| p1_police_blast | `$6562 (p1_police_blast_state_table)` | 6 |
+| demo_mode_type3e | `$6744 (demo_mode_type3e_state_table)` | 2 |
+| wave_go_prompt | `$67AC (wave_go_prompt_state_table)` | 5 |
+| player_contact_effect | `$686A (player_contact_effect_state_table)` | 2 |
+| object_ground_shadow | `$689C (object_ground_shadow_state_table)` | 2 |
+| points_3000_pickup | `$68F2 (points_3000_pickup_state_table)` | 3 |
+| points_10000_pickup | `$6914 (points_10000_pickup_state_table)` | 3 |
+| small_health_pickup | `$6936 (small_health_pickup_state_table)` | 3 |
+| extra_life_pickup | `$6958 (extra_life_pickup_state_table)` | 3 |
+| extra_special_pickup | `$6978 (extra_special_pickup_state_table)` | 3 |
+| full_health_pickup | `$6998 (full_health_pickup_state_table)` | 3 |
+| phone_booth | `$6B00 (phone_booth_state_table)` | 5 |
+| breakable_type19 | `$6C90 (breakable_type19_state_table)` | 3 |
+| object_type14 | `$6D48 (object_type14_state_table)` | 7 |
+| object_type13 | `$6DEA (object_type13_state_table)` | 2 |
+| object_type12 | `$6E3E (object_type12_state_table)` | 4 |
+| object_type4d | `$6EA6 (object_type4d_state_table)` | 6 |
+| object_type17 | `$6F8C (object_type17_state_table)` | 4 |
+| object_type18 | `$70D0 (object_type18_state_table)` | 3 |
+| round3_controller_type4e | `$71EA (round3_controller_type4e_state_table)` | 2 |
+| object_type16 | `$7226 (object_type16_state_table)` | 9 |
+| object_type1b | `$737C (object_type1b_state_table)` | 3 |
+| object_type1c | `$7454 (object_type1c_state_table)` | 3 |
+| object_type1d | `$7476 (object_type1d_state_table)` | 3 |
+| round8_table | `$7540 (round8_table_state_table)` | 3 |
+| object_type15 | `$7618 (object_type15_state_table)` | 2 |
+| object_type44 | `$764C (object_type44_state_table)` | 2 |
+| final_section_type46 | `$766A (final_section_type46_state_table)` | 2 |
+| object_type1a | `$77BE (object_type1a_state_table)` | 2 |
+| object_type41 | `$7926 (object_type41_state_table)` | 4 |
+| object_type42 | `$7A7C (object_type42_state_table)` | 9 |
+| object_type43 | `$7C78 (object_type43_state_table)` | 2 |
+| object_type1f | `$7CC8 (object_type1f_state_table)` | 3 |
+| round7_fixed_type50 | `$7D52 (round7_fixed_type50_state_table)` | 2 |
+| round7_fixed_type51 | `$7D82 (round7_fixed_type51_state_table)` | 3 |
+| round7_fixed_type52 | `$7DF8 (round7_fixed_type52_state_table)` | 2 |
+| round7_fixed_type53 | `$7E28 (round7_fixed_type53_state_table)` | 2 |
+| object_type04 | `$8E34 (object_type04_state_table)` | 5 |
+| presentation_type8d | `$BB2A (presentation_type8d_state_table)` | 2 |
+| presentation_type8e_static_sprite | `$BB60 (presentation_type8e_static_sprite_state_table)` | 2 |
+| presentation_type8c | `$BBA6 (presentation_type8c_state_table)` | 2 |
+| presentation_type87 | `$BC00 (presentation_type87_state_table)` | 2 |
+| presentation_type89 | `$BC6E (presentation_type89_state_table)` | 2 |
+| presentation_type8a | `$BCB4 (presentation_type8a_state_table)` | 2 |
+| presentation_type8b | `$BD18 (presentation_type8b_state_table)` | 10 |
+| presentation_type85 | `$BECC (presentation_type85_state_table)` | 2 |
+| presentation_type86 | `$BF12 (presentation_type86_state_table)` | 2 |
+| presentation_type84 | `$BF7E (presentation_type84_state_table)` | 7 |
+| presentation_type82 | `$C126 (presentation_type82_state_table)` | 3 |
+| presentation_type83 | `$C184 (presentation_type83_state_table)` | 7 |
+| presentation_type77 | `$C39C (presentation_type77_state_table)` | 5 |
+| presentation_type81 | `$C49A (presentation_type81_state_table)` | 4 |
+| presentation_type79_palette_cycle | `$C594 (presentation_type79_palette_cycle_state_table)` | 3 |
+| presentation_type70 | `$C620 (presentation_type70_state_table)` | 4 |
+| presentation_type6e_slide_in_sprite | `$C6E8 (presentation_type6e_slide_in_sprite_state_table)` | 3 |
+| presentation_type6f_slide_in_sprite | `$C75E (presentation_type6f_slide_in_sprite_state_table)` | 3 |
+| presentation_type75_slide_in_sprite | `$C7D8 (presentation_type75_slide_in_sprite_state_table)` | 3 |
+| presentation_type76_slide_in_sprite | `$C84E (presentation_type76_slide_in_sprite_state_table)` | 3 |
+| presentation_type80 | `$C8A4 (presentation_type80_state_table)` | 3 |
+| presentation_type88 | `$C8FA (presentation_type88_state_table)` | 2 |
+| presentation_type78_blinking_sprite | `$C92C (presentation_type78_blinking_sprite_state_table)` | 2 |
+| presentation_type7a_vertical_sprite | `$C982 (presentation_type7a_vertical_sprite_state_table)` | 2 |
+| presentation_type7b_horizontal_sprite | `$C9D8 (presentation_type7b_horizontal_sprite_state_table)` | 2 |
+| presentation_type7c_horizontal_sprite | `$CA2E (presentation_type7c_horizontal_sprite_state_table)` | 2 |
+| presentation_type6a | `$CA84 (presentation_type6a_state_table)` | 5 |
+| presentation_type64_tile_strip_anim | `$CBF8 (presentation_type64_tile_strip_anim_state_table)` | 3 |
+| presentation_type65_camera_y_drift | `$CCFA (presentation_type65_camera_y_drift_state_table)` | 2 |
+| presentation_type60_plane_fill | `$CD34 (presentation_type60_plane_fill_state_table)` | 2 |
+| presentation_type69 | `$CD6E (presentation_type69_state_table)` | 10 |
+| presentation_type6b | `$CFCA (presentation_type6b_state_table)` | 2 |
+| presentation_type74 | `$D0B4 (presentation_type74_state_table)` | 2 |
+| presentation_type61_palette_fade | `$D124 (presentation_type61_palette_fade_state_table)` | 2 |
+| presentation_type6c | `$D162 (presentation_type6c_state_table)` | 3 |
+| presentation_type62 | `$D224 (presentation_type62_state_table)` | 4 |
+| presentation_type63_palette_swap | `$D2BC (presentation_type63_palette_swap_state_table)` | 3 |
+| presentation_type66 | `$D334 (presentation_type66_state_table)` | 3 |
+| presentation_type67 | `$D36A (presentation_type67_state_table)` | 3 |
+| presentation_type68 | `$D3A4 (presentation_type68_state_table)` | 3 |
+| presentation_type71 | `$D3E8 (presentation_type71_state_table)` | 3 |
+| presentation_type72 | `$D456 (presentation_type72_state_table)` | 3 |
+| presentation_type73 | `$D4C4 (presentation_type73_state_table)` | 3 |
+| presentation_type7d | `$D550 (presentation_type7d_state_table)` | 3 |
+| presentation_type7f_palette_fade_signal | `$D5D0 (presentation_type7f_palette_fade_signal_state_table)` | 2 |
+| garcia_type20 | `$D60E (garcia_type20_state_table)` | 14 |
+| garcia_type21 | `$D9A2 (garcia_type21_state_table)` | 13 |
+| garcia_type22_32 | `$FFDD80 (police_special_palette_snapshot)` | 20 |
+| garcia_type23 | `$E32E (garcia_type23_state_table)` | 13 |
+| signal_type24 | `$E4DA (signal_type24_state_table)` | 14 |
+| haku_ro_type25 | `$E8F8 (haku_ro_type25_state_table)` | 20 |
+| nora_type26 | `$10362 (nora_type26_state_table)` | 13 |
+| jack_type27 | `$1037C (jack_type27_state_table)` | 21 |
+| haku_ro_type2a | `$103AE (haku_ro_type2a_state_table)` | 17 |
+| mr_x_office_controller | `$12B64 (mr_x_office_controller_state_table)` | 24 |
+| mr_x_office_scene_type34 | `$12F1C (mr_x_office_scene_type34_state_table)` | 6 |
+| mr_x_type38 | `$12FBC (mr_x_type38_state_table)` | 4 |
+| mr_x_bullet | `$140E4 (mr_x_bullet_state_table)` | 3 |
+| mr_x_shell | `$1426E (mr_x_shell_state_table)` | 2 |
+| abadede_variant_type39 | `$14320 (abadede_variant_type39_state_table)` | 2 |
+| abadede | `$14466 (abadede_state_table)` | 15 |

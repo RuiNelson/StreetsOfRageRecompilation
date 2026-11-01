@@ -456,7 +456,7 @@ void StreetsOfRage::abadede_state7_run_update(m_long /*entry_*/) {
     }
 
     SOR_CALL(sub_01577c, 0x00014C7Au, 0x0001577Cu);
-    SOR_CALL(sub_01566e, 0x00014C80u, 0x0001566Eu);
+    SOR_CALL(abadede_steer_velocity_toward_target, 0x00014C80u, 0x0001566Eu);
     mem.writeWord(boss + 0x54, 0x0001u);
     mem.writeByte(boss + 0x5B, 0x00u);
     mem.writeByte(boss + 0x30, 0x02u);

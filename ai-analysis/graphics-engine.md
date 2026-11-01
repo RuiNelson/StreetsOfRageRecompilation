@@ -1207,3 +1207,4 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$10F6A (status_screen_filter_nibble)` | Keeps nibble values 1, $C and $D and turns any other into 0 |
 | `$11090 (hud_write_plate_row)` | Writes three longs of the plate row at $110A8 and five of d1 to the data port at a2 |
 | `$12888 (top10_draw_two_row_glyph)` | Draws one character as two stacked tiles from a byte holding two nibbles; $FF is the blank |
+| `$10400 (memfill_long_32)` | Writes d1 to a1 eight times, advancing |

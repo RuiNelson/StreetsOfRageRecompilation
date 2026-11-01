@@ -15,7 +15,7 @@ Primary evidence:
 
 | Topic | Location |
 | --- | --- |
-| Knife / shared wear & throw | `$5C1E (knife_weapon_dispatcher)`, `$5C66`, `$5D34`, `$5D84 (launch_released_weapon)`, `$5DEA` |
+| Knife / shared wear & throw | `$5C1E (knife_weapon_dispatcher)`, `$5C66 (weapon_shared_state1)`, `$5D34 (weapon_shared_state3)`, `$5D84 (launch_released_weapon)`, `$5DEA` |
 | Bottle / shards | `$6114 (bottle_weapon_dispatcher)`, `$614E (break_bottle_into_shards)`, `$61BE (bottle_shard_dispatcher)` |
 | Bat / pipe | `$61F6 (baseball_bat_weapon_dispatcher)`, `$6226 (steel_pipe_weapon_dispatcher)` (`move.b #4, +$34`) |
 | Pepper throw / smoke | `$6256 (pepper_spray_weapon_dispatcher)`, `$62DA (throw_pepper_spray)`, `$6312`, `$6372 (emit_pepper_smoke_sequence)` |
@@ -77,7 +77,7 @@ enemy.primary_state = 0x0400;   // immobilization / smoke reaction, not ordinary
 ```
 
 Pepper still carries damage **2**; the extra effect is the forced reaction
-state, not a larger nibble. Shared ordinary-enemy handler `$A43E` (primary
+state, not a larger nibble. Shared ordinary-enemy handler `$A43E (ordinary_enemy_pepper_state)` (primary
 state index 4) loads `enemy[+$50] = $A0` (**160 frames**) then returns to
 state `$0100` when the timer expires (only when police special is not active).
 
@@ -93,8 +93,8 @@ path; they remain the constants in §1.
 
 | Weapon | Rule | Code |
 | --- | --- | --- |
-| Bat, pipe (and shared path) | `+$50` is a use counter. While `+$50 < 3` and command `+$51 == 1`, each held-use entry does `+$50++` and continues. When `+$50 >= 3`, weapon retires (hide, timer `+$56 = $10` frames, then delete). | `$5C66` |
-| Knife | Same wear routine is in the state table, but player attack **throws** (command `+$51 = 3` → `$5D84 (launch_released_weapon)`). On solid hit the object is deleted; on ground settle `$5DEA` forces `+$50 = 3` (no longer pickable). Effective lifetime is one throw arc, not three swings. | `$5D34`, `$5DEA`, `$21E6 (player_release_thrown_weapon)` |
+| Bat, pipe (and shared path) | `+$50` is a use counter. While `+$50 < 3` and command `+$51 == 1`, each held-use entry does `+$50++` and continues. When `+$50 >= 3`, weapon retires (hide, timer `+$56 = $10` frames, then delete). | `$5C66 (weapon_shared_state1)` |
+| Knife | Same wear routine is in the state table, but player attack **throws** (command `+$51 = 3` → `$5D84 (launch_released_weapon)`). On solid hit the object is deleted; on ground settle `$5DEA` forces `+$50 = 3` (no longer pickable). Effective lifetime is one throw arc, not three swings. | `$5D34 (weapon_shared_state3)`, `$5DEA`, `$21E6 (player_release_thrown_weapon)` |
 | Bottle | One-way shatter: first impact sets `+$54`, swaps art, spawns **3** type-`$1E` shards, no re-collect as bottle. | `$614E (break_bottle_into_shards)` |
 | Pepper | `+$50` used for effect lifecycle (thrown instance can force `+$50 = 3` on special anims). Canister becomes timed smoke emitter. | `$6270+`, `$6328 (begin_pepper_smoke_emission)` |
 
@@ -161,7 +161,7 @@ Z_{\mathrm{launch}} = Z_{\mathrm{hold}} + 16
 **Pepper** (ROM + held launch): \(\Delta x=\pm48\), \(\Delta z=+16\), \(v_x=\pm6\),
 \(v_z=-3\).
 
-**Bounce** (knife `$5D34`): \(v_x \leftarrow -v_x/4\) (forced-path live: −16→+4).
+**Bounce** (knife `$5D34 (weapon_shared_state3)`): \(v_x \leftarrow -v_x/4\) (forced-path live: −16→+4).
 
 Policy heuristics in `autoplay`: throwable mid-range **20–100** px; ally throw
 exclusion **140** px.
@@ -334,7 +334,7 @@ Adam/Blaze long-weapon reach, per-cell hang-time, booth/crate loot producer.
 | Launch vs **hold** ±48 X, +16 Z | Closed | `$5D84 (launch_released_weapon)`/`$62DA (throw_pepper_spray)` + natural knife |
 | Knife flight ≥160 px sample, \(Z=115\) | Closed | natural throw |
 | Pipe/bat origin reach 36 (Axel) | Closed | natural pipe + bat |
-| Pepper immobilize 160 fr | Closed | `$A43E` |
+| Pepper immobilize 160 fr | Closed | `$A43E (ordinary_enemy_pepper_state)` |
 | Shards no damage | Closed | `$61BE (bottle_shard_dispatcher)` |
 | `+$51` 0..3 | Closed | static |
 
@@ -345,11 +345,11 @@ Adam/Blaze long-weapon reach, per-cell hang-time, booth/crate loot producer.
 | Damage 5/3/4/4/2 | `$5C54`, `$613C`, `$6214`, `$6244`, `$627A` |
 | Knife \(v_x=\pm16\); pepper \(v_x=\pm6,v_z=-3\) | `$5D84 (launch_released_weapon)`, `$62DA (throw_pepper_spray)`; live knife |
 | Launch vs hold origin | natural Axel knife: hold→launch +48 X, +16 Z |
-| Bounce \(-v_x/4\) | `$5D34`; forced live −16→+4 |
+| Bounce \(-v_x/4\) | `$5D34 (weapon_shared_state3)`; forced live −16→+4 |
 | Bat/pipe 36 px (Axel) | natural pipe in `$FFFB22 (enemy_attacker_count)`, action `$48` |
-| Wear three uses (bat/pipe) | `$5C66` |
+| Wear three uses (bat/pipe) | `$5C66 (weapon_shared_state1)` |
 | Pickup ±20/±16/±8 | `$3136 (find_close_interaction_target)` |
 | Enemy HP table | `$26FCE (ordinary_enemy_combat_value_table)` + `$93CE (ordinary_enemy_init_combat_values)` |
-| Pepper `$0400` + 160 fr | `$9C1E` → `$A43E` `$A0` |
+| Pepper `$0400` + 160 fr | `$9C1E` → `$A43E (ordinary_enemy_pepper_state)` `$A0` |
 | Shards inert | `$61BE (bottle_shard_dispatcher)` no `+$34` / `$95CE (register_enemy_attacker)` |
 | Attacker list | `$95CE (register_enemy_attacker)` / `$FFFB22 (enemy_attacker_count)` |

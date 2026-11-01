@@ -117,7 +117,7 @@ void StreetsOfRage::abadede_sync_facing_from_velocity(m_long /*entry_*/) {
 // $01566E: bounce toward the target: each velocity (+$1C X, +$20 lane) is negated when its sign differs from
 // the target's side ($12A4E); a flipped X also turns the facing ($156E0).
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_01566e(m_long /*entry_*/) {
+void StreetsOfRage::abadede_steer_velocity_toward_target(m_long /*entry_*/) {
     traceEnter(0x0001566Eu);
     auto &c   = cpu();
     auto &mem = memory();
@@ -237,7 +237,7 @@ void StreetsOfRage::sub_01577c(m_long /*entry_*/) {
     tst(c, 0x00060000u, 32);
     mem.writeLong(c.a[0] + 0x1Cu, 0x00060000u);
     tst(c, 0x00060000u, 32);
-    sub_01566e();
+    abadede_steer_velocity_toward_target();
 }
 
 // ---------------------------------------------------------------------------

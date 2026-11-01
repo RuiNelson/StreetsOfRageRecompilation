@@ -643,3 +643,19 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$B558 (titlescreen_load_scene)` | Loads the title assets, uploads the tiles at VDP $0620, loads seven palette lists and positions the cameras |
 | `$3F284 (story_scene_set_vdp_registers)` | Writes VDP registers $0B, $05, $0D and $10 for the story scenes |
 | `$1C2E (char_select_start_preview_animation)` | Starts the animation d0 of the preview object, loads its frame timer and sets +$51 to request the art upload |
+| `$B82C (presentation_load_target_palette_and_reset_delay)` | load_palette_list_to_target, then reloads +$69 from +$68 |
+| `$B884 (presentation_step_palette_line)` | Steps one palette line from $FFF400 towards $FFF480 by d4 |
+| `$BA40 (presentation_add_hscroll_rows)` | Adds d0 to the scroll rows of $FF5E02 from row d1, the count in d1 high |
+| `$BA5C (presentation_set_hscroll_rows)` | Writes d0 high to the scroll rows of $FF5E00 or $FF5E02 by d0 low, from row d1 |
+| `$BA82 (presentation_tile_script_step)` | Reads one byte of a tile script at a1 and runs its write or command |
+| `$BC2E (presentation_type87_89_scroll_state)` | State 1 of types $87 and $89: until +$58 moves left and wraps to X $F0 with a random draw |
+| `$BED0 (presentation_type85_86_init_state)` | State 0 of types $85 and $86 |
+| `$C318 (presentation_type83_draw_next_and_spawn)` | presentation_type83_draw_next_tilemap, then presentation_type83_spawn_type82 with d7 = 0 |
+| `$C31E (presentation_type83_spawn_type82)` | Creates presentation type $82 with +$59 = d7 and lifetime $6C |
+| `$C336 (presentation_type83_draw_next_tilemap)` | Takes the next index from +$58 and draws its entry through story_draw_tilemap_asset |
+| `$C492 (presentation_type81_dispatcher)` | Type $81: presentation object; created by presentation_type7e_region_select |
+| `$C822 (presentation_slide_to_x58_state)` | State 1 of types $75, $76 and $80: accelerates to X $58 |
+| `$C844 (presentation_slide_idle_state)` | State 2 of types $75, $76 and $80: rts |
+| `$C89C (presentation_type80_dispatcher)` | Type $80: presentation object |
+| `$C8F2 (presentation_type88_dispatcher)` | Type $88: presentation object |
+| `$CFA4 (presentation_type69_write_colour_446)` | Writes colour $446 to (a1) and sets $FFFA01 |

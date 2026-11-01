@@ -746,6 +746,8 @@ could reach were repaired from the callsites' owners in `logCallFromReturn`, and
 `repaired_source_events` counts them. Read the callsite in `output/sor.asm` before naming from a caller.
 A type table's callees (`$AE30`) say nothing by their caller: name them from
 `$B236 (object_type_update_jt)`, as `object_typeNN_dispatcher` when only the type is known.
+A state handler has no caller in the log (`jmp` is not recorded): name it from its object's state table, as `<object>_stateN` when only the
+binding is known; a label on a `loc_` changes the C++ `goto` name and `logCallFromReturn`'s source, nothing else.
 
 `observed_count` is how many runtime events collapsed into that row, not a
 static reachability weight. A routine present only via `labels.csv` is known
