@@ -6,6 +6,8 @@
 #include "system/memory/SystemMemory.hpp"
 
 #include <algorithm>
+#include <array>
+#include <cstdint>
 #include <cstdlib>
 #include <string>
 #include <vector>
@@ -60,7 +62,7 @@ std::string_view actionLabel(Action action) {
         case Action::Right:
             return "RIGHT";
         case Action::Start:
-            return "START";
+            return SoRPlatform::consoleMenus() ? "OPTIONS" : "START";
         case Action::Special:
             return "SPECIAL";
         case Action::Punch:
@@ -87,7 +89,64 @@ std::string keyName(SDL_Scancode scancode) {
     return drawable ? text : "KEY " + std::to_string(static_cast<int>(scancode));
 }
 
+// A DualSense's own names, in the console's menus. The touch pad's click reaches SDL as Back.
+std::string consolePadName(const PadInput &input) {
+    switch (input.kind) {
+        case PadInput::Kind::None:
+            return "NONE";
+        case PadInput::Kind::LeftTrigger:
+            return "L2";
+        case PadInput::Kind::RightTrigger:
+            return "R2";
+        case PadInput::Kind::Button:
+            break;
+    }
+    switch (input.button) {
+        case SDL_GAMEPAD_BUTTON_SOUTH:
+            return {kCross};
+        case SDL_GAMEPAD_BUTTON_EAST:
+            return {kCircle};
+        case SDL_GAMEPAD_BUTTON_WEST:
+            return {kSquare};
+        case SDL_GAMEPAD_BUTTON_NORTH:
+            return {kTriangle};
+        case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:
+            return "L1";
+        case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:
+            return "R1";
+        case SDL_GAMEPAD_BUTTON_LEFT_STICK:
+            return "L3";
+        case SDL_GAMEPAD_BUTTON_RIGHT_STICK:
+            return "R3";
+        case SDL_GAMEPAD_BUTTON_BACK:
+            return "CLICK";
+        default:
+            return upper(SoRControlsConfig::padInputName(input));
+    }
+}
+
+// In the font's colours: 1 the letter, C its shadow, 2 the background, the bottom row empty.
+constexpr std::array<std::array<std::uint32_t, 8>, 4> kSymbolTiles = {{
+    {0x11C2211Cu, 0x211C11C2u, 0x22111C22u, 0x22111C22u, 0x211C11C2u, 0x11C2211Cu, 0x1C22221Cu, 0x22222222u}, // cross
+    {0x221111C2u, 0x211C211Cu, 0x11C2211Cu, 0x11C2211Cu, 0x11C2211Cu, 0x211C211Cu, 0x221111C2u, 0x22222222u}, // circle
+    {0x1111111Cu, 0x11C2211Cu, 0x11C2211Cu, 0x11C2211Cu, 0x11C2211Cu, 0x11C2211Cu, 0x1111111Cu, 0x22222222u}, // square
+    {0x22211C22u, 0x22111C22u, 0x211C11C2u, 0x211C11C2u, 0x11C2211Cu, 0x11C2211Cu, 0x1111111Cu, 0x22222222u}, // triangle
+}};
+
+// While the menu is open; blank again after, as the OPTIONS screen had them.
+void writeSymbolTiles(SystemMemory &memory, bool loaded) {
+    memory.writeLong(kVdpControl, vramWriteCommand(static_cast<m_long>(kFirstSymbolTile) * 32u));
+    for (const auto &tile : kSymbolTiles) {
+        for (const std::uint32_t row : tile) {
+            memory.writeWord(kVdpData, loaded ? static_cast<m_word>(row >> 16) : 0u);
+            memory.writeWord(kVdpData, loaded ? static_cast<m_word>(row) : 0u);
+        }
+    }
+}
+
 std::string padName(const PadInput &input) {
+    if (SoRPlatform::consoleMenus())
+        return consolePadName(input);
     switch (input.kind) {
         case PadInput::Kind::None:
             return "NONE";
@@ -446,7 +505,12 @@ void drawScreen(const Menu &m, Canvas &canvas) {
         case Screen::Bind: {
             const bool keyboard = m.bindDevice == SoRInput::CaptureDevice::Keyboard;
             canvas.text(kLabelColumn, kTitleRow, playerTitle + (keyboard ? " KEYBOARD" : " GAMEPAD"), true);
-            canvas.text(keyboard ? 26 : 25, kTitleRow, keyboard ? "ESC CANCELS" : "START CANCELS", false);
+            if (keyboard)
+                canvas.text(26, kTitleRow, "ESC CANCELS", false);
+            else if (SoRPlatform::consoleMenus())
+                canvas.text(23, kTitleRow, "OPTIONS CANCELS", false);
+            else
+                canvas.text(25, kTitleRow, "START CANCELS", false);
             for (std::size_t i = 0; i < m.bindActions.size(); ++i) {
                 const int    row     = 5 + static_cast<int>(i) * 2;
                 const Action action  = m.bindActions[i];
@@ -490,7 +554,7 @@ void drawScreen(const Menu &m, Canvas &canvas) {
                 canvas.text(kLabelColumn, 17, tilt >= percent ? "MOVING" : "INSIDE THE DEADZONE", tilt >= percent);
             }
             canvas.text(kLabelColumn, 21, "LEFT RIGHT: CHANGE IT", false);
-            canvas.text(kLabelColumn, 23, "START: RETURN", false);
+            canvas.text(kLabelColumn, 23, SoRPlatform::consoleMenus() ? "OPTIONS: RETURN" : "START: RETURN", false);
             return;
         }
     }
@@ -572,6 +636,8 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
 
     bool close = false;
     if (m.swallow) {
+        if (SoRPlatform::consoleMenus())
+            writeSymbolTiles(memory, true);
         m.swallow = false; // a key still held from opening is not a press
     } else if (m.screen == Screen::Bind) {
         updateBind(m, memory);
@@ -609,6 +675,8 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
     Canvas canvas;
     if (close) {
         flush(memory, m.shown, canvas); // clear plane A for the OPTIONS screen
+        if (SoRPlatform::consoleMenus())
+            writeSymbolTiles(memory, false);
         m.isOpen = false;
         return Result::Closed;
     }

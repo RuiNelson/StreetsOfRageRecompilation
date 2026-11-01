@@ -28,10 +28,20 @@ inline constexpr int kRows    = 28;
 inline constexpr int kRepeatDelay = 20;
 inline constexpr int kRepeatRate  = 6;
 
+// PlayStation's button symbols, as characters in a menu's text. The font has none: SoRControlsMenu
+// loads them into tiles that are blank on the OPTIONS screen, past the font's last, while it is open.
+inline constexpr char   kCross           = '\x01';
+inline constexpr char   kCircle          = '\x02';
+inline constexpr char   kSquare          = '\x03';
+inline constexpr char   kTriangle        = '\x04';
+inline constexpr m_word kFirstSymbolTile = 0x31u;
+
 // The menu font loaded for the title and OPTIONS screens: a text byte is the
 // tile index (the ROM's own strings use these codes, e.g. "A-SPECIAL ATTACK"
 // at $1C9FC).
 inline std::optional<m_byte> glyph(char c) {
+    if (c >= kCross && c <= kTriangle)
+        return static_cast<m_byte>(kFirstSymbolTile + (c - kCross));
     if (c >= 'a' && c <= 'z')
         c = static_cast<char>(c - 'a' + 'A');
     if (c >= 'A' && c <= 'Z')
