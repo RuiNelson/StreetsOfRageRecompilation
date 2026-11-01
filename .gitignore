@@ -10,7 +10,6 @@ vdp_*.png
 code-analysis/speculative_addresses.txt
 .vscode/
 controls.yaml
-/call-map.sqlite
 /tools/__pycache__
 /tests/__pycache__
 dist-ps5
