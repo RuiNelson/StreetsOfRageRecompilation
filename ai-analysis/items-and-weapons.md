@@ -805,7 +805,10 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$6A66 (delete_unheld_object_behind_camera)` | Unless +$51 is 1 (held) goes to delete_pickup_behind_camera; the weapon dispatchers end here |
 | `$6AD0 (object_contact_knockback_direction)` | Runs the contact test and on a hit gives d6 0 or 2 from the velocity sign, or from the other object facing when not moving |
 | `$6A60 (play_extra_special_pickup_sound)` | Plays sound $C7 through object_queue_sound_trampoline |
-| `$6A98 (object_set_flag_bit4)` | Sets +$01 bit 4 |
+| `$6A98 (effect_set_flag_bit4_load_tile_base)` | Sets +$01 bit 4 and falls into `$6A9E (effect_load_tile_base_and_anim0)` |
+| `$686E (player_contact_effect_init)` | Type $49 state 0: starts the animation from art $6F0A2 with tile base $6E0, on frame 1 when +$50 is set |
+| `$68A0 (object_ground_shadow_init)` | Type $4A state 0: starts the animation from art $6F0CC with tile base $6E0 and falls into the follow state at $68AE in the same update |
+| `$6A9E (effect_load_tile_base_and_anim0)` | Loads d1 = $6E0 (tile base) and d0 = 0 (animation 0) for the effect objects |
 | `$6AA6 (object_apply_level_flags)` | ORs the level-indexed byte table $6AB4 into +$01 |
 | `$6ABC (object_start_animation_with_flag_bit6)` | Sets +$01 bit 6 and starts the animation through object_init_animation_from_zero |
 | `$67F8 (wave_go_prompt_state_init)` | Type $48 first state: plays $CF, loads the frame timer, clears +$01 bit 0 and advances the state |
