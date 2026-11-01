@@ -638,3 +638,7 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$BB94 (presentation_type8c_dispatcher)` | Type $8C: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
 | `$BB18 (presentation_type8d_dispatcher)` | Type $8D: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
 | `$C36E (presentation_type7e_region_select)` | Type $7E: creates presentation type $77 or $81 by console_hardware_version bit 7, then clears itself |
+| `$FE2 (char_select_init_animation_trampoline)` | jmp object_init_animation_from_zero |
+| `$B42E (intro_load_scene_assets)` | Resets the VDP, clears the blockmap RAM, sets the story VDP registers, decompresses six Kosinski story assets and uploads the tiles |
+| `$B558 (titlescreen_load_scene)` | Loads the title assets, uploads the tiles at VDP $0620, loads seven palette lists and positions the cameras |
+| `$3F284 (story_scene_set_vdp_registers)` | Writes VDP registers $0B, $05, $0D and $10 for the story scenes |

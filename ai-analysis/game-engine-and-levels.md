@@ -497,7 +497,7 @@ spawned type is in the tracked subset, the loader:
 - sets object flag bit 3;
 - increments the word at `$FFFB1E (active_progression_entity_count)`.
 
-Death/removal paths at `$92F0` and `$9D8C` decrement the same counter. Several
+Death/removal paths at `$92F0 (release_progression_entity)` and `$9D8C` decrement the same counter. Several
 pipeline states wait for it to reach zero before clearing their local flags or
 starting the next phase. The exact count is therefore “active level-script
 entities that gate progression,” not a count of all allocated objects.
@@ -946,6 +946,11 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$188BE (round_clear_player_tally_dispatch)` | From round_clear_substate $14 to $51, outside level index 7, dispatches on player_mode through the table at $188EC |
 | `$1260E (build_top10_score_screen)` | Loads the screen, starts music $8D and draws the ten entries with colour from each entry flag |
 | `$12730 (high_score_check_player_entry)` | Compares a player score with the 10th entry and marks the name entry in +$4B bit 7 when it beats it |
+| `$12832 (init_top10_score_table)` | Enigma-decodes the default ten-entry table at $12842 into top10_score_table at power-on |
+| `$18324 (round_clear_add_bonus_repeated)` | Adds the score table entry d0 to the total at a4 d6 times through add_bcd_score_value |
+| `$18824 (vblank_round_clear_draw_tally_request)` | Consumes round_clear_tally_draw_request and draws one of the tally rows through the table at $18840 |
+| `$18A02 (vblank_round_clear_dispatch_request)` | Consumes round_clear_vblank_request and runs its entry of the table at $18A1E |
+| `$18A96 (vblank_round_clear_draw_player_scores)` | Draws the score digits of the active players, by player_mode through the table at $18AB4 |
 
 ## Object type map
 

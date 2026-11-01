@@ -121,7 +121,9 @@ def read_labels(path: Path | None) -> dict[int, Label]:
         return {}
     labels: dict[int, Label] = {}
     with path.open(newline="", encoding="utf-8") as stream:
-        for line_number, row in enumerate(csv.reader(stream), 1):
+        # labels.csv writes `address, name, "description"`: without
+        # skipinitialspace the space hides the quote and commas split the text.
+        for line_number, row in enumerate(csv.reader(stream, skipinitialspace=True), 1):
             if not row or row[0].lstrip().startswith(("#", ";")):
                 continue
             if len(row) < 2:

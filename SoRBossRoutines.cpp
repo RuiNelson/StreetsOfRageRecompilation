@@ -244,7 +244,7 @@ void StreetsOfRage::sub_01577c(m_long /*entry_*/) {
 // $015604: the object's recoil: +$5E = $3000, height velocity -8, X velocity $3.8000, mirrored when the
 // target (+$5C) faces left (+$09 bit 1).
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_015604(m_long /*entry_*/) {
+void StreetsOfRage::abadede_start_knockback(m_long /*entry_*/) {
     traceEnter(0x00015604u);
     auto &c   = cpu();
     auto &mem = memory();
@@ -281,7 +281,7 @@ void StreetsOfRage::sub_015632(m_long /*entry_*/) {
     tst(c, 0, 8);
     mem.writeByte(c.a[0] + 0x30u, 6);
     tst(c, 6, 8);
-    sub_015604();
+    abadede_start_knockback();
 }
 
 // ---------------------------------------------------------------------------
@@ -347,7 +347,7 @@ void StreetsOfRage::sub_015560(m_long /*entry_*/) {
         tst(c, 0, 8);
         mem.writeByte(c.a[0] + 0x30u, 6);
         tst(c, 6, 8);
-        SOR_CALL(sub_015604, 0x00015590u, 0x00015604u);
+        SOR_CALL(abadede_start_knockback, 0x00015590u, 0x00015604u);
     }
     c.d[0] = mem.readByte(c.a[1] + 0x34u);
     tst(c, c.db(0), 8);
@@ -417,7 +417,7 @@ void StreetsOfRage::sub_0155be(m_long /*entry_*/) {
     mem.writeWord(c.a[0] + 0x32u, static_cast<m_word>(subValue(c, mem.readWord(c.a[0] + 0x32u), c.dw(0), 16)));
     mem.writeByte(c.a[0] + 0x30u, 6);
     tst(c, 6, 8);
-    sub_015604();
+    abadede_start_knockback();
 }
 
 // ---------------------------------------------------------------------------

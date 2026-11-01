@@ -695,7 +695,7 @@ void StreetsOfRage::police_special_player_update_gate(m_long /*entry_*/) {
 
     SOR_CALL(probe_floor_at_object, 0x000040B2u, 0x0000AD2Au);
     mem.writeWord(player + 0x18, cpu().dw(6));
-    SOR_CALL(sub_00b228, 0x000040BAu, 0x0000B228u);
+    SOR_CALL(object_clear_velocity, 0x000040BAu, 0x0000B228u);
     mem.writeByte(player + 0x59, static_cast<m_byte>(mem.readByte(player + 0x59) & 0xFDu));
 
     const m_byte action = static_cast<m_byte>(mem.readByte(player + 0x30) & 0xFEu);

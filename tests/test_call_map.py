@@ -5,7 +5,21 @@ import urllib.request
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from tools.call_map import build_web_server, load_web_data, main
+from tools.call_map import build_web_server, load_web_data, main, read_labels
+
+
+def test_read_labels_keeps_commas_in_a_quoted_description():
+    with TemporaryDirectory() as directory:
+        labels = Path(directory) / "labels.csv"
+        labels.write_text(
+            '00000200, init, "100% - Sets up hardware, waits, then branches"\n',
+            encoding="utf-8",
+        )
+
+        label = read_labels(labels)[0x200]
+
+        assert label.name == "init"
+        assert label.description == "100% - Sets up hardware, waits, then branches"
 
 
 def test_call_map_collapses_events_and_preserves_callsites():

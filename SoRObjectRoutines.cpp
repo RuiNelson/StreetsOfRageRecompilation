@@ -457,7 +457,7 @@ void StreetsOfRage::object_start_animation_with_flag_bit6(m_long entry_) {
 // ---------------------------------------------------------------------------
 // $00B228: the object's three velocities (+$1C, +$20, +$24) cleared, d7 = 0.
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_00b228(m_long /*entry_*/) {
+void StreetsOfRage::object_clear_velocity(m_long /*entry_*/) {
     traceEnter(0x0000B228u);
     auto &c   = cpu();
     auto &mem = memory();

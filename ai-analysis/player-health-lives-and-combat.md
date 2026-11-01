@@ -619,6 +619,8 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$51D6 (nudge_player_to_walkable_floor_step)` | For one player object probes the floor and either side to find walkable ground; the body of nudge_players_to_walkable_floor |
 | `$3B8A (resolve_solid_object_collisions)` | Scans 66 object slots with +$3A bit 0 (solid) and resolves the first contact against a0; players and ordinary enemies |
 | `$5218 (continue_object_dispatcher)` | Type $0F update, a dead player: continue Yes/No state table at $5236, or high_score_name_entry_dispatcher when +$4B bit 7 is set; frozen during a police special |
-| `$563E (hud_clear_player_join_rows)` | Fills the two window-plane HUD rows at $FF6032 and $FF6082 with blank tile $6D7 |
+| `$563E (hud_clear_p2_status_rows)` | Fills the two window-plane HUD rows at $FF6032 and $FF6082 with blank tile $6D7 |
 | `$6652 (p1_police_blast_spawn_next)` | Takes a slot from $D100 and spawns the next type $0E blast of the chain at the offsets of tables $66A5/$66B4 |
 | `$5976 (object_queue_sound_trampoline)` | jmp queue_sound_id, used by the police and pickup objects |
+| `$5620 (hud_clear_p1_status_rows)` | Fills the two window-plane HUD rows at $FF600A and $FF605A with blank tile $6D7; hud_clear_p2_status_rows is the same on the right side |
+| `$106DA (player_queue_character_ko_voice)` | Plays the voice selected by character +$50 from table $106E6 |

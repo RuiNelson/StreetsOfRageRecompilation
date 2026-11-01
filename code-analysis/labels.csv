@@ -116,6 +116,10 @@
 0001077C, game_mode_levelstart, "100% - Updates the level-start / intro sequence (game_state=0x2A)"
 
 # Story / campaign progression
+00000FE2, char_select_init_animation_trampoline, "100% - jmp object_init_animation_from_zero"
+0000B42E, intro_load_scene_assets, "90% - Resets the VDP, clears the blockmap RAM, sets the story VDP registers, decompresses six Kosinski story assets and uploads the tiles"
+0000B558, titlescreen_load_scene, "85% - Loads the title assets, uploads the tiles at VDP $0620, loads seven palette lists and positions the cameras"
+0003F284, story_scene_set_vdp_registers, "95% - Writes VDP registers $0B, $05, $0D and $10 for the story scenes"
 0000D210, presentation_type62_dispatcher, "100% - Type $62: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime"
 0000D32C, presentation_type66_dispatcher, "100% - Type $66: presentation object run through dispatch_presentation_object_state_table"
 0000D362, presentation_type67_dispatcher, "100% - Type $67: presentation object run through dispatch_presentation_object_state_table"
@@ -470,6 +474,11 @@
 00019848, load_level_graphics_maps_and_camera, "100% - Loads the per-level mixed-codec graphics/maps package, builds plane data, and initializes both camera structures"
 
 # Level engine, spawn pipeline, and camera progression
+00012832, init_top10_score_table, "100% - Enigma-decodes the default ten-entry table at $12842 into top10_score_table at power-on"
+00018324, round_clear_add_bonus_repeated, "95% - Adds the score table entry d0 to the total at a4 d6 times through add_bcd_score_value"
+00018824, vblank_round_clear_draw_tally_request, "85% - Consumes round_clear_tally_draw_request and draws one of the tally rows through the table at $18840"
+00018A02, vblank_round_clear_dispatch_request, "80% - Consumes round_clear_vblank_request and runs its entry of the table at $18A1E"
+00018A96, vblank_round_clear_draw_player_scores, "90% - Draws the score digits of the active players, by player_mode through the table at $18AB4"
 000188BE, round_clear_player_tally_dispatch, "85% - From round_clear_substate $14 to $51, outside level index 7, dispatches on player_mode through the table at $188EC"
 0001260E, build_top10_score_screen, "85% - Loads the screen, starts music $8D and draws the ten entries with colour from each entry flag"
 00012730, high_score_check_player_entry, "90% - Compares a player score with the 10th entry and marks the name entry in +$4B bit 7 when it beats it"
@@ -489,6 +498,8 @@
 0001C378, level_resource_table, "100% - Eight six-byte records: resource-list pointer plus two parameters, indexed by level"
 
 # Player health, lives, combat, and police specials
+00005620, hud_clear_p1_status_rows, "90% - Fills the two window-plane HUD rows at $FF600A and $FF605A with blank tile $6D7; hud_clear_p2_status_rows is the same on the right side"
+000106DA, player_queue_character_ko_voice, "90% - Plays the voice selected by character +$50 from table $106E6"
 000039C6, player_tick_temporary_state_timer, "95% - While +$59 bit 0 is set counts +$5C down; at 0 clears +$58 bits 4-5 and +$59 bit 0"
 000050A6, final_section_player_script_update, "90% - Round 8 final section: while camera_scripted_left_pan is set walks each player to the scene position, spawns type $46 once and raises mr_x_offer_flag and stop_clock when all active players arrived"
 00003886, player_clamp_fall_speed, "100% - Caps +$24 (vertical velocity) at $C0000, 12.0 px per update"
@@ -521,13 +532,13 @@
 000051D6, nudge_player_to_walkable_floor_step, "95% - For one player object probes the floor and either side to find walkable ground; the body of nudge_players_to_walkable_floor"
 00003B8A, resolve_solid_object_collisions, "90% - Scans 66 object slots with +$3A bit 0 (solid) and resolves the first contact against a0; players and ordinary enemies"
 00005218, continue_object_dispatcher, "100% - Type $0F update, a dead player: continue Yes/No state table at $5236, or high_score_name_entry_dispatcher when +$4B bit 7 is set; frozen during a police special"
-0000563E, hud_clear_player_join_rows, "85% - Fills the two window-plane HUD rows at $FF6032 and $FF6082 with blank tile $6D7"
+0000563E, hud_clear_p2_status_rows, "85% - Fills the two window-plane HUD rows at $FF6032 and $FF6082 with blank tile $6D7"
 00006652, p1_police_blast_spawn_next, "95% - Takes a slot from $D100 and spawns the next type $0E blast of the chain at the offsets of tables $66A5/$66B4"
 00005976, object_queue_sound_trampoline, "100% - jmp queue_sound_id, used by the police and pickup objects"
 00001E0E, player_spawn_or_respawn, "100% - Reinitializes an active player with placement, animation, full $50 health, normally one police special, and zero specials in Round 8"
 00002B48, resolve_player_death, "100% - After death animation and life deduction, respawns if lives remain or converts the player to the continue/game-over object"
 00003448, player_lose_life, "95% - Takes one life from the player in a0 (P1 or P2 from a0 == $B800): if the life byte in front of the special counter is nonzero, adds table entry $0C ($99999999) with add_bcd_resource_value, which is a BCD decrement, then redraws the lives and specials"
-0000358C, player_fall_out_of_arena_check, "100% - Fall boundary: when +$18 reaches $01C0, with health (+$32) nonzero deducts a life through player_lose_life (zero health goes through sub_000106DA and a redraw of the lives instead), then resolve_player_death, and returns d7 = -1; in level index 7 it starts the fade out instead; below the boundary returns d7 = 0"
+0000358C, player_fall_out_of_arena_check, "100% - Fall boundary: when +$18 reaches $01C0, with health (+$32) nonzero deducts a life through player_lose_life (zero health goes through player_queue_character_ko_voice and a redraw of the lives instead), then resolve_player_death, and returns d7 = -1; in level index 7 it starts the fade out instead; below the boundary returns d7 = 0"
 00003028, player_normal_attack_input, "100% - Handles logical attack-button input, close interaction acquisition, and attack/combo state transition"
 00003084, player_held_object_attack_input, "100% - Handles logical attack-button input while carrying a weapon or held target; supports close-interaction acquisition before held-object attacks"
 00003136, find_close_interaction_target, "100% - Scans the player's close interaction box for free weapon types $08-$0C or six consumable pickup types and links/reserves the match"
@@ -593,6 +604,7 @@
 0000B3C0, police_special_enemy_sweep_trampoline, "100% - Object table trampoline for type $29; jumps to police_special_enemy_sweep_update"
 
 # Items, weapons, and breakable props
+00007424, thrown_prop_contact_reaction, "80% - Contact response of a thrown prop: reaction 1 on the object hit, except that type $45 with +$40 clear only clears +$7E and +$7C on it"
 000068E2, points_3000_pickup_dispatcher, "100% - Type $3F: 3,000-point pickup wrapper"
 00006904, points_10000_pickup_dispatcher, "100% - Type $40: 10,000-point pickup wrapper"
 00006948, extra_life_pickup_dispatcher, "100% - Type $4C: extra-life pickup wrapper"
@@ -650,7 +662,7 @@
 00006A2A, apply_extra_special_pickup, "100% - Selects a one-past-special address so the predecrementing BCD helper increments the police-special byte"
 00006A46, apply_score_pickup, "100% - Adds packed-BCD 3000 or 10000 points to the collecting player's score"
 00006ACA, queue_object_sound_id, "100% - Trampoline: jmp queue_sound_id, the sound id in d7 (used by the enemy and prop updates in range of a short branch)"
-00007392, prop_hit_reaction, "90% - Hit check shared by breakable props and the round 8 table: sub_00006AD0 says whether a player contact landed, then by d7 (1 body, 2 strike, 3 hold, 5 weapon) it knocks the prop away -- plays a sound, sets the +$24 lift (-$6, or -$A for type $45), the +$1C drift from the side, state 2 -- or clears the grab code of the player (+$7C/+$7E) through sub_00007424; type $45 uses the stronger recoil only while armed (+$40)"
+00007392, prop_hit_reaction, "90% - Hit check shared by breakable props and the round 8 table: sub_00006AD0 says whether a player contact landed, then by d7 (1 body, 2 strike, 3 hold, 5 weapon) it knocks the prop away -- plays a sound, sets the +$24 lift (-$6, or -$A for type $45), the +$1C drift from the side, state 2 -- or clears the grab code of the player (+$7C/+$7E) through thrown_prop_contact_reaction; type $45 uses the stronger recoil only while armed (+$40)"
 00006A70, delete_pickup_behind_camera, "100% - Camera-relative cleanup for pickups and related objects, with the reversed Round-8 boundary"
 00010DA6, add_bcd_score_value, "100% - Adds the three-byte packed-BCD score table entry d7 (the table at $10DDE) to the score at a6 with ABCD and, on overflow of a positive entry, clamps the result to $999900"
 00006926, small_health_pickup_dispatcher, "100% - Type-$4B small-health food pickup dispatcher; initializes the +$14 health effect, shared pickup animation, and collection cleanup"
@@ -665,6 +677,9 @@
 0000B3BA, object_type54_dispatcher, "100% - Object type $54 primary-state dispatcher; initializes and coordinates a multi-slot linked segmented effect object"
 
 # Ordinary enemy AI (object types $20-$2A)
+000092F0, release_progression_entity, "100% - Decrements active_progression_entity_count, gives back a deferred spawn credit and the art residency counts, and ends the section flags when the count reaches 0"
+0000B228, object_clear_velocity, "100% - Clears +$1C, +$20 and +$24"
+0000B818, clear_p1_and_object_slots, "100% - Fills 41 blocks of 128 bytes from p1_object with zero"
 00007EA8, find_free_object_slot_c900, "100% - First free slot of the 8 from $FFC900 in a6; Z clear when none"
 00007EBE, find_free_object_slot_d100, "100% - First free slot of the 18 from $FFD100 in a6; Z clear when none"
 00007EEA, find_free_object_slot_cd00, "100% - First free slot of the 8 from $FFCD00 in a6; Z clear when none"
@@ -763,6 +778,12 @@
 00027032, ordinary_enemy_animation_set_pointer_table, "100% - L[11] - Animation/behavior resource pointer selected by ordinary type $20-$2A"
 
 # Bosses and final encounter
+000145C4, abadede_find_partner, "100% - Scans the first 32 object slots for another type $30 and stores it in +$52, or 0"
+00015604, abadede_start_knockback, "95% - Sets the upward velocity, the X velocity and the +$5E drag away from the attacker in +$5C"
+00015878, later_boss_start_action_unmirrored_side, "85% - Sets the facing bit when +$60 is clear and starts the type-indexed animation; the opposite of later_boss_start_action_mirrored"
+00015888, later_boss_start_base_action, "95% - later_boss_start_action_mirrored with action 0"
+00016542, later_boss_award_score, "100% - Reads the score from the type-indexed table $16564 and adds it to the player in +$70 through add_bcd_score_value"
+00016886, later_boss_load_type_offsets, "90% - Loads a signed pair from the type-indexed table $168A4 into d1 and d2"
 00016A1A, later_boss_consume_forced_reaction, "95% - Consumes boss_forced_reaction_flags for this boss in the update of types $55-$58 and leaves its caller when the primary state permits the reaction"
 000163B0, souther_clear_attack_link_state, "80% - For primaries from 3 clears +$6D, and +$67 with +$01 bit 2 set outside primary 9"
 000162C4, souther_measure_target_side_and_lane, "90% - Measures X distance, whether the target faces him and absolute lane distance into d1, d5 and d3"

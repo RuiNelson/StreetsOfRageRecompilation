@@ -833,3 +833,4 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$7D7A (round7_fixed_type51_dispatcher)` | Type $51: state table $7D82; seeded in level index 6 |
 | `$7DF0 (round7_fixed_type52_dispatcher)` | Type $52: state table $7DF8; seeded in level index 6 |
 | `$7E20 (round7_fixed_type53_dispatcher)` | Type $53: state table $7E28; seeded in level index 6 |
+| `$7424 (thrown_prop_contact_reaction)` | Contact response of a thrown prop: reaction 1 on the object hit, except that type $45 with +$40 clear only clears +$7E and +$7C on it |

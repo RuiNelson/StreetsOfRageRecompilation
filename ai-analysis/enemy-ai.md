@@ -1350,7 +1350,7 @@ or counter jump attacks.
 
 The airborne/bounce path at `$16400` returns a living boss to active AI. A
 defeated boss proceeds to `$16512`, which counts down, blinks/removes the
-sprite, awards score via `$16542`, clears its partner relationship through
+sprite, awards score via `$16542 (later_boss_award_score)`, clears its partner relationship through
 `$17F9C (boss_unlink_pair)`, and finally clears the object slot.
 
 Pairing is significant for Round 5/6/8. `$17F2E (boss_link_same_type_pair)` scans for another object of
@@ -3186,6 +3186,9 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$DBCC (ordinary_enemy_blocked_state)` | Primary state shared by the ordinary types for a blocked enemy |
 | `$966 (select_deferred_spawn_family_art)` | Checks that an ordinary-enemy spawn record has its art family resident, or claims a free residency slot |
 | `$A66 (select_deferred_spawn_variant_art)` | Checks that an ordinary-enemy spawn record has its art variant resident through the list at $FFFA6A |
+| `$92F0 (release_progression_entity)` | Decrements active_progression_entity_count, gives back a deferred spawn credit and the art residency counts, and ends the section flags when the count reaches 0 |
+| `$B228 (object_clear_velocity)` | Clears +$1C, +$20 and +$24 |
+| `$B818 (clear_p1_and_object_slots)` | Fills 41 blocks of 128 bytes from p1_object with zero |
 
 ## Boss helpers identified from the call map
 
@@ -3221,3 +3224,9 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$B3A2 (souther_update_trampoline)` | Type $55: jmp souther_update |
 | `$B3AE (bongo_update_trampoline)` | Type $57: jmp bongo_update |
 | `$B3B4 (onihime_yasha_update_trampoline)` | Type $58: jmp onihime_yasha_update |
+| `$145C4 (abadede_find_partner)` | Scans the first 32 object slots for another type $30 and stores it in +$52, or 0 |
+| `$15604 (abadede_start_knockback)` | Sets the upward velocity, the X velocity and the +$5E drag away from the attacker in +$5C |
+| `$15878 (later_boss_start_action_unmirrored_side)` | Sets the facing bit when +$60 is clear and starts the type-indexed animation; the opposite of later_boss_start_action_mirrored |
+| `$15888 (later_boss_start_base_action)` | later_boss_start_action_mirrored with action 0 |
+| `$16542 (later_boss_award_score)` | Reads the score from the type-indexed table $16564 and adds it to the player in +$70 through add_bcd_score_value |
+| `$16886 (later_boss_load_type_offsets)` | Loads a signed pair from the type-indexed table $168A4 into d1 and d2 |

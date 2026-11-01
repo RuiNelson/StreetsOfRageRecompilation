@@ -393,6 +393,10 @@ FFCD00, object_pool_cd00, "100% - Eight object slots searched by find_free_objec
 FFD100, object_pool_d100, "100% - Eighteen object slots at the end of object_table, searched by find_free_object_slot_d100; effects"
 FFD080, object_pool_d080_top, "100% - Slot where find_free_object_slot_down_from_d080 starts going down"
 
+FFFF4A, top10_score_table, "95% - Ten-entry high-score table decoded by init_top10_score_table at power-on"
+FFFA4F, round_clear_vblank_request, "80% - B - One-shot request consumed by vblank_round_clear_dispatch_request"
+FFFA50, round_clear_tally_draw_request, "85% - B - One-shot request consumed by vblank_round_clear_draw_tally_request"
+
 ; --- Identified from the call map: ROM tables ---
 0032F2, player_hold_reaction_table, "95% - B[] - Action-indexed reaction written to +$7D by player_write_hold_reaction"
 003664, player_action_velocity_table_ptrs, "95% - L[] - Character-indexed pointers to the action velocity bytes read by player_load_action_velocity"
@@ -402,3 +406,6 @@ FFD080, object_pool_d080_top, "100% - Slot where find_free_object_slot_down_from
 007E85, object_drop_type_table, "95% - B[] - Types spawned by spawn_object_from_drop_selector, indexed by +$41"
 035054, abadede_linked_sprite_offset_table, "95% - W[] - X and height offset pairs read by abadede_sync_linked_sprite"
 073728, fm_algorithm_carrier_mask_table, "95% - B[8] - Algorithm-indexed operator mask read by sound_fm_apply_carrier_volume"
+0106E6, player_ko_voice_table, "90% - B[4] - Character-indexed voice ids read by player_queue_character_ko_voice"
+016564, later_boss_score_table, "95% - B[] - Type-indexed score entries read by later_boss_award_score"
+0168A4, later_boss_type_offset_table, "85% - B[] - Type-indexed signed pairs read by later_boss_load_type_offsets"
