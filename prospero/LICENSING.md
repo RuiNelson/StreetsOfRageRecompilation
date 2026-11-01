@@ -11,4 +11,19 @@ Each source file names its licence in its header.
 | `prospero_icon.png`, `sce_sys/icon0.png` | the title's icon, supplied by the project's author | this project |
 | The rest | MIT | this project |
 
-A built title links GPL-3.0 parts of the PS5 stack (`PS5_Vulkan`'s platform layer), so griches reads a built title as GPL-3.0. That is their reading, not a legal review.
+## The built title is GPL-3.0
+
+A PS5 title built from this tree, and its ZIPs, are distributed under the **GNU GPL, version 3** (user decision). The full text is [`COPYING-GPL-3.0`](COPYING-GPL-3.0). The source files above keep their own licences (MIT, Zlib); the combined binary is GPL-3.0.
+
+Why, by component of the PS5 stack (licences checked on GitHub and in the source headers):
+
+| Component | Licence | Effect |
+| --- | --- | --- |
+| `mihawk-99/PS5_Vulkan` (platform layer, CRT, fake SELF), linked into the title | GPL-3.0 | requires the combined binary to be GPL-3.0 |
+| `mihawk-99/PS5_PayloadSDK` (the SDK the title is built with) | GPL-3.0 | same |
+| RADV, from `mihawk-99/PS5_Mesa` | MIT (Mesa) | none; RADV is **not** GPL |
+| SDL, with griches' console drivers | Zlib | none |
+
+The desktop builds are unaffected and stay MIT, as the root `LICENSE`.
+
+Anyone given a built title is owed its source: this repository, `MegaDriveEnvironment` and the pinned revisions in `docker/Dockerfile` are that source. This is a reading of the licences, not a legal review.

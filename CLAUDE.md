@@ -121,6 +121,8 @@ has the complete command. Built and run on a real Windows machine (user, 2026-10
 `prospero/cmake/ps5-sor.cmake`, included right after `project()`, adds the rest: SDL `release-3.4.10` with griches'
 console drivers, RADV and `tools/link-title.sh`, which refuses any import that would be null at run time.
 
+- **Licence** (user): a built PS5 title is GPL-3.0 (`prospero/LICENSING.md`, `COPYING-GPL-3.0`), because `PS5_Vulkan` and the
+  payload SDK are GPL-3.0. RADV is Mesa, MIT, not GPL; do not give it as the reason. Desktop builds stay MIT.
 - The console's files are in `/data/sor` (`SoRPlatform::kDataDir`; user decision, as ProsperoEden's `/data/prosperoeden`),
   which a title sees only with ShadowMountPlus 1.7beta4 or newer. `args.txt` there holds options, one a line: a title has
   no command line.
