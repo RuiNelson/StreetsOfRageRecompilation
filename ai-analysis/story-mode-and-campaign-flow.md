@@ -659,3 +659,8 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$C89C (presentation_type80_dispatcher)` | Type $80: presentation object |
 | `$C8F2 (presentation_type88_dispatcher)` | Type $88: presentation object |
 | `$CFA4 (presentation_type69_write_colour_446)` | Writes colour $446 to (a1) and sets $FFFA01 |
+| `$B7D8 (presentation_clear_palette_line)` | Sets $FFFA01 and clears line d0 of the active palette and of the target palette |
+| `$BA02 (presentation_write_byte_tilemap_rect)` | Writes the bytes at a1 as tile words to the VRAM address in d0, d1+1 wide and d2+1 high |
+| `$BA38 (presentation_add_hscroll_rows_a)` | presentation_add_hscroll_rows for the rows of $FF5E00 |
+| `$BAFE (presentation_write_tile_word)` | Sets the VRAM address in d0 and writes the word d1 |
+| `$BE2E (presentation_type8b_next_palette_list)` | Takes the next index from +$58, adds $10, resolves it through story_resolve_palette_list and loads the list |

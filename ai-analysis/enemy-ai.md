@@ -265,7 +265,7 @@ on — that a specific shape id is a genuine strike, for:
 | Type(s) | State | Handler | Box id (R/L) | Shape (facing right) |
 | --- | --- | --- | --- | --- |
 | `$20` | `$09` | `$D856 (garcia_type20_state9)` | `$14`/`$15` | forward `+32..+56` |
-| `$21`, `$22` (shared) | `$0A` | `$E190 (garcia_type21_22_attack_state)` (+ `$E0EC` sub-check) | `$12`/`$13` then `$3E`/`$3F` | forward `0..+40`, then `+16..+51` |
+| `$21`, `$22` (shared) | `$0A` | `$E190 (garcia_type21_22_attack_state)` (+ `$E0EC (garcia_far_head_box_check)` sub-check) | `$12`/`$13` then `$3E`/`$3F` | forward `0..+40`, then `+16..+51` |
 | `$26` (Nora) | `$08` | `$F1B0 (nora_type26_whip_engage_state)` | `$22`/`$23` | forward `+32..+80` |
 
 The Nora row independently confirms the dead-zone reach `attack_ranges.py`
@@ -469,7 +469,7 @@ personality 0 in rounds 2, 4, 6 and 8, personality 1 in rounds 6 and 8 (one of
 them two-player only), personality 2 in round 5 (eight records in one timed
 batch, several two-player only) and personality 3 in round 5.
 
-- **0, approach and aligned throw.** `$F55E (jack_type27_statec)` spawns his juggle (`$F544`) if
+- **0, approach and aligned throw.** `$F55E (jack_type27_statec)` spawns his juggle (`$F544 (jack_spawn_juggle)`) if
   `+$52` bit 0 was clear, faces the target, and walks at 2 px an update to
   108 px on his side of it, on its lane (a 160-update timeout resets him).
   `$F5F2 (ordinary_enemy_special_lunge_lane_setup)` then walks to lane 8 when the target is below lane `$20`, lane 56
@@ -506,7 +506,7 @@ target until he is 80 px beyond it, and resets (`$01`). What matters in play:
   `$DD68` (2.5, 3, 4 or 5 px an update) for a random `$1033A` length (16, 8,
   10 or 5 updates, `+$50`); the sign is `+$31` bit 2, set at entry when he
   stood at or right of the target (walk left);
-- every step goes through `$9F6A`: with no floor under him he falls
+- every step goes through `$9F6A (ordinary_enemy_step_x_or_fall)`: with no floor under him he falls
   (`$973E (enemy_apply_gravity_and_land)`); a hole or a wall 10 px ahead re-enters `$07`; a solid prop
   (`$3B8A (resolve_solid_object_collisions)`) resets him (`$01`); and `$9F96 (ordinary_enemy_advance_x_bounded)`
   refuses a step to X < 0 (≤ `$2F0` in round 7) or ≥ `$1510` (`$1400` in
@@ -516,9 +516,9 @@ target until he is 80 px beyond it, and resets (`$01`). What matters in play:
 - it calls `$9E4C (enemy_face_target)` -- face the target -- on every update, after its contact
   test: in this state he turns as the player walks past him.
 
-### The juggle (`$F544`, `$00FC1C`, `$FCB6`)
+### The juggle (`$F544 (jack_spawn_juggle)`, `$00FC1C`, `$FCB6`)
 
-`$F544` creates a type-`$28` spawner (helper state 5, `$00FC1C`) that spawns two
+`$F544 (jack_spawn_juggle)` creates a type-`$28` spawner (helper state 5, `$00FC1C`) that spawns two
 juggled axes 8 updates apart and removes itself. A juggled axe (state 1,
 `$FCB6`):
 
@@ -742,7 +742,7 @@ walking box already on his body takes the hold even through his own attack.
 
 - `$E124 (garcia_type21_22_approach_state)` (state 9, and `$21`'s `$0B`): toward 32 px short of the target on
   its lane (`$9648 (enemy_aim_at_target_lane)`), 4.5 px an update (3 with `+$40` bit 5), 48 updates; after
-  each move `$00E102` tests box `$12` (0-40 px ahead, lanes +-8, head height) on
+  each move `$00E102 (garcia_head_box_start_attack)` tests box `$12` (0-40 px ahead, lanes +-8, head height) on
   the target's body -- the punch.
 - `$E190 (garcia_type21_22_attack_state)` (state `$0A`): animation `$14` from frame 0, whose box is already
   `$12`: the jab lands on the update after its trigger. Frame 3 is the jab
@@ -765,7 +765,7 @@ walking box already on his body takes the hold even through his own attack.
 
 `$D9BC (garcia_type21_state1)` walks to the `$9654 (enemy_aim_at_target_offset)` point at 2 for 80 updates; `$DA10 (garcia_type21_statec)` (`$0C`) waits
 there 40 updates -- off the point (the target moved) it is `$DBCC (ordinary_enemy_blocked_state)` (`$0B` with
-`+$40` = 1). `$DA6C` returns 1 while **the target faces him**, and then
+`+$40` = 1). `$DA6C (garcia_type21_target_faces_him)` returns 1 while **the target faces him**, and then
 `$DA98 (garcia_type21_state8)` (8) rushes the target's spot at 4.5 with `$02` forced to `$1E`
 (-13..+13, lanes +-10); its touch sets the player's `+$7D` to 3 -- his hold,
 `$DB18 (garcia_type21_state9)` (9) -- unless the player holds a body or is in `$7A`/`$7C`/`$7E`, when
@@ -774,7 +774,7 @@ up (state 1).
 
 ### Garcia `$20`: the knife hurts by touching
 
-`$D64C` spawns the knife (type `$08`) in one of the eight slots from
+`$D64C (garcia_spawn_knife)` spawns the knife (type `$08`) in one of the eight slots from
 `$FFC900 (object_pool_c900)`, links it (`+$52` to him, his `+$6A` to it, `+$51` = 1) and sets his
 `+$48` bit 3. A held weapon never tests contact itself -- `$5E2E (update_held_weapon)`'s
 enemy-holder path only places it (`$60A0`, from animation `$1C` on, hidden
@@ -782,7 +782,7 @@ below it) -- so everything that cuts is his own animation:
 
 - `$D6C0 (garcia_type20_statec)` (`$0C`, personality 1): the entry run, animation `$38`, whose four
   frames all carry attack box `$01` -- his whole body, -9..+9 -- at 5 px an
-  update toward the target's spot (`$97FE`, set once). Past the target's X
+  update toward the target's spot (`$97FE (enemy_velocity_toward_target)`, set once). Past the target's X
   he brakes 0.1875 an update, and under 1 px an update it is `$D7BE (garcia_type20_state8)`. Any
   touch on that line is a hit, unless the player's walking box meets his body
   first (the hold).
@@ -836,7 +836,7 @@ counting changes of the target's X velocity word: five of them, or 48 moves,
 and `$ED44 (haku_ro_type25_state9)` (9) steps 4 lanes an update onto the target's lane, then `$0F`
 (1/8), within 96 px `$0E`, else `$0B`. `$EF0A (haku_ro_dash_state)` (`$0E`): 128 updates at 4.5
 (5.5 with `+$31` bit 1, 3 with `+$40` bit 5) toward 56 px short of the target
-(`$9800` with `d3` = `$38`); box `$06` (0-44 px ahead, the whole height) on
+(`$9800 (enemy_velocity_toward_target_offset)` with `d3` = `$38`); box `$06` (0-44 px ahead, the whole height) on
 the target's body is the strike `$EB6E (haku_ro_strike_state)` (`$0A`, animation `$14`, frames 1-3,
 then the backflip `$EE8A (haku_ro_backflip_state)`), and level within 8 lanes and 72 px the jump kick
 `$EBAC (haku_ro_stated)` (`$0D`: the strike's animation in a hop, grounded within 48 px). The
@@ -3153,7 +3153,7 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$7E92 (find_free_object_slot_down_from_d080)` | First free slot of 48 going down from $FFD080 in a6; Z clear when none |
 | `$B19A (object_set_animation_and_tile_base)` | Stores a1 in +$04 and d1 in +$0E and falls into the animation start at $B1A2 |
 | `$B1D6 (object_init_animation_from_zero)` | Clears d0 and branches to init_object_animation_state_and_advance |
-| `$B1DA (object_init_animation_branch)` | Branch to init_object_animation_state_and_advance with the caller d0 |
+| `$B1DA (object_init_animation_2)` | init_object_animation_state_and_advance with animation 2 |
 | `$B17E (clear_object_slot_a0)` | Fills the 128-byte object at a0 with zero |
 | `$AB88 (test_axis_overlap_from_shape)` | Tests one axis of a shape record against the box at a2: inclusive, d7 = 1 on overlap |
 | `$AD18 (probe_floor_at_x_offset)` | probe_floor_at_object_offset with no lane or height offset; d1 is the X offset |
@@ -3206,6 +3206,25 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$EDD8 (haku_ro_stateb)` | State $0B of HakuRo $25 and $2A |
 | `$EE8A (haku_ro_backflip_state)` | State $0C of HakuRo $25 and $2A: the backflip |
 | `$EF0A (haku_ro_dash_state)` | State $0E of HakuRo $25 and $2A: 128 updates at 4.5 px |
+| `$7ED4 (find_free_object_slot_down_from_d980)` | First free slot of 18 going down from $FFD980 in a6; Z clear when none |
+| `$97FE (enemy_velocity_toward_target)` | enemy_velocity_toward_target_offset with no X offset |
+| `$9800 (enemy_velocity_toward_target_offset)` | Sets +$1C and +$20 towards the target in +$42 plus d3 on his facing side |
+| `$9F56 (ordinary_enemy_step_x_if_floor_ahead)` | Probes the floor 12 px ahead and, when there is some, runs ordinary_enemy_advance_x_bounded |
+| `$9F6A (ordinary_enemy_step_x_or_fall)` | With no floor under him falls through enemy_apply_gravity_and_land; otherwise steps X with the wall and solid object checks |
+| `$9FE6 (ordinary_enemy_step_lane_checked)` | Probes the floor 8 lanes ahead and steps the lane with the solid object check |
+| `$AD1E (probe_floor_at_lane_offset)` | probe_floor_at_object_offset with no X or height offset; d2 is the lane offset |
+| `$AD24 (probe_floor_at_height_offset)` | probe_floor_at_object_offset with no X or lane offset; d3 is the height offset |
+| `$B1DE (object_init_animation_4)` | init_object_animation_state_and_advance with animation 4 |
+| `$B1E2 (object_init_animation_6)` | init_object_animation_state_and_advance with animation 6 |
+| `$B1E6 (object_init_animation_8)` | init_object_animation_state_and_advance with animation 8 |
+| `$B21E (object_integrate_height_velocity)` | Adds +$24 to +$18 |
+| `$D64C (garcia_spawn_knife)` | Spawns the knife, type $08, in one of the eight slots from $FFC900; with none free he becomes type $22 at state 1 |
+| `$DA6C (garcia_type21_target_faces_him)` | Returns d7 = 1 while the target faces him |
+| `$E0EC (garcia_far_head_box_check)` | From 48 px away on X runs garcia_head_box_start_attack |
+| `$FFE102 (secondary_cam_x)` | Tests box $12, or $13 on the other facing, on the target and enters state $0A00 on a hit |
+| `$F544 (jack_spawn_juggle)` | Creates the type $28 juggle object at state $0500 with this Jack in +$42 |
+| `$F93C (haku_ro_type2a_aim_past_screen_centre)` | Sets the walk goal to the target lane and, with +$40 = 2, 96 px past the screen centre on his far side, recording the side in +$77 |
+| `$F996 (haku_ro_type2a_check_crossed_centre)` | Enters state $1000 when he has crossed the screen centre from the side in +$77 |
 
 ## Boss helpers identified from the call map
 
@@ -3255,3 +3274,4 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$14318 (abadede_variant_type39_update)` | Type $39 update |
 | `$1566E (abadede_steer_velocity_toward_target)` | Reads the target signs from bespoke_boss_target_signs and turns his X and lane velocity to match |
 | `$15794 (abadede_linked_sprite_update)` | Type $31 update |
+| `$12D9E (mr_x_office_set_scene_delay)` | Sets +$54 to $5A, or $B4 with $FFFF44 bit 7 set |

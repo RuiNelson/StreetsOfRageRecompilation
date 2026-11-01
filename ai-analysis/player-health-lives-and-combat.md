@@ -629,3 +629,5 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$3BAE (test_solid_object_collision)` | Tests a0 against one solid object with the X box chosen by its type from the table at $3C6A; a player ignores a moving type $45 |
 | `$3C92 (player_resolve_side_wall)` | Probes the floor 8 px ahead of the X velocity and acts through the table at $3CAE; $3CB6 restores X and lane from player_transform_snapshot_cursor |
 | `$4D1E (hud_write_tile_list)` | Reads count and base from a3 and writes that many tile bytes plus base as words at a2 |
+| `$5768 (high_score_draw_name_entry_header)` | Writes the name-entry tile list to the player side of the HUD at $FF600A, then the score digits |
+| `$58E0 (high_score_draw_name_letter)` | Draws the letter +$62 through table $5904 at HUD offset +$60 on the player side, tile base $7C0 |

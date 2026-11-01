@@ -849,3 +849,4 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$7104 (prop_bounce_state)` | Shared by types $18, $1B, $1C, $1D and $1F: gravity $8800, bounces on the floor, ending after the second landing |
 | `$77B6 (object_type1a_dispatcher)` | Type $1A: state table $77BE |
 | `$8E2C (object_type04_dispatcher)` | Type $04: state table $8E34 |
+| `$6C6E (delete_object_unregistering_attacker)` | For type $45 runs unregister_enemy_attacker, then clears the object slot |

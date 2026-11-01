@@ -116,6 +116,11 @@
 0001077C, game_mode_levelstart, "100% - Updates the level-start / intro sequence (game_state=0x2A)"
 
 # Story / campaign progression
+0000B7D8, presentation_clear_palette_line, "90% - Sets $FFFA01 and clears line d0 of the active palette and of the target palette"
+0000BA02, presentation_write_byte_tilemap_rect, "95% - Writes the bytes at a1 as tile words to the VRAM address in d0, d1+1 wide and d2+1 high"
+0000BA38, presentation_add_hscroll_rows_a, "100% - presentation_add_hscroll_rows for the rows of $FF5E00"
+0000BAFE, presentation_write_tile_word, "100% - Sets the VRAM address in d0 and writes the word d1"
+0000BE2E, presentation_type8b_next_palette_list, "90% - Takes the next index from +$58, adds $10, resolves it through story_resolve_palette_list and loads the list"
 0000B82C, presentation_load_target_palette_and_reset_delay, "95% - load_palette_list_to_target, then reloads +$69 from +$68"
 0000B884, presentation_step_palette_line, "85% - Steps one palette line from $FFF400 towards $FFF480 by d4"
 0000BA40, presentation_add_hscroll_rows, "90% - Adds d0 to the scroll rows of $FF5E02 from row d1, the count in d1 high"
@@ -670,6 +675,8 @@
 0001C378, level_resource_table, "100% - Eight six-byte records: resource-list pointer plus two parameters, indexed by level"
 
 # Player health, lives, combat, and police specials
+00005768, high_score_draw_name_entry_header, "85% - Writes the name-entry tile list to the player side of the HUD at $FF600A, then the score digits"
+000058E0, high_score_draw_name_letter, "90% - Draws the letter +$62 through table $5904 at HUD offset +$60 on the player side, tile base $7C0"
 00004D1E, hud_write_tile_list, "90% - Reads count and base from a3 and writes that many tile bytes plus base as words at a2"
 00003B12, player_load_frame_extents, "85% - Copies +$02 and +$03 from the current animation frame record, from the other pair of bytes when the frame word has bit 15 set"
 00003B4E, player_resolve_lane_wall, "85% - With lane velocity and outside level index 6 probes the floor and, when blocked through the table at $3B74, undoes the lane move and clears +$20"
@@ -781,6 +788,7 @@
 0000B3C0, police_special_enemy_sweep_trampoline, "100% - Object table trampoline for type $29; jumps to police_special_enemy_sweep_update"
 
 # Items, weapons, and breakable props
+00006C6E, delete_object_unregistering_attacker, "100% - For type $45 runs unregister_enemy_attacker, then clears the object slot"
 00005256, continue_object_state0, "100% - State $0 of continue_object, from table $5236; the table gives this binding, the role is not yet read"
 00005278, continue_object_state1, "100% - State $1 of continue_object, from table $5236; the table gives this binding, the role is not yet read"
 0000529A, continue_object_state2, "100% - State $2 of continue_object, from table $5236; the table gives this binding, the role is not yet read"
@@ -986,6 +994,25 @@
 0000B3BA, object_type54_dispatcher, "100% - Object type $54 primary-state dispatcher; initializes and coordinates a multi-slot linked segmented effect object"
 
 # Ordinary enemy AI (object types $20-$2A)
+00007ED4, find_free_object_slot_down_from_d980, "100% - First free slot of 18 going down from $FFD980 in a6; Z clear when none"
+000097FE, enemy_velocity_toward_target, "95% - enemy_velocity_toward_target_offset with no X offset"
+00009800, enemy_velocity_toward_target_offset, "100% - Sets +$1C and +$20 towards the target in +$42 plus d3 on his facing side"
+00009F56, ordinary_enemy_step_x_if_floor_ahead, "90% - Probes the floor 12 px ahead and, when there is some, runs ordinary_enemy_advance_x_bounded"
+00009F6A, ordinary_enemy_step_x_or_fall, "95% - With no floor under him falls through enemy_apply_gravity_and_land; otherwise steps X with the wall and solid object checks"
+00009FE6, ordinary_enemy_step_lane_checked, "90% - Probes the floor 8 lanes ahead and steps the lane with the solid object check"
+0000AD1E, probe_floor_at_lane_offset, "100% - probe_floor_at_object_offset with no X or height offset; d2 is the lane offset"
+0000AD24, probe_floor_at_height_offset, "100% - probe_floor_at_object_offset with no X or lane offset; d3 is the height offset"
+0000B1DE, object_init_animation_4, "100% - init_object_animation_state_and_advance with animation 4"
+0000B1E2, object_init_animation_6, "100% - init_object_animation_state_and_advance with animation 6"
+0000B1E6, object_init_animation_8, "100% - init_object_animation_state_and_advance with animation 8"
+0000B21E, object_integrate_height_velocity, "100% - Adds +$24 to +$18"
+0000D64C, garcia_spawn_knife, "95% - Spawns the knife, type $08, in one of the eight slots from $FFC900; with none free he becomes type $22 at state 1"
+0000DA6C, garcia_type21_target_faces_him, "100% - Returns d7 = 1 while the target faces him"
+0000E0EC, garcia_far_head_box_check, "90% - From 48 px away on X runs garcia_head_box_start_attack"
+0000E102, garcia_head_box_start_attack, "95% - Tests box $12, or $13 on the other facing, on the target and enters state $0A00 on a hit"
+0000F544, jack_spawn_juggle, "100% - Creates the type $28 juggle object at state $0500 with this Jack in +$42"
+0000F93C, haku_ro_type2a_aim_past_screen_centre, "85% - Sets the walk goal to the target lane and, with +$40 = 2, 96 px past the screen centre on his far side, recording the side in +$77"
+0000F996, haku_ro_type2a_check_crossed_centre, "85% - Enters state $1000 when he has crossed the screen centre from the side in +$77"
 0000949E, kill_ordinary_enemies_and_release_players, "90% - Sets the players +$7D to 5 and status_bitfield_1 to $C, and puts every ordinary enemy of the first 32 slots not already dying into state $0300 with health $FFFF"
 00009D16, ordinary_enemy_death_state, "100% - State 6 of the ordinary enemies: death"
 0000A04A, ordinary_enemy_held_state, "100% - State 5 of the ordinary enemies: held by a player"
@@ -1066,7 +1093,7 @@
 00007E92, find_free_object_slot_down_from_d080, "100% - First free slot of 48 going down from $FFD080 in a6; Z clear when none"
 0000B19A, object_set_animation_and_tile_base, "95% - Stores a1 in +$04 and d1 in +$0E and falls into the animation start at $B1A2"
 0000B1D6, object_init_animation_from_zero, "95% - Clears d0 and branches to init_object_animation_state_and_advance"
-0000B1DA, object_init_animation_branch, "90% - Branch to init_object_animation_state_and_advance with the caller d0"
+0000B1DA, object_init_animation_2, "100% - init_object_animation_state_and_advance with animation 2"
 0000B17E, clear_object_slot_a0, "100% - Fills the 128-byte object at a0 with zero"
 0000AB88, test_axis_overlap_from_shape, "100% - Tests one axis of a shape record against the box at a2: inclusive, d7 = 1 on overlap"
 0000AD18, probe_floor_at_x_offset, "100% - probe_floor_at_object_offset with no lane or height offset; d1 is the X offset"
@@ -1158,6 +1185,7 @@
 00027032, ordinary_enemy_animation_set_pointer_table, "100% - L[11] - Animation/behavior resource pointer selected by ordinary type $20-$2A"
 
 # Bosses and final encounter
+00012D9E, mr_x_office_set_scene_delay, "80% - Sets +$54 to $5A, or $B4 with $FFFF44 bit 7 set"
 00012B94, mr_x_office_controller_state0, "100% - State $0 of mr_x_office_controller, from table $12B64; the table gives this binding, the role is not yet read"
 00012C0A, mr_x_office_controller_state1, "100% - State $1 of mr_x_office_controller, from table $12B64; the table gives this binding, the role is not yet read"
 00012C26, mr_x_office_controller_state2, "100% - State $2 of mr_x_office_controller, from table $12B64; the table gives this binding, the role is not yet read"
