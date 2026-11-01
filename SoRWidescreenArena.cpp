@@ -1,4 +1,4 @@
-#include "SoR.hpp"
+#include "SoRCpuOps.hpp"
 
 #include <cstdint>
 
@@ -87,18 +87,6 @@ bool waitsBehindShutter(SystemMemory &mem, m_byte type, m_byte personality) {
 
 } // namespace
 
-// Soft 68000 jsr into generated code: push the return PC, call, and leave this routine if the callee
-// unwound past it (the same contract as CALL in generated code).
-#define SOR_CALL(fn, retPc, target)                                              \
-    do {                                                                         \
-        const m_long spBefore_ = cpu().ssp;                                      \
-        logCallFromReturn((retPc), (target));                                    \
-        cpu().ssp -= 4;                                                          \
-        memory().writeLong(cpu().ssp, (retPc));                                  \
-        (fn)();                                                                  \
-        if ((cpu().ssp & 0x00FFFFFFu) > (spBefore_ & 0x00FFFFFFu))               \
-            return;                                                              \
-    } while (0)
 
 // ---------------------------------------------------------------------------
 // $0043AA — clamp_players_to_gameplay_bounds

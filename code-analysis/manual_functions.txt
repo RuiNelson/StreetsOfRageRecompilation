@@ -1,6 +1,7 @@
 # Functions whose declarations/call sites remain generated, but whose bodies
 # are provided by hand-written C++ in SoRManualFunctions.cpp,
-# SoRControls.cpp, SoRInteractions.cpp, SoRMainMenus.cpp, SoRObjectRoutines.cpp, SoRRNG.cpp, or SoRSound.cpp.
+# SoRControls.cpp, SoRInteractions.cpp, SoRMainMenus.cpp, SoRObjectRoutines.cpp, SoRPlayerRoutines.cpp,
+# SoREnemyRoutines.cpp, SoRBossRoutines.cpp, SoRRNG.cpp, or SoRSound.cpp.
 0003A2 # game_infinite_loop
 003028 # player_normal_attack_input (alt-controls pickup input hook)
 003084 # player_held_object_attack_input (alt-controls pickup input hook)
@@ -97,3 +98,55 @@
 00ABF8 # sub_00abf8 (box overlap with both shape ids given)
 006ACA # queue_object_sound_id (jmp queue_sound_id)
 0035D6 # jmp queue_sound_id
+
+# Callees of those ports (SoRObjectRoutines.cpp).
+000E46 # find_free_object_slot
+006ABC # sub_006abc (animation 0 with +$01 bit 6; also entered at $6AC2 and $6AC4)
+00B196 # init_object_animation_state_and_advance 
+00B1A2 # init_object_animation_frame
+00B1D6 # sub_00b1d6
+00B228 # clear the object's velocities
+
+# Player routines (SoRPlayerRoutines.cpp).
+002DE6 # sub_002de6 (action change)
+002EE8 # sub_002ee8 (action change without the weapon state)
+002E32 # weapon state of a player's action
+0035D0 # jmp init_object_animation_frame
+003614 # start speeds of an action
+003936 # player_action_change_mask_state_bits
+003A14 # player_load_frame_timer
+004104 # reset of a player's combat fields
+004140 # player_cache_boxes
+004192 # six box words for a shape record
+01040A # memfill_long_12
+
+# Enemy routines (SoREnemyRoutines.cpp).
+009350 # is_nonordinary_enemy_type
+0096C0 # face the target and start an animation (also entered at $96C4)
+009604 # ordinary_enemy_approach_point
+00982C # ordinary_enemy_vector_to_velocity
+009842 # slope and octant of a vector
+009896 # velocity pair from slope and speed
+00A56C # screen position of an object
+00A9BA # contact reaction of an enemy (jump table at $A9C8 inlined)
+00AA22 # contact lookup that links the pair
+00AA34 # which object attacks a0 now
+00F482 # target within $40 in X
+0105CE # one step of the palette fade
+
+# Bespoke boss routines (SoRBossRoutines.cpp).
+012A4E # bespoke_boss_target_signs
+012A78 # bespoke_boss_range_test
+0154E0 # contact reaction of a bespoke boss
+01550E # reaction 1
+015560 # reaction 2
+01559A # reaction 3
+0155BE # reaction 4 and 5
+015604 # recoil
+015632 # damage and recoil
+01566E # bounce toward the target
+01569C # pair follows the boss
+0156E0 # facing from the X velocity
+01572A # animation start and facing
+01573C # pair animation
+01577C # pair animation and bounce

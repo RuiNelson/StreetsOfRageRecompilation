@@ -1,11 +1,12 @@
-#include "SoR.hpp"
+#include "SoRCpuOps.hpp"
 
-#include <cstdint>
+using namespace sorops;
 
 // ---------------------------------------------------------------------------
 // Small object routines the hand-written ports call: the floor probe ($AD2A / $AD30), the object
-// velocity step ($B20E), the box tests between two objects ($AB24 / $ABF8) and the two trampolines
-// to queue_sound_id ($6ACA / $35D6). Each is the ROM routine as it is, registers and condition codes
+// velocity step ($B20E), the box tests between two objects ($AB24 / $ABF8), the animation setup
+// ($B1A2 and what leads to it), the free-slot scan ($E46) and the two trampolines to queue_sound_id
+// ($6ACA / $35D6). Each is the ROM routine as it is, registers and condition codes
 // included, so that a manual caller never reaches into generated code.
 // ---------------------------------------------------------------------------
 
@@ -341,4 +342,130 @@ void StreetsOfRage::queue_object_sound_id(m_long /*entry_*/) {
 void StreetsOfRage::sub_0035d6(m_long /*entry_*/) {
     traceEnter(0x000035D6u);
     queue_sound_id();
+}
+
+// ---------------------------------------------------------------------------
+// $000E46 (find_free_object_slot): a1 = the first object slot from $FFB900 whose type byte is 0 (the 32nd
+// when none is), Z set when one was found.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::find_free_object_slot(m_long /*entry_*/) {
+    traceEnter(0x00000E46u);
+    auto &c   = cpu();
+    auto &mem = memory();
+
+    c.a[1] = 0xFFFFB900u;
+    c.d[3] = 0x1Fu;
+    for (;;) {
+        const m_byte type = mem.readByte(c.a[1]);
+        tst(c, type, 8);
+        if (type == 0)
+            break;
+        c.a[1] += 0x80u;
+        c.setDw(3, static_cast<m_word>(c.dw(3) - 1u));
+        if (c.dw(3) == 0xFFFFu)
+            break;
+    }
+    c.ssp += 4;
+}
+
+// ---------------------------------------------------------------------------
+// $00B1A2 (init_object_animation_frame)
+//
+// Starts animation d0 (a word offset into the set at a1): +$08 = d0, +$0A = 0, +$0C and +$0D = the
+// frame's first byte, and +$02 / +$03 = the two bytes after the frame header (three when the header's
+// word has bit 15 set). a1 ends past them.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::init_object_animation_frame(m_long /*entry_*/) {
+    traceEnter(0x0000B1A2u);
+    auto &c   = cpu();
+    auto &mem = memory();
+
+    mem.writeWord(c.a[0] + 0x08u, c.dw(0));
+    c.d[1] = 0;
+    mem.writeByte(c.a[0] + 0x0Au, 0);
+    c.a[1] += sext16(mem.readWord(c.a[1] + sext16(c.dw(0))));
+    c.a[1] += 1;
+    const m_byte frame = mem.readByte(c.a[1]);
+    mem.writeByte(c.a[0] + 0x0Cu, frame);
+    mem.writeByte(c.a[0] + 0x0Du, frame);
+    c.a[1] -= 1;
+    c.setDw(0, mem.readWord(c.a[1] + 2u));
+    const bool wide = (c.d[0] & 0x8000u) != 0;
+    c.d[0] &= ~0x8000u;
+    c.a[1] = c.a[1] + 1u + sext16(c.dw(0));
+    if (wide)
+        c.a[1] += 2;
+    const m_byte first = mem.readByte(c.a[1]);
+    c.a[1] += 1;
+    mem.writeByte(c.a[0] + 0x02u, first);
+    const m_byte second = mem.readByte(c.a[1]);
+    c.a[1] += 1;
+    mem.writeByte(c.a[0] + 0x03u, second);
+    tst(c, second, 8);
+    c.ssp += 4;
+}
+
+// ---------------------------------------------------------------------------
+// $00B196 (init_object_animation_state_and_advance): +$30 += 1, +$04 = a1, +$0E = d1, then the frame start above.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::init_object_animation_state_and_advance(m_long /*entry_*/) {
+    traceEnter(0x0000B196u);
+    auto &c   = cpu();
+    auto &mem = memory();
+
+    const m_byte state = static_cast<m_byte>(addValue(c, mem.readByte(c.a[0] + 0x30u), 1, 8));
+    mem.writeByte(c.a[0] + 0x30u, state);
+    mem.writeLong(c.a[0] + 0x04u, c.a[1]);
+    mem.writeWord(c.a[0] + 0x0Eu, c.dw(1));
+    init_object_animation_frame();
+}
+
+// ---------------------------------------------------------------------------
+// $00B1D6: animation 0 of the set at a1 (d1 = timer word), state advanced.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::sub_00b1d6(m_long /*entry_*/) {
+    traceEnter(0x0000B1D6u);
+    cpu().d[0] = 0;
+    tst(cpu(), 0, 32);
+    init_object_animation_state_and_advance();
+}
+
+// ---------------------------------------------------------------------------
+// $006ABC: +$01 bit 6 set, d1 = 0, then $B1D6. Entered at $6AC2 without the bit, at $6AC4 without d1.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::sub_006abc(m_long entry_) {
+    auto &c   = cpu();
+    auto &mem = memory();
+
+    if (entry_ != 0x00006AC2u && entry_ != 0x00006AC4u) {
+        traceEnter(0x00006ABCu);
+        const m_byte flags = static_cast<m_byte>(mem.readByte(c.a[0] + 0x01u) | 0x40u);
+        mem.writeByte(c.a[0] + 0x01u, flags);
+        tst(c, flags, 8);
+    }
+    if (entry_ != 0x00006AC4u) {
+        if (entry_ == 0x00006AC2u)
+            traceEnter(0x00006AC2u);
+        c.d[1] = 0;
+        tst(c, 0, 32);
+    } else {
+        traceEnter(0x00006AC4u);
+    }
+    sub_00b1d6();
+}
+
+// ---------------------------------------------------------------------------
+// $00B228: the object's three velocities (+$1C, +$20, +$24) cleared, d7 = 0.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::sub_00b228(m_long /*entry_*/) {
+    traceEnter(0x0000B228u);
+    auto &c   = cpu();
+    auto &mem = memory();
+
+    c.d[7] = 0;
+    mem.writeLong(c.a[0] + kObjVelX, 0);
+    mem.writeLong(c.a[0] + kObjVelLane, 0);
+    mem.writeLong(c.a[0] + kObjVelZ, 0);
+    tst(c, 0, 32);
+    c.ssp += 4;
 }

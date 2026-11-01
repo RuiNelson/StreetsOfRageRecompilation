@@ -45,7 +45,11 @@ Before changing files:
 | `SoRMenuCanvas.hpp` | What those two menus share: the OPTIONS font, drawing to plane A, held directions |
 | `SoRPlatform.hpp` | `consoleMenus()`: the PS5's menus, on with `__PROSPERO__` or `--console-menus` (workspace `CLAUDE.md`, **PS5 menus**) |
 | `SoRRNG.cpp` | The game's RNG draw, `$0104D8 (rng_draw)` (see **Manual subroutines**) |
-| `SoRObjectRoutines.cpp` | The small object routines the other ports call: floor probe `$AD2A`/`$AD30`, velocity step `$B20E`, box tests `$AB24`/`$ABF8`, sound trampolines `$6ACA`/`$35D6` |
+| `SoRCpuOps.hpp` | What the small ports share: 68000 add/sub/cmp/neg/shift with the ROM's condition codes, bit tests on memory, and the `SOR_CALL` soft `jsr` |
+| `SoRObjectRoutines.cpp` | Small object routines the other ports call: floor probe `$AD2A`/`$AD30`, velocity step `$B20E`, box tests `$AB24`/`$ABF8`, animation start `$B1A2` and what leads to it, free slot `$E46`, sound trampolines `$6ACA`/`$35D6` |
+| `SoRPlayerRoutines.cpp` | Player action change `$2DE6`/`$2EE8` and its callees, box cache `$4104`/`$4140`/`$4192` |
+| `SoREnemyRoutines.cpp` | Enemy walk and velocity (`$9604`, `$982C`), attacker lookup (`$AA34`, `$AA22`, `$A9BA`), `$9350`, `$96C0`, `$A56C`, `$F482`, palette fade step `$105CE` |
+| `SoRBossRoutines.cpp` | The bespoke bosses' contact reaction (`$154E0` and its four targets), bounce, pair follow and pair animation (`$12A4E`-`$1577C`) |
 | `SoRRemoteInput.*` | Remote (autoplay) input as actions through the execution data, and each player's status in the game data (see **Controls**) |
 | `SoRSoundtrack.*` | Pre-rendered soundtrack playback (SDL3_mixer) driven by the ROM's own sound engine |
 | `tools/soundtrack/` | Separate CMake project: the Genesis Plus GX renderer that produces that soundtrack |
@@ -773,14 +777,26 @@ keeping the generated declaration, dispatcher, and call sites intact.
   200,000 states, and live: the states in a gameplay session follow the ROM's
   sequence.
 - **A manual routine calls only manual routines** (user, 2026-11-01): when a port needs a
-  generated callee, reimplement the callee (`SoRObjectRoutines.cpp` holds those so far) rather than
-  calling into generated code. Still generated and called from manual code: the `SOR_CALL`s in
-  `SoRWidescreenArena.cpp` (`is_nonordinary_enemy_type`, `bespoke_boss_range_test`, `$154E0`, `$1569C`, `$1566E`,
-  `$1577C`, `$96C0`, `$A9BA`, `$F482`, `ordinary_enemy_approach_point`, `$A56C`, `$6ABC`, `$B228`, `$2EE8`, `$2DE6`, `$4104`,
-  `find_free_object_slot`, `$105CE`) and the `dispatch($2EE8)`/`dispatch($2DE6)` calls in `SoRInteractions.cpp`.
+  generated callee, reimplement the callee rather than calling into generated code. Done for
+  `SoRWidescreenArena.cpp` and `SoRInteractions.cpp`, except `ordinary_enemy_move_with_collision` (`$9E68`),
+  `sub_0095ce` and `init()` (the boot) in the arena. Still generated and called from manual code:
+  `SoRMainMenus.cpp` (VDP tilemap and Nemesis art loaders, palette loaders and fades, `reset_vdp_and_graphics_state`,
+  `update_cameras_and_queue_tilemaps`, `resolve_player_vs_player_collision`, `nudge_players_to_walkable_floor`,
+  `ensure_object_ground_shadow`, `enqueue_object_render_bucket`, the OPTIONS draw routines, `char_select_idle_tick`,
+  `select_menu_wait_fade`, `$7F00`), `SoRControls.cpp` (the same loaders and OPTIONS draws,
+  `dispatch_object_primary_state_table`), `SoRManualFunctions.cpp` (`init_joypad`, `load_vdp_tilemap_bundle`,
+  `memfill_long_64`, `memcopy_128`, `vdp_fill_long_49`, `draw_player_lives_and_specials`,
+  `prepare_ordinary_enemies_for_police_special`) and `SoRPause.cpp` (`adjust_player_health`,
+  `draw_player_lives_and_specials`).
+- A jump table inside a reimplemented routine is inlined for its valid entries and an out-of-range index goes to
+  `unhandledDispatch`, as the ROM would jump into data. A routine only reached by `jmp` (`$9896`) needs its address in
+  `code-analysis/aux_addresses.txt` before it can be manual, and so does a block that follows a manual routine and is
+  entered separately (`$12ADC`, `$1564A`, `$156CC`, `$15794`): the generator hands such entries to the manual routine's
+  function otherwise, and a call lands in the wrong body.
 - A reimplemented leaf is checked against the generated body by fuzzing: a scratch copy of the tree with the old manual
   list and the new file renamed (`*_NEW`) beside it, random registers, objects and tables, comparing every register, the
-  CCR (X included), `ssp` and the object memory. `SoRObjectRoutines.cpp`: 120,000 cases, no difference. A lockstep RAM
+  CCR (X included), `ssp` and the memory the routines touch. All the object, player, enemy and boss routines: 49
+  kinds of 3,000 cases (contact-heavy setups for the attacker lookups), no difference. A lockstep RAM
   trace of two runs of the same binary is not deterministic (the host differs from the boot logo on), so it cannot compare builds.
 - A routine that a hand-written port called through a grouped generated function (`player_hold_crossover_update(0x35D6)`
   after `$26E2` was labelled) is a different root: look the entry up in the ASM, not the group's name.
