@@ -43,6 +43,7 @@ Before changing files:
 | `SoRVideoConfig.*` | `video.yaml`, next to `controls.yaml`: frame sync, widescreen, fullscreen, integer scaling |
 | `SoRVideoMenu.*` | OPTIONS > VIDEO, the in-game video menu (see **OPTIONS > VIDEO**) |
 | `SoRMenuCanvas.hpp` | What those two menus share: the OPTIONS font, drawing to plane A, held directions |
+| `SoRPlatform.hpp` | `consoleMenus()`: the PS5's menus, on with `__PROSPERO__` or `--console-menus` (workspace `CLAUDE.md`, **PS5 menus**) |
 | `SoRRNG.cpp` | The game's RNG draw, `$0104D8 (rng_draw)` (see **Manual subroutines**) |
 | `SoRRemoteInput.*` | Remote (autoplay) input as actions through the execution data, and each player's status in the game data (see **Controls**) |
 | `SoRSoundtrack.*` | Pre-rendered soundtrack playback (SDL3_mixer) driven by the ROM's own sound engine |
@@ -112,6 +113,42 @@ Windows uses llvm-mingw (Clang, LLD, libc++, UCRT) with Ninja: pass
 static there and the C++ runtime is linked in (`-static-libstdc++`), so only
 `SDL3.dll`/`SDL3_mixer.dll` sit next to `sor.exe`. The meta-repository README
 has the complete command. Built and run on a real Windows machine (user, 2026-10-30).
+
+## The PS5 title (`prospero/`, work in progress)
+
+`../scripts/build_ps5.py` builds it in Docker into ignored `dist-ps5/PPSA99872/`, with the build tree in the volume
+`sor-ps5-build`; `../scripts/deploy_ps5.py` copies it to a console. Under `PS5` (set by the SDK's toolchain) `CMakeLists.txt` drops shared libraries, and
+`prospero/cmake/ps5-sor.cmake`, included right after `project()`, adds the rest: SDL `release-3.4.10` with griches'
+console drivers, RADV and `tools/link-title.sh`, which refuses any import that would be null at run time.
+
+- **Licence** (user): a built PS5 title is GPL-3.0 (`prospero/LICENSING.md`, `COPYING-GPL-3.0`), because `PS5_Vulkan` and the
+  payload SDK are GPL-3.0. RADV is Mesa, MIT, not GPL; do not give it as the reason. Desktop builds stay MIT.
+- The console's files are in `/data/sor` (`SoRPlatform::kDataDir`; user decision, as ProsperoEden's `/data/prosperoeden`),
+  which a title sees only with ShadowMountPlus 1.7beta4 or newer. `args.txt` there holds options, one a line: a title has
+  no command line.
+- **The ROM, the pre-rendered soundtrack, the AI's files and the stdlib are obligatory** (user): without any of them `main.cpp`
+  sends a notification saying what to copy where and the title closes, even with `--silent` or `--sound emulated` in
+  `args.txt`. There is no fallback to emulated sound or a game without AI on the console.
+- A title has no working directory (`src/shims.c` answers `/data/sor`), no `dlopen`, and `access()` always fails.
+- `compat/atomic_ref.hpp` supplies `std::atomic_ref`, which the SDK's libc++ 18 lacks.
+- **Python on the console is static** (a title cannot load a module). `tools/build-cpython.sh` cross-builds the pinned
+  version into the volume: configure is patched to accept FreeBSD as a cross target, `tools/cpython-config.site` answers
+  no for what a title cannot import, and only the extension modules `sor_ai` imports are compiled in (`keep` in that
+  script; the AI's other C modules, `fcntl` and `grp`, are optional imports). No PGO: expect about 7% slower ticks. The
+  stdlib and `sor_ai` go to `dist-ps5/data-sor/`, for `/data/sor`, where Python writes its `.pyc` files. UTF-8 mode and
+  a fixed hash seed, because a title has no locales or random device to count on.
+- The console refuses `fcntl(F_GETFD)` and `F_SETFD` with `EINVAL` (measured on the user's console), so `build-cpython.sh`
+  makes Python's close-on-exec functions no-ops; nothing can exec there.
+- `/data/sor/ai.log` holds every `[ai]` line and Python's tracebacks (descriptor 2), and is readable over FTP. C's
+  `stderr` stays klog's. AI Assist works on the user's console (2026-10-31); ticks not yet measured there.
+- `contentVersion` in `sce_sys/param.json` is `scripts/update_version_everywhere.py`'s, as NN.NNN.NNN (user).
+- In the console's CONTROLS menu a pad's inputs have a DualSense's names (user): the four symbols, L1, L2, R1, R2, L3, R3,
+  CLICK for the touch pad (SDL's Back) and OPTIONS for Start. The font has no symbols, so `SoRControlsMenu` loads them into
+  tiles `$31`-`$34`, blank on the OPTIONS screen, while it is open, and blanks them on closing.
+- The default JOYSTICK DEADZONE is 1 there, not 24 (user): `prospero/src/platform.c` removes a 12% dead zone before the
+  game sees the stick. A saved `controls.yaml` keeps its own value.
+- `sce_sys/icon0.png` is `prospero_icon.png` (the user's) at 512x512. There is no `pic0.dds` or `pic1.dds` yet.
+- The game and FLAC playback work on the user's console (2026-10-31).
 
 ## The Python AI in the process (`SoRPython`, `--ai-path`)
 

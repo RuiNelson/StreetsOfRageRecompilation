@@ -2,11 +2,13 @@
 
 #include "SoRInput.hpp"
 #include "SoRMenuCanvas.hpp"
+#include "SoRPlatform.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -23,10 +25,20 @@ constexpr int kValueColumn = 22;
 constexpr int kHelpRow     = 22;
 
 enum class Row { FrameSync, Picture, Display, IntegerScaling, Reset, Save, Cancel };
-constexpr std::array kRowList = {
+constexpr std::array kDesktopRows = {
     Row::FrameSync, Row::Picture, Row::Display, Row::IntegerScaling, Row::Reset, Row::Save, Row::Cancel};
+constexpr std::array kConsoleRows = {
+    Row::FrameSync, Row::Picture, Row::IntegerScaling, Row::Reset, Row::Save, Row::Cancel};
 
-constexpr int screenRow(Row row) {
+std::span<const Row> rowList() {
+    if (SoRPlatform::consoleMenus())
+        return kConsoleRows;
+    return kDesktopRows;
+}
+
+int screenRow(Row row) {
+    // The rows below DISPLAY close its gap where it is left out.
+    const int shift = SoRPlatform::consoleMenus() ? 2 : 0;
     switch (row) {
         case Row::FrameSync:
             return 7;
@@ -35,13 +47,13 @@ constexpr int screenRow(Row row) {
         case Row::Display:
             return 11;
         case Row::IntegerScaling:
-            return 13;
+            return 13 - shift;
         case Row::Reset:
-            return 16;
+            return 16 - shift;
         case Row::Save:
-            return 18;
+            return 18 - shift;
         case Row::Cancel:
-            return 20;
+            return 20 - shift;
     }
     return 0;
 }
@@ -200,13 +212,14 @@ std::array<std::string, 2> help(const Menu &m, Row row) {
 
 void draw(const Menu &m, Canvas &canvas) {
     canvas.text(kLabelColumn, kTitleRow, "VIDEO", true);
-    for (std::size_t i = 0; i < kRowList.size(); ++i) {
-        const Row  row      = kRowList[i];
+    const std::span<const Row> rows = rowList();
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+        const Row  row      = rows[i];
         const bool selected = static_cast<int>(i) == m.cursor;
         canvas.text(kLabelColumn, screenRow(row), label(row), selected);
         canvas.text(kValueColumn, screenRow(row), value(m.pending, row), selected);
     }
-    const auto lines = help(m, kRowList[static_cast<std::size_t>(m.cursor)]);
+    const auto lines = help(m, rows[static_cast<std::size_t>(m.cursor)]);
     // White: this screen's grey is palette line 1's darkest text, too dark to read a sentence in.
     canvas.text(kLabelColumn, kHelpRow, lines[0], true);
     canvas.text(kLabelColumn, kHelpRow + 1, lines[1], true);
@@ -217,8 +230,9 @@ void draw(const Menu &m, Canvas &canvas) {
 void drawOptionsRow(SystemMemory &memory, const VideoConfig &current, bool highlighted) {
     const int row = 15; // free in the ROM's layout: CONTROLS ends at 13, EXIT is at 18
     drawText(memory, kLabelColumn, row, "VIDEO", highlighted);
-    const std::string summary = std::string(current.widescreen ? "WIDESCREEN" : "ORIGINAL") + " " +
-                                std::string(displayName(current.fullscreen));
+    std::string summary = current.widescreen ? "WIDESCREEN" : "ORIGINAL";
+    if (!SoRPlatform::consoleMenus())
+        summary += " " + std::string(displayName(current.fullscreen));
     drawText(memory, 18, row, summary, highlighted);
     // Back from a longer summary, as from WIDESCREEN FULLSCREEN to ORIGINAL WINDOW.
     drawText(memory, 18 + static_cast<int>(summary.size()), row, std::string(40 - 18 - summary.size(), ' '), highlighted);
@@ -251,8 +265,9 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
     const bool confirm = m.confirm.step(held.confirm, false);
     const bool back    = m.back.step(held.back, false);
 
-    const auto count = static_cast<int>(kRowList.size());
-    const Row  row   = kRowList[static_cast<std::size_t>(m.cursor)];
+    const std::span<const Row> rows  = rowList();
+    const auto                 count = static_cast<int>(rows.size());
+    const Row                  row   = rows[static_cast<std::size_t>(m.cursor)];
     bool       close = false;
     if (m.swallow) {
         m.swallow = false; // a key still held from opening is not a press
@@ -269,7 +284,8 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
         playSound(memory, kSoundPick);
         switch (row) {
             case Row::Reset:
-                m.pending = VideoConfig{};
+                m.pending            = VideoConfig{};
+                m.pending.fullscreen = SoRPlatform::consoleMenus(); // a console has no window to go back to
                 break;
             case Row::Save:
                 if (!SoRVideoConfig::save(m.pending, SoRVideoConfig::defaultPath()))

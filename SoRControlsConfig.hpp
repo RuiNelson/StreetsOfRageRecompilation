@@ -98,7 +98,11 @@ struct PlayerConfig {
     std::string                                gamepadGuid;
     std::string                                gamepadName;
     int                                        gamepadIndex    = 0;
-    int                                        deadzonePercent = 24;
+#ifdef __PROSPERO__
+    int deadzonePercent = 1; // the console's platform layer has already taken 12% off the stick (user)
+#else
+    int deadzonePercent = 24;
+#endif
     std::array<SchemeBindings, kSchemeCount> bindings{};
 
     SchemeBindings &schemeBindings(Scheme s) {

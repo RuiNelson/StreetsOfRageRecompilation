@@ -18,8 +18,10 @@ set(CMAKE_LINK_DEPENDS_NO_SHARED ON)
 
 # Build/link MegaDriveEnvironment's FetchContent deps (yaml-cpp, zlib, libpng)
 # as shared libraries for this consumer only.
-set(MEGADRIVE_ENVIRONMENT_SHARED_DEPS ON CACHE BOOL
-    "Build and link yaml-cpp/zlib/libpng as shared libraries" FORCE)
+if(NOT PS5) # a title has only what is linked into it (prospero/cmake/ps5-sor.cmake)
+    set(MEGADRIVE_ENVIRONMENT_SHARED_DEPS ON CACHE BOOL
+        "Build and link yaml-cpp/zlib/libpng as shared libraries" FORCE)
+endif()
 
 include(FetchContent)
 
@@ -67,6 +69,8 @@ list(FILTER SOR_SOURCES EXCLUDE REGEX ".*/build/.*")
 # tools/ holds separate programs, such as the soundtrack renderer.
 list(FILTER SOR_SOURCES EXCLUDE REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/tools/.*")
 list(FILTER SOR_SOURCES EXCLUDE REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/\\.cpython/.*")
+# prospero/ is the PS5's: its platform layer, built by prospero/cmake/ps5-sor.cmake.
+list(FILTER SOR_SOURCES EXCLUDE REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/prospero/.*")
 
 add_executable(sor ${SOR_SOURCES})
 

@@ -20,6 +20,9 @@ class SystemMemory;
 // part. An AI that fails is reported on stderr and the game goes on without it.
 namespace SoRPython {
 
+/// The bundled stdlib's folder.
+std::filesystem::path standardLibrary();
+
 /// Says where the AI's code is. Nothing in it runs yet.
 void configure(const std::filesystem::path &aiPath, bool widescreen, std::uint32_t turbo);
 

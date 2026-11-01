@@ -1,4 +1,5 @@
 #include "SoRPython.hpp"
+#include "SoRPlatform.hpp"
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
@@ -7,16 +8,43 @@
 
 #include "system/memory/SystemMemory.hpp"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstdarg>
 #include <cstdio>
 #include <mutex>
 #include <string>
 #include <utility>
 
+#ifdef __PROSPERO__
+#include <fcntl.h>
+#include <unistd.h>
+#endif
+
 namespace {
+
+// A line on standard error, and on the console in <data>/ai.log too: a player can read
+// that over FTP, and klog only with a service running on the console to serve it.
+void report(const char *format, ...) __attribute__((format(printf, 1, 2)));
+void report(const char *format, ...) {
+    char    line[1024];
+    va_list arguments;
+    va_start(arguments, format);
+    const int length = std::vsnprintf(line, sizeof(line), format, arguments);
+    va_end(arguments);
+    std::fputs(line, stderr);
+#ifdef __PROSPERO__
+    static const int file = ::open((std::string(SoRPlatform::kDataDir) + "/ai.log").c_str(),
+                                   O_WRONLY | O_CREAT | O_TRUNC | O_APPEND, 0666);
+    if (file >= 0 && length > 0)
+        (void)!::write(file, line, std::min<std::size_t>(static_cast<std::size_t>(length), sizeof(line) - 1));
+#else
+    (void)length;
+#endif
+}
 
 // Python's own threads on macOS get 16 MiB: the 512 KiB of a secondary thread
 // there is not enough for what the interpreter expects to recurse.
@@ -166,7 +194,7 @@ PyObject *hostLog(PyObject * /*module*/, PyObject *argument) {
     const char *text = PyUnicode_AsUTF8(argument);
     if (text == nullptr)
         return nullptr;
-    std::fprintf(stderr, "[ai] %s\n", text);
+    report("[ai] %s\n", text);
     Py_RETURN_NONE;
 }
 
@@ -197,31 +225,58 @@ PyObject *initHostModule() {
 void reportPythonError() {
     if (PyErr_ExceptionMatches(PyExc_SystemExit)) {
         PyErr_Clear();
-        std::fprintf(stderr, "[ai] the Python AI asked to exit; the game goes on without it\n");
+        report("[ai] the Python AI asked to exit; the game goes on without it\n");
         return;
     }
     PyErr_Print();
-    std::fprintf(stderr, "[ai] the Python AI failed; the game goes on without it\n");
+    report("[ai] the Python AI failed; the game goes on without it\n");
+}
+
+// Where the stdlib is: beside the executable, or on the console in its data folder (a title's own is read-only,
+// and Python writes .pyc files beside the sources). Empty if the executable's folder is unknown.
+std::filesystem::path pythonHome() {
+#ifdef __PROSPERO__
+    return std::filesystem::path(SoRPlatform::kDataDir) / "python";
+#else
+    const char *basePath = SDL_GetBasePath();
+    return basePath != nullptr ? std::filesystem::path(basePath) / "python" : std::filesystem::path();
+#endif
+}
+
+std::filesystem::path stdlibFolder(const std::filesystem::path &home) {
+#ifdef _WIN32
+    return home / "Lib";
+#else
+    return home / "lib" / ("python" + std::to_string(PY_MAJOR_VERSION) + "." + std::to_string(PY_MINOR_VERSION));
+#endif
 }
 
 bool initializeInterpreter(const std::filesystem::path &aiPath) {
-    const char *basePath = SDL_GetBasePath();
-    if (basePath == nullptr) {
-        std::fprintf(stderr, "[ai] cannot find the executable's folder: %s\n", SDL_GetError());
+    const std::filesystem::path home = pythonHome();
+    if (home.empty()) {
+        report("[ai] cannot find the executable's folder: %s\n", SDL_GetError());
         return false;
     }
-    const std::filesystem::path home = std::filesystem::path(basePath) / "python";
+    const std::filesystem::path stdlib = stdlibFolder(home);
 #ifdef _WIN32
-    const std::filesystem::path stdlib     = home / "Lib";
     const std::filesystem::path extensions = home / "DLLs";
 #else
-    const std::filesystem::path stdlib =
-        home / "lib" / ("python" + std::to_string(PY_MAJOR_VERSION) + "." + std::to_string(PY_MINOR_VERSION));
     const std::filesystem::path extensions = stdlib / "lib-dynload";
 #endif
 
+#ifdef __PROSPERO__
+    // UTF-8 whatever the console's libc says of locales.
+    PyPreConfig preconfig;
+    PyPreConfig_InitIsolatedConfig(&preconfig);
+    preconfig.utf8_mode = 1;
+    if (PyStatus status = Py_PreInitialize(&preconfig); PyStatus_Exception(status)) {
+        report("[ai] cannot start Python: %s\n", status.err_msg != nullptr ? status.err_msg : "unknown");
+        return false;
+    }
+#endif
+
     if (PyImport_AppendInittab("sor_host", initHostModule) == -1) {
-        std::fprintf(stderr, "[ai] cannot register the sor_host module\n");
+        report("[ai] cannot register the sor_host module\n");
         return false;
     }
 
@@ -229,10 +284,15 @@ bool initializeInterpreter(const std::filesystem::path &aiPath) {
     PyConfig_InitIsolatedConfig(&config);
     config.site_import              = 0;
     config.module_search_paths_set  = 1;
+#ifdef __PROSPERO__
+    // No random device to count on in a title; the AI hashes nothing an attacker chooses.
+    config.use_hash_seed = 1;
+    config.hash_seed     = 0;
+#endif
     const auto succeeded            = [&config](PyStatus status) {
         if (!PyStatus_Exception(status))
             return true;
-        std::fprintf(stderr, "[ai] cannot start Python: %s\n", status.err_msg != nullptr ? status.err_msg : "unknown");
+        report("[ai] cannot start Python: %s\n", status.err_msg != nullptr ? status.err_msg : "unknown");
         PyConfig_Clear(&config);
         return false;
     };
@@ -259,10 +319,19 @@ void runEmbeddedAi() {
 
 int interpreterThread(void * /*unused*/) {
     State &shared = state();
+#ifdef __PROSPERO__
+    // Python's tracebacks are written to descriptor 2. C's stderr stays klog's.
+    report("[ai] starting\n");
+    if (const int file = ::open((std::string(SoRPlatform::kDataDir) + "/ai.log").c_str(), O_WRONLY | O_APPEND); file >= 0) {
+        ::dup2(file, 2);
+        ::close(file);
+    }
+#endif
     if (initializeInterpreter(shared.aiPath)) {
+        report("[ai] Python started\n");
         runEmbeddedAi();
         if (Py_FinalizeEx() < 0)
-            std::fprintf(stderr, "[ai] Python did not shut down cleanly\n");
+            report("[ai] Python did not shut down cleanly\n");
     }
     {
         const std::lock_guard lock(shared.mutex);
@@ -276,6 +345,10 @@ int interpreterThread(void * /*unused*/) {
 
 namespace SoRPython {
 
+std::filesystem::path standardLibrary() {
+    return stdlibFolder(pythonHome());
+}
+
 void configure(const std::filesystem::path &aiPath, bool widescreen, std::uint32_t turbo) {
     State &shared = state();
     std::error_code error;
@@ -284,7 +357,7 @@ void configure(const std::filesystem::path &aiPath, bool widescreen, std::uint32
     shared.turbo      = turbo;
     setVideo(widescreen, true);
     if (!available())
-        std::fprintf(stderr, "[ai] no Python AI in '%s' (see --ai-path): 1 PLAYER AI ASSIST is hidden\n",
+        report("[ai] no Python AI in '%s' (see --ai-path): 1 PLAYER AI ASSIST is hidden\n",
                      shared.aiPath.string().c_str());
 }
 
@@ -321,7 +394,7 @@ void start(SystemMemory &memory) {
     shared.thread = SDL_CreateThreadWithProperties(properties);
     SDL_DestroyProperties(properties);
     if (shared.thread == nullptr) {
-        std::fprintf(stderr, "[ai] cannot start the Python thread: %s\n", SDL_GetError());
+        report("[ai] cannot start the Python thread: %s\n", SDL_GetError());
         return;
     }
     shared.running.store(true, std::memory_order_release);
@@ -370,7 +443,7 @@ void stop() {
     if (finished) {
         SDL_WaitThread(shared.thread, nullptr);
     } else {
-        std::fprintf(stderr, "[ai] the Python AI did not end in time; abandoning it\n");
+        report("[ai] the Python AI did not end in time; abandoning it\n");
         SDL_DetachThread(shared.thread);
         shared.abandoned = true;
     }

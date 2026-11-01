@@ -1,0 +1,63 @@
+# configure's answers for a PS5 title, which its cross build cannot find by itself. The SDK's stubs
+# make many libc names link that are null at run time in a title; link-title.sh refuses those.
+
+# Cross-build questions it cannot run a test for.
+ac_cv_file__dev_ptmx=no
+ac_cv_file__dev_ptc=no
+
+# A title cannot load a module; pymalloc's arenas come from malloc, the platform layer's heap.
+ac_cv_func_dlopen=no
+ac_cv_lib_dl_dlopen=no
+ac_cv_func_mmap=no
+
+# No child processes.
+ac_cv_func_fork=no
+ac_cv_func_fork1=no
+ac_cv_func_forkpty=no
+ac_cv_lib_util_forkpty=no
+ac_cv_func_vfork=no
+ac_cv_func_posix_spawn=no
+ac_cv_func_posix_spawnp=no
+ac_cv_func_system=no
+
+# They link, but the SDK's headers do not declare them.
+ac_cv_func_pthread_getname_np=no
+ac_cv_func_pthread_set_name_np=no
+ac_cv_func_pthread_setname_np=no
+ac_cv_func_memfd_create=no
+
+# Link only through modules a title does not load, or not at all.
+ac_cv_func_chown=no
+ac_cv_func_chroot=no
+ac_cv_func_closefrom=no
+ac_cv_func_faccessat=no
+ac_cv_func_fchdir=no
+ac_cv_func_fchownat=no
+ac_cv_func_fexecve=no
+ac_cv_func_fpathconf=no
+ac_cv_func_getloadavg=no
+ac_cv_func_getpgid=no
+ac_cv_func_getpgrp=no
+ac_cv_func_getresgid=no
+ac_cv_func_getresuid=no
+ac_cv_func_lchflags=no
+ac_cv_func_lchmod=no
+ac_cv_func_lchown=no
+ac_cv_func_linkat=no
+ac_cv_func_mkfifo=no
+ac_cv_func_mkfifoat=no
+ac_cv_func_mknod=no
+ac_cv_func_mknodat=no
+ac_cv_func_pipe2=no
+ac_cv_func_posix_fadvise=no
+ac_cv_func_posix_openpt=no
+ac_cv_func_readlinkat=no
+ac_cv_func_setgid=no
+ac_cv_func_setpgid=no
+ac_cv_func_setresgid=no
+ac_cv_func_setresuid=no
+ac_cv_func_strsignal=no
+ac_cv_func_symlinkat=no
+ac_cv_func_times=no
+ac_cv_func_wait3=no
+ac_cv_func_wait4=no

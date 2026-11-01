@@ -2,6 +2,7 @@
 #include "SoRControlsConfig.hpp"
 #include "SoRInput.hpp"
 #include "SoRPause.hpp"
+#include "SoRPlatform.hpp"
 #include "SoRPython.hpp"
 #include "SoRRemoteInput.hpp"
 #include "SoRSoundtrack.hpp"
@@ -12,13 +13,36 @@
 #include <cstdio>
 #include <filesystem>
 #include <cstring>
+#include <memory>
 #include <string>
 
 #ifdef _WIN32
 #include <windows.h>
 #endif
 
+#ifdef __PROSPERO__
+#include <fstream>
+#include <vector>
+
+extern "C" void ps5_notify(const char *message); // prospero/src/startup.c
+#endif
+
 namespace {
+
+#ifdef __PROSPERO__
+// A title gets no command line: <data>/args.txt holds options for development, one a line.
+std::vector<std::string> consoleArguments(const char *program) {
+    std::vector<std::string> arguments{program};
+    std::ifstream            file(std::string(SoRPlatform::kDataDir) + "/args.txt");
+    for (std::string line; std::getline(file, line);) {
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        if (!line.empty())
+            arguments.push_back(line);
+    }
+    return arguments;
+}
+#endif
 
 // On Windows `sor` is a GUI program (no console window). A console exists only when a debug option or
 // --help/--version asks for output: the parent terminal's if there is one, else a new window.
@@ -48,6 +72,14 @@ void openConsoleIfWanted(int argc, char *argv[]) {
 } // namespace
 
 int main(int argc, char *argv[]) {
+#ifdef __PROSPERO__
+    std::vector<std::string> consoleOptions = consoleArguments(argc > 0 ? argv[0] : "sor");
+    std::vector<char *>      consoleArgv;
+    for (std::string &option : consoleOptions)
+        consoleArgv.push_back(option.data());
+    argc = static_cast<int>(consoleArgv.size());
+    argv = consoleArgv.data();
+#endif
     openConsoleIfWanted(argc, argv);
     CLI::App app{"Streets of Rage"};
     app.set_version_flag("-V,--version", "0.3.2");
@@ -62,7 +94,11 @@ int main(int argc, char *argv[]) {
     bool          aiAssistFlag       = false;
     int           remoteAccessPort   = 6969;
     std::uint32_t turboMultiplier    = 0;
+#ifdef __PROSPERO__
+    std::string   sorRomPath         = std::string(SoRPlatform::kDataDir) + "/SOR.bin";
+#else
     std::string   sorRomPath         = "rom/SOR.bin";
+#endif
     std::string   sorAuxAddrFile; // if set, record unknown dispatch targets here
     std::string   sorCallLogFile;
     std::string   frameSync;
@@ -70,7 +106,11 @@ int main(int argc, char *argv[]) {
     std::string   videoHz     = "60";
     std::string   soundMode   = "prerendered";
     std::string   soundtrackDir; // default: soundtrack/ next to the ROM
+#ifdef __PROSPERO__
+    std::string   aiPath = std::string(SoRPlatform::kDataDir) + "/ai-code";
+#else
     std::string   aiPath = "ai-code";
+#endif
 
     app.add_option("--rom", sorRomPath, "Streets of Rage ROM path")->capture_default_str()->group("Game");
     app.add_option("--lang", languagePin, "Console language: jp=Japanese, en=overseas")
@@ -136,9 +176,43 @@ int main(int argc, char *argv[]) {
                    "On an indirect dispatch to an unknown address, append it to this file and exit (42) "
                    "instead of aborting: the discovery loop")
         ->group("Development");
+    app.add_flag("--console-menus",
+                 SoRPlatform::consoleMenusFlag(),
+                 "The PS5's menus (no BIND KEYBOARD, no DISPLAY) and always fullscreen, to test them on the desktop")
+        ->group("Development");
 
     CLI11_PARSE(app, argc, argv);
 
+    const auto soundtrackDirectory = [&]() -> std::filesystem::path {
+        return soundtrackDir.empty() ? std::filesystem::path(sorRomPath).parent_path() / "soundtrack"
+                                     : std::filesystem::path(soundtrackDir);
+    };
+
+#ifdef __PROSPERO__
+    // Nothing here is optional on the console, whatever the options say. Standard error is klog
+    // there, out of the player's sight, so the player is told in a notification.
+    const auto missing = [](const std::filesystem::path &file) {
+        std::error_code error;
+        return !std::filesystem::is_regular_file(file, error);
+    };
+    const char *const kAdvice = " /data needs ShadowMountPlus 1.7beta4 or newer.";
+    if (missing(sorRomPath)) {
+        ps5_notify(("Streets of Rage: copy your ROM to " + sorRomPath + "." + kAdvice).c_str());
+        return 0;
+    }
+    if (missing(soundtrackDirectory() / "manifest.tsv")) {
+        ps5_notify(("Streets of Rage: copy the pre-rendered soundtrack to " + soundtrackDirectory().string() + "." + kAdvice).c_str());
+        return 0;
+    }
+    if (missing(std::filesystem::path(aiPath) / "sor_ai" / "embedded.py")) {
+        ps5_notify(("Streets of Rage: copy the AI's files to " + aiPath + "." + kAdvice).c_str());
+        return 0;
+    }
+    if (missing(SoRPython::standardLibrary() / "os.py")) {
+        ps5_notify(("Streets of Rage: copy Python's standard library to " + SoRPython::standardLibrary().string() + "." + kAdvice).c_str());
+        return 0;
+    }
+#else
     // No log output unless a debug option asks for it (--help/--version and parse errors already printed).
     if (!debugUtilsFlag && !sorDebugFlag && sorCallLogFile.empty() && sorAuxAddrFile.empty()) {
 #ifdef _WIN32
@@ -149,6 +223,7 @@ int main(int argc, char *argv[]) {
         std::freopen(kNull, "w", stdout);
         std::freopen(kNull, "w", stderr);
     }
+#endif
 
     SoRVideoConfig::VideoConfig video;
     if (!defaultVideoFlag)
@@ -163,7 +238,10 @@ int main(int argc, char *argv[]) {
         video.frameSync = *SoRVideoConfig::frameSyncFromKey(frameSync);
     else if (turboMultiplier > 0)
         video.frameSync = VDP::InternalTimer; // only the timer can run faster than the monitor
+    if (SoRPlatform::consoleMenus())
+        video.fullscreen = true;
 
+    bool soundtrackFailed = false;
     auto configureEnvironment = [&](MegaDriveEnvironment &env) {
         env.setLanguagePin(languagePin == "en" ? MegaDriveEnvironment::LanguagePin::Overseas
                                                : MegaDriveEnvironment::LanguagePin::Japanese);
@@ -175,26 +253,34 @@ int main(int argc, char *argv[]) {
         if (silentFlag) {
             env.sound().disable();
         } else if (soundMode == "prerendered") {
-            const std::filesystem::path directory = soundtrackDir.empty()
-                                                        ? std::filesystem::path(sorRomPath).parent_path() / "soundtrack"
-                                                        : std::filesystem::path(soundtrackDir);
+            const std::filesystem::path directory = soundtrackDirectory();
             // The engine still runs; only the chip output is replaced.
-            if (SoRSoundtrack::open(directory))
+            if (SoRSoundtrack::open(directory)) {
                 env.sound().disable();
-            else
+            } else {
+                soundtrackFailed = true;
                 std::fprintf(stderr,
                              "No pre-rendered soundtrack in %s (run scripts/render_soundtrack.py); "
                              "emulating the sound chips\n",
                              directory.string().c_str());
+            }
         }
     };
 
     {
-        StreetsOfRage sor(sorRomPath,
-                          video.frameSync,
-                          VDP::Integer,
-                          debugUtilsFlag ? static_cast<std::uint16_t>(remoteAccessPort) : 0);
+        // On the heap: it holds the whole emulation environment, which overflowed a 1 MiB main stack on Windows.
+        const auto game = std::make_unique<StreetsOfRage>(sorRomPath,
+                                                          video.frameSync,
+                                                          VDP::Integer,
+                                                          debugUtilsFlag ? static_cast<std::uint16_t>(remoteAccessPort) : 0);
+        StreetsOfRage &sor = *game;
         configureEnvironment(sor);
+#ifdef __PROSPERO__
+        if (soundtrackFailed) { // the manifest is there, but unreadable or the audio output is not
+            ps5_notify("Streets of Rage: the pre-rendered soundtrack could not be opened. Render it and copy it again.");
+            return 0;
+        }
+#endif
         // The game reads the keyboard and gamepads itself (controls.yaml);
         // MegaDriveEnvironment keeps only the remote (autoplay) buttons.
         sor.controllers().setPhysicalInputEnabled(false);

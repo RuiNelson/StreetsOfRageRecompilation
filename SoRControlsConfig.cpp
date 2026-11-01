@@ -1,4 +1,5 @@
 #include "SoRControlsConfig.hpp"
+#include "SoRPlatform.hpp"
 
 #include <yaml-cpp/yaml.h>
 
@@ -321,6 +322,9 @@ ControlsConfig ControlsConfig::defaults() {
 }
 
 std::filesystem::path defaultPath() {
+#ifdef __PROSPERO__
+    return std::filesystem::path(SoRPlatform::kDataDir) / "controls.yaml";
+#endif
     std::filesystem::path home;
     if (const char *folder = SDL_GetUserFolder(SDL_FOLDER_HOME))
         home = folder;
