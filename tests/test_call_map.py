@@ -115,6 +115,33 @@ def test_old_grouped_owner_is_normalized_to_closest_labelled_source():
             ).fetchone() == ("1",)
 
 
+def test_typed_log_keeps_an_anonymous_source_before_a_later_label():
+    with TemporaryDirectory() as directory:
+        root = Path(directory)
+        log = root / "calls.csv"
+        labels = root / "labels.csv"
+        database = root / "calls.sqlite"
+        log.write_text(
+            "event,source,callsite,target\n"
+            "call,000100,000310,000400\n",
+            encoding="ascii",
+        )
+        labels.write_text(
+            "00000300,later_label,later label\n"
+            "00000400,target,target\n",
+            encoding="utf-8",
+        )
+
+        assert main(
+            [str(log), "--database", str(database), "--labels", str(labels)]
+        ) == 0
+
+        with sqlite3.connect(database) as connection:
+            assert connection.execute(
+                "SELECT source_address FROM callsite_target"
+            ).fetchall() == [(0x100,)]
+
+
 def test_labelled_dynamic_source_is_not_replaced_by_a_later_label():
     with TemporaryDirectory() as directory:
         root = Path(directory)

@@ -34,6 +34,7 @@ class CallMap:
     total_events: int = 0
     call_events: int = 0
     entry_events: int = 0
+    legacy_log: bool = False
 
     @classmethod
     def empty(cls) -> "CallMap":
@@ -84,6 +85,7 @@ def read_call_logs(paths: Iterable[Path]) -> CallMap:
                     f"or legacy source,callsite,target; "
                     f"got {','.join(reader.fieldnames or [])!r}"
                 )
+            call_map.legacy_log = call_map.legacy_log or legacy
             for line_number, row in enumerate(reader, 2):
                 event = "call" if legacy else row["event"].strip().lower()
                 source = parse_address(
@@ -673,8 +675,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         labels = read_labels(args.labels)
         call_map = read_call_logs(args.logs)
+        # A typed log records the dynamic 68000 entry: an anonymous source there
+        # is exact, and the closest label would be a different routine.
         normalized_source_events = (
-            0 if args.trust_recorded_source else normalize_sources(call_map, labels)
+            normalize_sources(call_map, labels)
+            if call_map.legacy_log and not args.trust_recorded_source
+            else 0
         )
         write_database(
             args.database,

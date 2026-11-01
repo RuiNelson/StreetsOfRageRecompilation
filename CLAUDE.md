@@ -716,11 +716,11 @@ Do not launch or leave the game unbounded for analysis unless asked; follow
 `event,source,callsite,target` or legacy `source,callsite,target`) and writes
 a deduplicated SQLite call graph. It inserts every `code-analysis/labels.csv`
 routine, even when it has zero observed activity, and preserves source
-addresses that are already labelled. Unless
-`--trust-recorded-source` is supplied, it approximates anonymous sources in
-older grouped-owner logs from the closest label; that approximation cannot
-reconstruct every non-contiguous dynamic entry, so regenerate important logs
-with the current recompiler. Passing `--port PORT` starts its read-only
+addresses that are already labelled. A typed log's source is the exact dynamic
+entry and is kept. Only a legacy log, unless `--trust-recorded-source` is
+supplied, has anonymous sources approximated from the closest label; that
+approximation cannot reconstruct every non-contiguous dynamic entry, so regenerate
+important logs with the current recompiler. Passing `--port PORT` starts its read-only
 interactive web viewer after database generation. The viewer binds to
 `127.0.0.1` unless `--host` is explicitly provided and exposes all labelled
 routines, dynamic entry counts, flow counts, and per-flow callsites.
@@ -739,9 +739,11 @@ Useful analysis views (addresses formatted as `$XXXXXX`):
 | `subroutine_flow` | Deduplicated source→target edges with `observed_count` |
 | `callsite_flow` | Exact source/callsite/target rows with labels |
 
-A caller inside an unlabelled stretch collapses to the closest label before it:
-`resolve_player_death` shows 215,193 calls of `$3266`, which belong to the ground
-update at `$2BA8`. Read the callsite in `output/sor.asm` before naming from a caller.
+A source is the dynamic entry, so a tail jump shows the routine entered, not the one
+holding the callsite. The current map's log is gone and its grouped-owner sources were
+collapsed to the closest label (`resolve_player_death` calling `$3266`); the rows no entry
+could reach were repaired from the callsites' owners in `logCallFromReturn`, and metadata
+`repaired_source_events` counts them. Read the callsite in `output/sor.asm` before naming from a caller.
 A type table's callees (`$AE30`) say nothing by their caller: name them from
 `$B236 (object_type_update_jt)`, as `object_typeNN_dispatcher` when only the type is known.
 
