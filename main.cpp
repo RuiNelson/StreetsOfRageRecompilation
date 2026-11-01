@@ -5,6 +5,7 @@
 #include "SoRPlatform.hpp"
 #include "SoRPython.hpp"
 #include "SoRRemoteInput.hpp"
+#include "SoRQolConfig.hpp"
 #include "SoRSoundtrack.hpp"
 #include "SoRVideoConfig.hpp"
 #include "SoR.hpp"
@@ -15,6 +16,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -91,6 +93,7 @@ int main(int argc, char *argv[]) {
     bool          widescreenFlag     = false;
     bool          integerScalingFlag = false;
     bool          defaultVideoFlag   = false;
+    bool          defaultQolFlag     = false;
     bool          aiAssistFlag       = false;
     int           remoteAccessPort   = 6969;
     std::uint32_t turboMultiplier    = 0;
@@ -99,6 +102,7 @@ int main(int argc, char *argv[]) {
 #else
     std::string   sorRomPath         = "rom/SOR.bin";
 #endif
+    std::vector<std::string> qolOptions;
     std::string   sorAuxAddrFile; // if set, record unknown dispatch targets here
     std::string   sorCallLogFile;
     std::string   frameSync;
@@ -120,6 +124,15 @@ int main(int argc, char *argv[]) {
     app.add_option("--hz", videoHz, "Console video frequency: 60=NTSC, 50=PAL")
         ->capture_default_str()
         ->check(CLI::IsMember({"60", "50"}))
+        ->group("Game");
+    // Each wins over qol.yaml for this run; OPTIONS > QUALITY-OF-LIFE can still change it, and saves what it shows.
+    app.add_option("--qol", qolOptions, "Quality-of-life changes to turn on, separated by commas. cam: the camera rolls from 30% of the screen")
+        ->delimiter(',')
+        ->check(CLI::IsMember({"cam"}))
+        ->group("Game");
+    app.add_flag("--default-qol",
+                 defaultQolFlag,
+                 "Ignore qol.yaml for this run: the defaults, and anything --qol turns on. For scripts and measurements")
         ->group("Game");
 
     // Each wins over video.yaml for this run; OPTIONS > VIDEO can still change it, and saves what it shows.
@@ -240,6 +253,11 @@ int main(int argc, char *argv[]) {
         video.frameSync = VDP::InternalTimer; // only the timer can run faster than the monitor
     if (SoRPlatform::consoleMenus())
         video.fullscreen = true;
+
+    if (!defaultQolFlag)
+        SoRQolConfig::current() = SoRQolConfig::loadOrCreate(SoRQolConfig::defaultPath());
+    for (const std::string &name : qolOptions)
+        SoRQolConfig::enable(SoRQolConfig::current(), name);
 
     bool soundtrackFailed = false;
     auto configureEnvironment = [&](MegaDriveEnvironment &env) {

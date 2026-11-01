@@ -1,6 +1,8 @@
 #include "SoR.hpp"
 #include "SoRCheats.hpp"
+#include "SoRQolConfig.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -567,6 +569,89 @@ void StreetsOfRage::vblank_update_gameplay_health_bars(m_long /*entry_*/) {
     if (mem.readWord(kBossHealthSecondary) != 0) {
         mem.writeLong(kVdpControl, 0x5FA00003u);
         bossBar(kBossHealthSecondary + 2);
+    }
+    cpu().ssp += 4;
+}
+
+// ---------------------------------------------------------------------------
+// $018F5C -- compute_camera_follow_x_velocity
+//
+// The ROM's follow zone is $110-$130 in biased screen X (object +$28, camera + $80):
+// the camera advances with the player past 55% of the screen. Under `--qol cam` it
+// advances from 30% of the visible screen, 70% on round 8, which scrolls left. The
+// zone's other end only keeps the ROM's 32 px between the lead and a second player:
+// the camera's bound behind it (`$19570`) stops any move back. Round 7's elevator
+// keeps the ROM's zone.
+// ---------------------------------------------------------------------------
+namespace {
+
+constexpr m_long kPlayerMode   = 0xFFFFFF18u;
+constexpr m_long kP1ScreenX    = 0xFFFFB828u;
+constexpr m_long kP2ScreenX    = 0xFFFFB8A8u;
+constexpr m_word kRound7Level  = 6u;
+constexpr m_word kRound8Level  = 7u;
+constexpr m_long kFollowGap    = 0x0020u;
+constexpr m_long kFollowMaxVel = 0x00030000u;
+
+struct FollowZone {
+    m_long lower;
+    m_long upper;
+};
+
+FollowZone cameraFollowZone(bool earlier, m_word level, bool widescreen) {
+    if (!earlier || level == kRound7Level)
+        return {0x01100000u, 0x01300000u};
+    const m_long screenLeft  = widescreen ? 0x60u : 0x80u;
+    const m_long screenWidth = widescreen ? 384u : 320u;
+    if (level == kRound8Level) {
+        const m_long lower = screenLeft + screenWidth * 70u / 100u;
+        return {lower << 16, (lower + kFollowGap) << 16};
+    }
+    const m_long upper = screenLeft + screenWidth * 30u / 100u;
+    return {(upper - kFollowGap) << 16, upper << 16};
+}
+
+} // namespace
+
+void StreetsOfRage::compute_camera_follow_x_velocity(m_long /*entry_*/) {
+    traceEnter(0x00018F5Cu);
+
+    const FollowZone zone = cameraFollowZone(SoRQolConfig::current().rollCameraEarlier, memory().readWord(kLevel), vdp().widescreen());
+    const m_byte     mode = memory().readByte(kPlayerMode);
+
+    m_long velocity = 0;
+    bool   moves    = false;
+    if (mode == 3u) {
+        const m_long p1   = memory().readLong(kP1ScreenX);
+        const m_long p2   = memory().readLong(kP2ScreenX);
+        const m_long high = p1 >= p2 ? p1 : p2;
+        const m_long low  = p1 >= p2 ? p2 : p1;
+        if (high >= zone.upper) {
+            if (low >= zone.lower) {
+                velocity = std::min(high - zone.upper, low - zone.lower);
+                moves    = true;
+            }
+        } else if (low < zone.lower) {
+            const auto ahead  = static_cast<std::int32_t>(high - zone.upper);
+            const auto behind = static_cast<std::int32_t>(low - zone.lower);
+            velocity          = static_cast<m_long>(std::max(ahead, behind));
+            moves             = true;
+        }
+    } else if ((mode & 0x03u) != 0u) {
+        const m_long x = memory().readLong((mode & 0x01u) != 0u ? kP1ScreenX : kP2ScreenX);
+        if (x < zone.lower) {
+            velocity = x - zone.lower;
+            moves    = true;
+        } else if (x >= zone.upper) {
+            velocity = x - zone.upper;
+            moves    = true;
+        }
+    }
+
+    if (moves) {
+        const auto limit   = static_cast<std::int32_t>(kFollowMaxVel);
+        const auto clamped = std::clamp(static_cast<std::int32_t>(velocity), -limit, limit);
+        memory().writeLong(cpu().a[1] + 0x0Au, static_cast<m_long>(clamped));
     }
     cpu().ssp += 4;
 }

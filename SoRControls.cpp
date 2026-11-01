@@ -2,6 +2,7 @@
 #include "SoRControlsMenu.hpp"
 #include "SoRInput.hpp"
 #include "SoRPython.hpp"
+#include "SoRQolMenu.hpp"
 #include "SoRRemoteInput.hpp"
 #include "SoRVideoMenu.hpp"
 #include "SoR.hpp"
@@ -256,7 +257,8 @@ void sampleOneJoypadBody(CPU68K &cpu, SystemMemory &memory, const SampledPlayer 
 
 namespace {
 
-constexpr m_word kOptionsVideoRowInput = 0x30u; // sub-state: past the ROM's table (game_start_screen_update)
+constexpr m_word kOptionsVideoRowInput = 0x30u; // sub-states: past the ROM's table (game_start_screen_update)
+constexpr m_word kOptionsQolRowInput   = 0x34u;
 
 SoRVideoConfig::VideoConfig liveVideoConfig(const VDP &vdp) {
     return {vdp.synchronization(), vdp.widescreen(), vdp.fullscreen(), vdp.integerScaling()};
@@ -273,6 +275,8 @@ void StreetsOfRage::options_highlight_controls(m_long /*entry_*/) {
     memory().writeWord(kSelectScreenSubstate, static_cast<m_word>(substate + 2));
     if (static_cast<m_word>(substate + 2) == kOptionsVideoRowInput)
         SoRVideoMenu::drawOptionsRow(memory(), liveVideoConfig(vdp()), true);
+    else if (static_cast<m_word>(substate + 2) == kOptionsQolRowInput)
+        SoRQolMenu::drawOptionsRow(memory(), true);
     else
         SoRControlsMenu::drawOptionsRow(memory(), true);
     return68k(cpu());
@@ -281,21 +285,26 @@ void StreetsOfRage::options_highlight_controls(m_long /*entry_*/) {
 // $001390 -- OPTIONS sub-state $1A: the CONTROLS row. Up/Down leave it as
 // every row does; Punch, Jump or Special opens the CONTROLS menu, which then
 // runs here one frame per call until it closes ($FFFFC8 is never changed).
-// Also sub-state $30, the VIDEO row, the same way with its own menu.
+// Also sub-states $30, the VIDEO row, and $34, the QUALITY-OF-LIFE row, the same
+// way with their own menus.
 void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
     traceEnter(0x1390u);
 
     const bool videoRow = memory().readWord(kSelectScreenSubstate) == kOptionsVideoRowInput;
+    const bool qolRow   = memory().readWord(kSelectScreenSubstate) == kOptionsQolRowInput;
     const auto drawRow  = [&](bool highlighted) {
         if (videoRow)
             SoRVideoMenu::drawOptionsRow(memory(), liveVideoConfig(vdp()), highlighted);
+        else if (qolRow)
+            SoRQolMenu::drawOptionsRow(memory(), highlighted);
         else
             SoRControlsMenu::drawOptionsRow(memory(), highlighted);
     };
 
-    if (videoRow ? SoRVideoMenu::isOpen() : SoRControlsMenu::isOpen()) {
+    if (videoRow ? SoRVideoMenu::isOpen() : qolRow ? SoRQolMenu::isOpen() : SoRControlsMenu::isOpen()) {
         const auto remote = static_cast<SoRInput::ActionMask>(SoRRemoteInput::actions(0) | SoRRemoteInput::actions(1));
         const bool closed = videoRow ? SoRVideoMenu::frame(memory(), remote) == SoRVideoMenu::Result::Closed
+                            : qolRow ? SoRQolMenu::frame(memory(), remote) == SoRQolMenu::Result::Closed
                                      : SoRControlsMenu::frame(memory(), remote) == SoRControlsMenu::Result::Closed;
         if (closed) {
             if (videoRow) {
@@ -320,8 +329,9 @@ void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
                 cpu().d[0] = 0x00000F0Eu;
                 SOR_CONTROLS_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x11C2u, 0x00A8B8u);
             }
-            SoRControlsMenu::drawOptionsRow(memory(), !videoRow);
+            SoRControlsMenu::drawOptionsRow(memory(), !videoRow && !qolRow);
             SoRVideoMenu::drawOptionsRow(memory(), liveVideoConfig(vdp()), videoRow);
+            SoRQolMenu::drawOptionsRow(memory(), qolRow);
         }
         return68k(cpu());
         return;
@@ -340,6 +350,8 @@ void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
         memory().writeByte(kPlaySe, 0xBAu);
         if (videoRow)
             SoRVideoMenu::open(liveVideoConfig(vdp()), vdp().displayRefreshHz(), isPal50Hz() ? 50 : 60);
+        else if (qolRow)
+            SoRQolMenu::open();
         else
             SoRControlsMenu::open();
     }

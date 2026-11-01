@@ -26,6 +26,9 @@
 008064 # vdp_copy_stride
 010F80 # vblank_update_gameplay_health_bars (inlines the bar uploads)
 
+# --qol cam (SoRManualFunctions.cpp): the camera's follow zone moves under the option.
+018F5C # compute_camera_follow_x_velocity
+
 # Widescreen arena (SoRWidescreenArena.cpp): ports whose screen-edge constants widen with --widescreen.
 0043AA # clamp_players_to_gameplay_bounds
 000C60 # spawn_single_object
