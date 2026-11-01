@@ -342,7 +342,7 @@ void StreetsOfRage::player_held_object_attack_input(m_long entry_) {
                 cpu(),
                 memory(),
                 [this] {
-                    sub_0026e2(0x35D6u);
+                    player_hold_crossover_update(0x35D6u);
                 },
                 0x3122u))
             return;

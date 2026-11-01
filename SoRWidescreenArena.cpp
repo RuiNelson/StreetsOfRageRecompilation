@@ -186,7 +186,7 @@ void StreetsOfRage::spawn_single_object(m_long /*entry_*/) {
     if (level == 6u) {
         cpu().setDw(6, 0x0088u);
     } else {
-        SOR_CALL(sub_00ad2a, 0x00000CA2u, 0x0000AD2Au);
+        SOR_CALL(probe_floor_at_object, 0x00000CA2u, 0x0000AD2Au);
     }
     mem.writeWord(object + 0x18, cpu().dw(6));
 
@@ -318,7 +318,7 @@ void StreetsOfRage::resolve_enemy_player_contact(m_long /*entry_*/) {
         logCallFromReturn(retPc, 0x0000AB24u);
         cpu().ssp -= 4;
         memory().writeLong(cpu().ssp, retPc);
-        sub_00ab24();
+        test_shape_box_overlap();
         unwound = (cpu().ssp & 0x00FFFFFFu) > (spBefore & 0x00FFFFFFu);
         return !cpu().flagZ();
     };
@@ -452,7 +452,7 @@ void StreetsOfRage::abadede_state7_run_update(m_long /*entry_*/) {
         return;
     }
 
-    SOR_CALL(sub_00b20e, 0x00014C54u, 0x0000B20Eu);
+    SOR_CALL(integrate_object_velocity, 0x00014C54u, 0x0000B20Eu);
     cpu().d[0] = 0x01;
     SOR_CALL(sub_01569c, 0x00014C5Cu, 0x0001569Cu);
 
@@ -631,7 +631,7 @@ void StreetsOfRage::round8_table_state0_wait_and_arm(m_long /*entry_*/) {
     if (cpu().d[0] != 0u) {
         mem.writeByte(object + 0x34, 0x03u);
         cpu().d[7] = 0xFFFFFFCBu;
-        SOR_CALL(sub_006aca, 0x00007582u, 0x00006ACAu);
+        SOR_CALL(queue_object_sound_id, 0x00007582u, 0x00006ACAu);
         const m_long tableEntry = 0x000075DCu + 2u * (cpu().dw(0) & 0xFFFFu);
         mem.writeWord(object + 0x1C, mem.readWord(tableEntry));
 
@@ -705,7 +705,7 @@ void StreetsOfRage::police_special_player_update_gate(m_long /*entry_*/) {
         return;
     }
 
-    SOR_CALL(sub_00ad2a, 0x000040B2u, 0x0000AD2Au);
+    SOR_CALL(probe_floor_at_object, 0x000040B2u, 0x0000AD2Au);
     mem.writeWord(player + 0x18, cpu().dw(6));
     SOR_CALL(sub_00b228, 0x000040BAu, 0x0000B228u);
     mem.writeByte(player + 0x59, static_cast<m_byte>(mem.readByte(player + 0x59) & 0xFDu));
@@ -835,7 +835,7 @@ void StreetsOfRage::spawn_object_batch(m_long /*entry_*/) {
                 cpu().setDw(6, 0x0088u);
                 if (level != 6u) {
                     const m_long saved = cpu().d[2];
-                    SOR_CALL(sub_00ad2a, 0x00000D36u, 0x0000AD2Au);
+                    SOR_CALL(probe_floor_at_object, 0x00000D36u, 0x0000AD2Au);
                     cpu().d[2] = saved;
                 }
                 mem.writeWord(object + 0x18, cpu().dw(6));
