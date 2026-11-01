@@ -290,7 +290,7 @@ The player-mode byte is a live mask, not merely the original menu choice:
 
 When a player reaches the continue/game-over object type, the corresponding mode bit is cleared. The other player can continue alone, so one player's death does not end a two-player game.
 
-The continue UI is implemented by the dead player's object (`type $0F`) in the `$52xx-$58xx` region. `$5218` is the type-`$0F` object update entry: when object `+$4B` bit 7 is clear it dispatches `object+$30` through the absolute word table at `$5236` (init → continue Yes/No → confirm). When bit 7 is set (set by `$12730` from `$2B48 (resolve_player_death)` when the player's score beats the current 10th-place entry at `$FFB6`), `$5218` instead enters `$56E6 (high_score_name_entry_dispatcher)` and the `$56EE` name-entry state table. Completing name entry clears bit 7 and state so a later frame can run the normal continue table. Direction presses toggle the yes/no selection in object `+$63`; a face-button press confirms. `$5334 (confirm_player_continue)` selects the correct player's continue, character, and status fields:
+The continue UI is implemented by the dead player's object (`type $0F`) in the `$52xx-$58xx` region. `$5218 (continue_object_dispatcher)` is the type-`$0F` object update entry: when object `+$4B` bit 7 is clear it dispatches `object+$30` through the absolute word table at `$5236` (init → continue Yes/No → confirm). When bit 7 is set (set by `$12730 (high_score_check_player_entry)` from `$2B48 (resolve_player_death)` when the player's score beats the current 10th-place entry at `$FFB6`), `$5218 (continue_object_dispatcher)` instead enters `$56E6 (high_score_name_entry_dispatcher)` and the `$56EE` name-entry state table. Completing name entry clears bit 7 and state so a later frame can run the normal continue table. Direction presses toggle the yes/no selection in object `+$63`; a face-button press confirms. `$5334 (confirm_player_continue)` selects the correct player's continue, character, and status fields:
 
 - choosing **No** clears the remaining continue word and marks that player as out;
 - choosing **Yes** subtracts one continue, recreates an active player object with the selected character, restores the corresponding player-mode bit, and clears the player's extra-life threshold index;
@@ -364,7 +364,7 @@ subtype       = low two bits of X
 
 Health `$FFFF` is deliberate: the later `$0300` reaction is lethal without a
 numeric blast-damage calculation. The routine then allocates a type `$29`
-controller in the 24-slot extended object area beginning at `$FFC900`. If no
+controller in the 24-slot extended object area beginning at `$FFC900 (object_pool_c900)`. If no
 slot is free it forcibly writes type `$29` into the first slot, guaranteeing
 that the sweep exists.
 
@@ -446,7 +446,7 @@ For P2, the controller initializes its cursor to `$FFB900 (object_table)` and a
 delay of `$30`. After the first shell enables the blast it waits until that byte
 underflows, then forces one eligible ordinary enemy into state `$0300`, advances
 the cursor, and reloads the delay to 4. This produces one reaction every five
-controller updates until the scan reaches `$FFC900`, when the controller deletes
+controller updates until the scan reaches `$FFC900 (object_pool_c900)`, when the controller deletes
 itself.
 
 ### Boss damage
@@ -580,3 +580,45 @@ connection.
 2. Several `+$58/+$59` bits combine invulnerability, combo continuation, grab state, and temporary locks. They should be named only after per-state traces, not globally from one call site. `+$59` bit 1 now has one (the hit-reaction bit in the field table above); the rest remain open.
 3. The time-over path enters a global timed display state before resuming object updates. The indirect branch at `$109D4` should be traced in 1P, P2-only, and 2P modes to document exactly when each active player is forced into the fatal state.
 4. The mechanics of both caller-index scripts are now statically complete. A framebuffer/object-table capture would only refine the retail visual names of individual type-`$05/$0D/$0E` child actors; it is not needed for timing, damage, or attribution.
+
+## Routines identified from the call map
+
+Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidence and exact contract of each name are in `code-analysis/labels.csv`.
+
+| Routine | What it does |
+| --- | --- |
+| `$39C6 (player_tick_temporary_state_timer)` | While +$59 bit 0 is set counts +$5C down; at 0 clears +$58 bits 4-5 and +$59 bit 0 |
+| `$50A6 (final_section_player_script_update)` | Round 8 final section: while camera_scripted_left_pan is set walks each player to the scene position, spawns type $46 once and raises mr_x_offer_flag and stop_clock when all active players arrived |
+| `$3886 (player_clamp_fall_speed)` | Caps +$24 (vertical velocity) at $C0000, 12.0 px per update |
+| `$3FA2 (round7_player_update_floor_priority_flag)` | Level index 6 only: clears +$01 bit 4, then sets it when the floor probe under a grounded player reads $1000 |
+| `$442C (player_integrate_velocity)` | Adds +$1C/+$20/+$24 to +$10/+$14/+$18 unless +$59 bit 7 freezes an action of family $14 |
+| `$4F4C (player_tick_respawn_timer)` | While +$4B bit 1 is set counts +$49 down and clears the bit at 0 |
+| `$4F62 (player_start_respawn_timer)` | Sets +$4B bit 1 and loads 48 updates into +$49 unless already running |
+| `$32D8 (player_write_hold_reaction)` | Writes +$7D from the action-indexed byte table $32F2 (zero for a negative entry): what a holder reports to the held target |
+| `$3B00 (player_update_world_collision)` | Per-update collision: loads the frame extents, solid objects, side walls, floor and the vertical path at $3CE2 |
+| `$479C (player_position_held_partner)` | For actions from $70 positions the holder or the held player in +$4C from the per-character offset tables at $4884, by animation frame |
+| `$4F72 (player_update_hold_link_flags)` | Reads action-indexed table $4FC4: clears +$59 bit 1 and +$4C for actions without a hold and sets the sprite-order bit +$01 bit 7 on holder or held |
+| `$2C74 (player_set_action_faced)` | Adds the facing bit to d0 and falls into player_set_action |
+| `$2C7E (player_set_action)` | Changes +$30 to d0 when different: animation from table $2F2C, frame timer, action velocity and state-bit mask |
+| `$2DE6 (player_set_action_faced_weapon_adjust)` | player_set_action with the +$5A/+$5B frame restore (+$58 bit 1), then player_weapon_pickup_animation_adjust |
+| `$2ED0 (player_set_action_facing_attacker)` | Adds 1 to d0 when the attacker in +$7E is to the left, then the $2EF2 action change |
+| `$2EE8 (player_set_action_faced_restore_frame)` | Adds the facing bit to d0 and falls into $2EF2: action change that restores +$A/+$D from +$5A/+$5B when +$58 bit 1 is set |
+| `$3266 (player_resolve_grab_contact)` | On a contact result of 3 starts the front ($60) or back ($66) hold of the object in +$7E and clears +$4B bit 7; returns d7 = -1 when a hold began |
+| `$3614 (player_load_action_velocity)` | Loads X and lane velocity from the character speed table $3664 by action, each skipped once by a set +$58 bit 2 |
+| `$2E32 (player_weapon_pickup_animation_adjust)` | For action families $28 and $30 with a weapon type in +$60, applies the weapon-specific animation adjustment through the table at $2E5A |
+| `$3010 (player_armed_try_jump)` | On a jump press (+$55 bit 5) plays $A0 and starts armed jump action $3C; returns d7 = -1 |
+| `$2FCC (player_try_jump)` | On a jump press (+$55 bit 5) plays $A0 and starts free-flight action $10; returns d7 = -1 |
+| `$35D0 (player_init_animation_frame_trampoline)` | jmp init_object_animation_frame |
+| `$35D6 (player_queue_sound_trampoline)` | jmp queue_sound_id |
+| `$3504 (player_drop_carried_weapon)` | When +$60 is set clears it and +$5E and sets the weapon object +$51 to 2 |
+| `$4104 (player_clear_combat_fields)` | Clears the animation, hit, grab and link fields of a player, keeping the +$4B and +$59 bits outside its masks |
+| `$4462 (player_rear_attack_sound_on_frame1)` | On frame 1 with +$51 set plays sound $A6 |
+| `$27CE (player_hold_crossover_find_blocker)` | Scans 68 slots with +$3A bit 0 for an object inside the box in front of the player; returns d7 = -1 when found |
+| `$4192 (player_write_box_from_shape)` | Writes one six-word X/lane/height box for player_cache_boxes from shape record d1 |
+| `$450C (player_vs_player_test_boxes)` | Tests the attacker +$64 box against the victim +$70 box and writes the reciprocal contact results |
+| `$51D6 (nudge_player_to_walkable_floor_step)` | For one player object probes the floor and either side to find walkable ground; the body of nudge_players_to_walkable_floor |
+| `$3B8A (resolve_solid_object_collisions)` | Scans 66 object slots with +$3A bit 0 (solid) and resolves the first contact against a0; players and ordinary enemies |
+| `$5218 (continue_object_dispatcher)` | Type $0F update, a dead player: continue Yes/No state table at $5236, or high_score_name_entry_dispatcher when +$4B bit 7 is set; frozen during a police special |
+| `$563E (hud_clear_player_join_rows)` | Fills the two window-plane HUD rows at $FF6032 and $FF6082 with blank tile $6D7 |
+| `$6652 (p1_police_blast_spawn_next)` | Takes a slot from $D100 and spawns the next type $0E blast of the chain at the offsets of tables $66A5/$66B4 |
+| `$5976 (object_queue_sound_trampoline)` | jmp queue_sound_id, used by the police and pickup objects |

@@ -739,6 +739,12 @@ Useful analysis views (addresses formatted as `$XXXXXX`):
 | `subroutine_flow` | Deduplicated source→target edges with `observed_count` |
 | `callsite_flow` | Exact source/callsite/target rows with labels |
 
+A caller inside an unlabelled stretch collapses to the closest label before it:
+`resolve_player_death` shows 215,193 calls of `$3266`, which belong to the ground
+update at `$2BA8`. Read the callsite in `output/sor.asm` before naming from a caller.
+A type table's callees (`$AE30`) say nothing by their caller: name them from
+`$B236 (object_type_update_jt)`, as `object_typeNN_dispatcher` when only the type is known.
+
 `observed_count` is how many runtime events collapsed into that row, not a
 static reachability weight. A routine present only via `labels.csv` is known
 but was not entered in the captured run.

@@ -96,7 +96,7 @@ void StreetsOfRage::bespoke_boss_range_test(m_long /*entry_*/) {
 // $0156E0: the object's facing (+$09 bit 1) and its pair's (+$50) follow the direction of the X velocity
 // (+$1C): set when it is negative.
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_0156e0(m_long /*entry_*/) {
+void StreetsOfRage::abadede_sync_facing_from_velocity(m_long /*entry_*/) {
     traceEnter(0x000156E0u);
     auto &c   = cpu();
     auto &mem = memory();
@@ -136,7 +136,7 @@ void StreetsOfRage::sub_01566e(m_long /*entry_*/) {
     c.setFlag(CPU68K::FlagZ, (c.dw(0) & 0x8000u) == 0);
     if (c.dw(0) & 0x8000u) {
         mem.writeLong(c.a[0] + 0x1Cu, negValue(c, mem.readLong(c.a[0] + 0x1Cu), 32));
-        SOR_CALL(sub_0156e0, 0x0001568Eu, 0x000156E0u);
+        SOR_CALL(abadede_sync_facing_from_velocity, 0x0001568Eu, 0x000156E0u);
     }
     c.setDw(1, static_cast<m_word>(c.dw(1) ^ c.dw(7)));
     tst(c, c.dw(1), 16);
@@ -150,7 +150,7 @@ void StreetsOfRage::sub_01566e(m_long /*entry_*/) {
 // $01569C: the pair object (+$50) takes the object's position, offset by pose d0 of the table at $35054
 // (X, then height).
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_01569c(m_long /*entry_*/) {
+void StreetsOfRage::abadede_sync_linked_sprite(m_long /*entry_*/) {
     traceEnter(0x0001569Cu);
     auto &c   = cpu();
     auto &mem = memory();
@@ -186,14 +186,14 @@ void StreetsOfRage::sub_01572a(m_long /*entry_*/) {
     c.a[1] = mem.readLong(c.a[0] + 0x04u);
     tst(c, c.a[1], 32);
     SOR_CALL(init_object_animation_frame, 0x00015738u, 0x0000B1A2u);
-    sub_0156e0();
+    abadede_sync_facing_from_velocity();
 }
 
 // ---------------------------------------------------------------------------
 // $01573C: start animation 6 of the object (timer $225C), then the pair (+$50) on animation 2 with the
 // flag bits of a following piece, state 1, and the pair placed ($1569C with d0 = 0).
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_01573c(m_long /*entry_*/) {
+void StreetsOfRage::abadede_init_linked_sprite_pose(m_long /*entry_*/) {
     traceEnter(0x0001573Cu);
     auto &c   = cpu();
     auto &mem = memory();
@@ -221,7 +221,7 @@ void StreetsOfRage::sub_01573c(m_long /*entry_*/) {
     c.ssp += 4;
     c.d[0] = 0;
     tst(c, 0, 32);
-    sub_01569c();
+    abadede_sync_linked_sprite();
 }
 
 // ---------------------------------------------------------------------------
@@ -232,7 +232,7 @@ void StreetsOfRage::sub_01577c(m_long /*entry_*/) {
     auto &c   = cpu();
     auto &mem = memory();
 
-    SOR_CALL(sub_01573c, 0x00015780u, 0x0001573Cu);
+    SOR_CALL(abadede_init_linked_sprite_pose, 0x00015780u, 0x0001573Cu);
     mem.writeLong(c.a[0] + 0x20u, 0x00060000u);
     tst(c, 0x00060000u, 32);
     mem.writeLong(c.a[0] + 0x1Cu, 0x00060000u);
@@ -421,15 +421,15 @@ void StreetsOfRage::sub_0155be(m_long /*entry_*/) {
 }
 
 // ---------------------------------------------------------------------------
-// $0154E0 (sub_0154e0): a contact on the object ($AA22); on a contact the reaction for result d7 (1-5)
+// $0154E0 (abadede_contact_reaction): a contact on the object ($AA22); on a contact the reaction for result d7 (1-5)
 // is run: $1550E, $15560, $1559A, $155BE twice. An attacker of type 1 also becomes the target (+$5C).
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_0154e0(m_long /*entry_*/) {
+void StreetsOfRage::abadede_contact_reaction(m_long /*entry_*/) {
     traceEnter(0x000154E0u);
     auto &c   = cpu();
     auto &mem = memory();
 
-    SOR_CALL(sub_00aa22, 0x000154E6u, 0x0000AA22u);
+    SOR_CALL(resolve_object_contact, 0x000154E6u, 0x0000AA22u);
     if (c.flagZ()) {
         c.ssp += 4;
         return;

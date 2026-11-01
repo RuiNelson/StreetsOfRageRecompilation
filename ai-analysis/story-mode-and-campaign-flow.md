@@ -315,7 +315,7 @@ This directly proves the meaning of `$FFDE10 (bad_ending_selected)`:
 
 ### 7.1 Activation
 
-In the final section of round 8, player-object logic at `$50A6` detects that the active players have entered the scene area. Once all active players are in position, it executes:
+In the final section of round 8, player-object logic at `$50A6 (final_section_player_script_update)` detects that the active players have entered the scene area. Once all active players are in position, it executes:
 
 ```asm
 move.b #1,mr_x_offer_flag
@@ -603,3 +603,38 @@ ROM's own option and cursor rows (§7.4: YES above, the cursor there while the
 bit is clear), in both the Japanese and English tables. Not yet checked on a
 running game: whether the out/continue flags that end the duel are set by the
 loser's last life or by a single knockdown.
+
+## Presentation objects identified from the call map
+
+Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidence and exact contract of each name are in `code-analysis/labels.csv`.
+
+| Routine | What it does |
+| --- | --- |
+| `$D210 (presentation_type62_dispatcher)` | Type $62: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
+| `$D32C (presentation_type66_dispatcher)` | Type $66: presentation object run through dispatch_presentation_object_state_table |
+| `$D362 (presentation_type67_dispatcher)` | Type $67: presentation object run through dispatch_presentation_object_state_table |
+| `$D39C (presentation_type68_dispatcher)` | Type $68: presentation object run through dispatch_presentation_object_state_table |
+| `$CD66 (presentation_type69_dispatcher)` | Type $69: presentation object run through dispatch_presentation_object_state_table |
+| `$CA7C (presentation_type6a_dispatcher)` | Type $6A: presentation object run through dispatch_presentation_object_state_table |
+| `$CFB8 (presentation_type6b_dispatcher)` | Type $6B: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
+| `$D150 (presentation_type6c_dispatcher)` | Type $6C: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
+| `$D08E (presentation_type6d_dispatcher)` | Type $6D: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
+| `$C618 (presentation_type70_dispatcher)` | Type $70: presentation object run through dispatch_presentation_object_state_table |
+| `$D3D6 (presentation_type71_dispatcher)` | Type $71: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
+| `$D444 (presentation_type72_dispatcher)` | Type $72: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
+| `$D4B2 (presentation_type73_dispatcher)` | Type $73: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
+| `$D0AC (presentation_type74_dispatcher)` | Type $74: presentation object run through dispatch_presentation_object_state_table |
+| `$C394 (presentation_type77_dispatcher)` | Type $77: presentation object run through dispatch_presentation_object_state_table |
+| `$D548 (presentation_type7d_dispatcher)` | Type $7D: presentation object run through dispatch_presentation_object_state_table |
+| `$C114 (presentation_type82_dispatcher)` | Type $82: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
+| `$C17C (presentation_type83_dispatcher)` | Type $83: presentation object run through dispatch_presentation_object_state_table |
+| `$BF76 (presentation_type84_dispatcher)` | Type $84: presentation object run through dispatch_presentation_object_state_table |
+| `$BEBA (presentation_type85_dispatcher)` | Type $85: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
+| `$BF00 (presentation_type86_dispatcher)` | Type $86: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
+| `$BBEE (presentation_type87_dispatcher)` | Type $87: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
+| `$BC5C (presentation_type89_dispatcher)` | Type $89: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
+| `$BCA2 (presentation_type8a_dispatcher)` | Type $8A: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
+| `$BD10 (presentation_type8b_dispatcher)` | Type $8B: presentation object run through dispatch_presentation_object_state_table |
+| `$BB94 (presentation_type8c_dispatcher)` | Type $8C: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
+| `$BB18 (presentation_type8d_dispatcher)` | Type $8D: presentation object run through dispatch_presentation_object_state_table; +$66 is its lifetime |
+| `$C36E (presentation_type7e_region_select)` | Type $7E: creates presentation type $77 or $81 by console_hardware_version bit 7, then clears itself |

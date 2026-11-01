@@ -20,8 +20,8 @@ Primary evidence:
 | Bat / pipe | `$61F6 (baseball_bat_weapon_dispatcher)`, `$6226 (steel_pipe_weapon_dispatcher)` (`move.b #4, +$34`) |
 | Pepper throw / smoke | `$6256 (pepper_spray_weapon_dispatcher)`, `$62DA (throw_pepper_spray)`, `$6312`, `$6372 (emit_pepper_smoke_sequence)` |
 | Pickup search box | `$3136 (find_close_interaction_target)` |
-| Attacker registration | `$95CE` / `$95E8` (`$FFFB22` list) |
-| Box test | `$ABA4 (resolve_enemy_registered_attacker_contact)` / `$ABF8` / `$AC78`, shapes `$1A68E` |
+| Attacker registration | `$95CE (register_enemy_attacker)` / `$95E8 (unregister_enemy_attacker)` (`$FFFB22 (enemy_attacker_count)` list) |
+| Box test | `$ABA4 (resolve_enemy_registered_attacker_contact)` / `$ABF8 (test_attacker_shape_box_overlap)` / `$AC78`, shapes `$1A68E` |
 | Enemy damage application | `$9B88 (ordinary_enemy_apply_contact_damage)` |
 | Enemy HP / contact damage | `$26FCE (ordinary_enemy_combat_value_table)` |
 
@@ -55,7 +55,7 @@ weapon.outgoing_damage = weapon[+$34]          # constant for the weapon type
 ```
 
 When the weapon is in a damaging phase it is registered in the short attacker
-list at `$FFFB22` (`$95CE`). Ordinary enemies call `$AA22`, resolve box overlap,
+list at `$FFFB22 (enemy_attacker_count)` (`$95CE (register_enemy_attacker)`). Ordinary enemies call `$AA22 (resolve_object_contact)`, resolve box overlap,
 then:
 
 ```c
@@ -177,7 +177,7 @@ Three shards, tables at `$61B2` / `$61B8`:
 | 2 | −7 | −4 |
 
 Gravity on shards: `+$8800` per frame (`$61E0`). **No damage:** type `$1E`
-never writes `+$34` and never registers via `$95CE`. Confirmed by ROM and play
+never writes `+$34` and never registers via `$95CE (register_enemy_attacker)`. Confirmed by ROM and play
 observation. Not collectible weapons.
 
 ---
@@ -188,8 +188,8 @@ Bat and pipe stay linked to the holder (`$5E2E (update_held_weapon)`). On
 animation frames whose attachment record has the collision enable bit, the
 weapon:
 
-1. is registered in `$FFFB22` (`$95CE`);
-2. runs `$AA22` against players / listed objects;
+1. is registered in `$FFFB22 (enemy_attacker_count)` (`$95CE (register_enemy_attacker)`);
+2. runs `$AA22 (resolve_object_contact)` against players / listed objects;
 3. deals **`+$34 = 4`** on a valid enemy contact.
 
 Sprite attach tables: `$5FC8` (player holder), `$60A0` (enemy holder). Attach
@@ -229,7 +229,7 @@ Empirical first-punch body boxes (unarmed) measured for autoplay:
 | Quantity | Value |
 | --- | ---: |
 | Hold \(\Delta x, \Delta z\) | −3, −61 |
-| Hit frames | in `$FFFB22`, player action `$48` |
+| Hit frames | in `$FFFB22 (enemy_attacker_count)`, player action `$48` |
 | Max \(\lvert w_x-p_x\rvert\) | **36** |
 | Peak \(\Delta z\) | −42 |
 
@@ -346,10 +346,10 @@ Adam/Blaze long-weapon reach, per-cell hang-time, booth/crate loot producer.
 | Knife \(v_x=\pm16\); pepper \(v_x=\pm6,v_z=-3\) | `$5D84 (launch_released_weapon)`, `$62DA (throw_pepper_spray)`; live knife |
 | Launch vs hold origin | natural Axel knife: hold→launch +48 X, +16 Z |
 | Bounce \(-v_x/4\) | `$5D34`; forced live −16→+4 |
-| Bat/pipe 36 px (Axel) | natural pipe in `$FFFB22`, action `$48` |
+| Bat/pipe 36 px (Axel) | natural pipe in `$FFFB22 (enemy_attacker_count)`, action `$48` |
 | Wear three uses (bat/pipe) | `$5C66` |
 | Pickup ±20/±16/±8 | `$3136 (find_close_interaction_target)` |
 | Enemy HP table | `$26FCE (ordinary_enemy_combat_value_table)` + `$93CE (ordinary_enemy_init_combat_values)` |
 | Pepper `$0400` + 160 fr | `$9C1E` → `$A43E` `$A0` |
-| Shards inert | `$61BE (bottle_shard_dispatcher)` no `+$34` / `$95CE` |
-| Attacker list | `$95CE` / `$FFFB22` |
+| Shards inert | `$61BE (bottle_shard_dispatcher)` no `+$34` / `$95CE (register_enemy_attacker)` |
+| Attacker list | `$95CE (register_enemy_attacker)` / `$FFFB22 (enemy_attacker_count)` |

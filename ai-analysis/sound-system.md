@@ -454,7 +454,7 @@ These are **VBlank wait** helpers, not Z80 sound mailboxes. `$19D16 (vblank_hand
 | `$732EA (sound_seq_command)` |
 | `$7388C (sound_update_psg_channel)` |
 
-Deep sequence helpers remain largely unnamed `sub_072xxx` / `sub_073xxx` in generated code.
+The channel-update helpers are named below; deeper sequence helpers remain unnamed `sub_072xxx` / `sub_073xxx` in generated code.
 
 ---
 
@@ -508,3 +508,22 @@ Deep sequence helpers remain largely unnamed `sub_072xxx` / `sub_073xxx` in gene
 ---
 
 *Addresses and routine names synced with `code-analysis/addresses.csv` and `code-analysis/labels.csv`. Behaviours derived from disassembly and ROM inspection; confidence high for structure and I/O, lower for human-readable track/SFX names until call-site naming is completed.*
+
+## Sequence helpers identified from the call map
+
+Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidence and exact contract of each name are in `code-analysis/labels.csv`.
+
+| Routine | What it does |
+| --- | --- |
+| `$72BFE (sound_fm_check_note_cutoff)` | At the note cutoff point keys the channel off and leaves the channel update, unless the next sequence byte is $FD |
+| `$738BC (sound_psg_check_note_cutoff)` | PSG version of sound_fm_check_note_cutoff |
+| `$72B5E (sound_fm_read_next_note)` | Reads sequence commands and the next note or rest for an FM channel |
+| `$738D8 (sound_psg_read_next_note)` | Reads sequence commands and the next note or rest for a PSG channel |
+| `$731BA (sound_ym2612_key_on_channel)` | Writes register $28 with all operators on unless the channel is resting or muted |
+| `$72C74 (sound_fm_write_frequency)` | Adds detune and modulation and writes the channel frequency registers $A4/$A0 |
+| `$73980 (sound_psg_write_frequency)` | Adds detune and modulation and writes the PSG tone period |
+| `$739B6 (sound_psg_apply_volume_envelope)` | Steps the PSG volume envelope from table $728D0 and handles its $80, $81 and $83 commands |
+| `$7367E (sound_fm_load_voice)` | Selects a 25-byte FM voice record and writes its 24 operator registers from $30 |
+| `$73102 (sound_fm_silence_channel)` | Keys the channel off, sets total level $7F and release rate $F on its four operators |
+| `$736DA (sound_fm_apply_carrier_volume)` | Writes the channel volume to the carrier operators chosen by the algorithm mask table $73728 |
+| `$73142 (sound_ym2612_silence_all_fm)` | Keys off all six FM channels and sets total level $7F on every operator |

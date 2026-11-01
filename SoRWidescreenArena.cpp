@@ -380,7 +380,7 @@ void StreetsOfRage::resolve_enemy_registered_attacker_contact(m_long /*entry_*/)
     if (cpu().d[0] != 0) {
         cpu().d[1] = mem.readByte(cpu().a[0] + 3);
         if (cpu().d[1] != 0) {
-            SOR_CALL(sub_00abf8, 0x0000ABB6u, 0x0000ABF8u);
+            SOR_CALL(test_attacker_shape_box_overlap, 0x0000ABB6u, 0x0000ABF8u);
             if (!cpu().flagZ()) {
                 finish(attackWindowContains(mem.readWord(cpu().a[0] + 0x28), grow) ? 5 : 0);
                 return;
@@ -398,7 +398,7 @@ void StreetsOfRage::resolve_enemy_registered_attacker_contact(m_long /*entry_*/)
         finish(0);
         return;
     }
-    SOR_CALL(sub_00abf8, 0x0000ABDCu, 0x0000ABF8u);
+    SOR_CALL(test_attacker_shape_box_overlap, 0x0000ABDCu, 0x0000ABF8u);
     if (cpu().flagZ()) {
         // The rectangles miss: d7 and the flags are whatever $ABF8 left, exactly as in the ROM.
         cpu().ssp += 4;
@@ -421,7 +421,7 @@ void StreetsOfRage::abadede_state7_run_update(m_long /*entry_*/) {
     const m_word grow = vdp().widescreen() ? kArenaGrow : 0u;
     const m_long boss = cpu().a[0];
 
-    SOR_CALL(sub_0154e0, 0x00014C3Eu, 0x000154E0u);
+    SOR_CALL(abadede_contact_reaction, 0x00014C3Eu, 0x000154E0u);
     if (cpu().dw(7) != 0) {
         cpu().ssp += 4;
         return;
@@ -442,7 +442,7 @@ void StreetsOfRage::abadede_state7_run_update(m_long /*entry_*/) {
 
     SOR_CALL(integrate_object_velocity, 0x00014C54u, 0x0000B20Eu);
     cpu().d[0] = 0x01;
-    SOR_CALL(sub_01569c, 0x00014C5Cu, 0x0001569Cu);
+    SOR_CALL(abadede_sync_linked_sprite, 0x00014C5Cu, 0x0001569Cu);
 
     const std::int16_t screenX = static_cast<std::int16_t>(mem.readWord(boss + 0x28));
     bool               turn;
@@ -481,17 +481,17 @@ void StreetsOfRage::jack_retreat_to_screen_edge(m_long /*entry_*/) {
     mem.writeByte(enemy + 0x31, static_cast<m_byte>(flags | 0x01u));
     if ((flags & 0x01u) == 0) {
         cpu().d[0] = 0;
-        SOR_CALL(sub_0096c0, 0x0000F4B4u, 0x000096C0u);
+        SOR_CALL(enemy_set_action_facing_target, 0x0000F4B4u, 0x000096C0u);
         mem.writeByte(enemy + 1, static_cast<m_byte>(mem.readByte(enemy + 1) | 0x04u));
         mem.writeByte(enemy + 0x50, 0x08u);
     }
 
-    SOR_CALL(sub_00a9ba, 0x0000F4C4u, 0x0000A9BAu);
+    SOR_CALL(ordinary_enemy_contact_dispatch, 0x0000F4C4u, 0x0000A9BAu);
     if (cpu().flagN()) {
         cpu().ssp += 4;
         return;
     }
-    SOR_CALL(sub_00f482, 0x0000F4CAu, 0x0000F482u);
+    SOR_CALL(jack_abort_retreat_if_target_near, 0x0000F4CAu, 0x0000F482u);
     if (cpu().flagN()) {
         cpu().ssp += 4;
         return;
@@ -542,7 +542,7 @@ void StreetsOfRage::ordinary_enemy_wait_until_on_screen(m_long /*entry_*/) {
     const m_long object = cpu().a[0];
 
     mem.writeByte(object + 1, static_cast<m_byte>(mem.readByte(object + 1) | 0x01u));
-    SOR_CALL(sub_00a56c, 0x0000A5A6u, 0x0000A56Cu);
+    SOR_CALL(object_update_screen_position, 0x0000A5A6u, 0x0000A56Cu);
 
     const auto finish = [this](m_word result) {
         cpu().d[0] = result;
@@ -640,9 +640,9 @@ void StreetsOfRage::round8_table_state0_wait_and_arm(m_long /*entry_*/) {
     mem.writeByte(object + 0x3A, static_cast<m_byte>(mem.readByte(object + 0x3A) | 0x01u));
     mem.writeWord(object + 0x18, 0x00A8u);
     cpu().a[1] = 0x0006ED72u;
-    SOR_CALL(sub_006abc, 0x000075C8u, 0x00006ABCu);
+    SOR_CALL(object_start_animation_with_flag_bit6, 0x000075C8u, 0x00006ABCu);
     if (mem.readWord(object + 0x1C) != 0) {
-        sub_0095ce();
+        register_enemy_attacker();
         return;
     }
     cpu().ssp += 4;
@@ -702,12 +702,12 @@ void StreetsOfRage::police_special_player_update_gate(m_long /*entry_*/) {
     if (action >= 4u) {
         cpu().d[0] = 2;
         if (mem.readByte(player + 0x60) == 0) {
-            SOR_CALL(sub_002ee8, 0x000040FCu, 0x00002EE8u);
+            SOR_CALL(player_set_action_faced_restore_frame, 0x000040FCu, 0x00002EE8u);
         } else {
             cpu().d[0] = 0x30;
-            SOR_CALL(sub_002de6, 0x000040F8u, 0x00002DE6u);
+            SOR_CALL(player_set_action_faced_weapon_adjust, 0x000040F8u, 0x00002DE6u);
         }
-        SOR_CALL(sub_004104, 0x00004100u, 0x00004104u);
+        SOR_CALL(player_clear_combat_fields, 0x00004100u, 0x00004104u);
     }
     cpu().d[7] = 0xFFFFFFFFu;
     cpu().setNZClearVC(cpu().d[7], 0x80000000u);
@@ -922,7 +922,7 @@ void StreetsOfRage::level_intro_wait_fade_in(m_long /*entry_*/) {
         placeBannerHalves(memory(), 0, kArenaGrow);
 
     cpu().d[6] = 0x10u;
-    SOR_CALL(sub_0105ce, 0x00011A6Eu, 0x000105CEu);
+    SOR_CALL(palette_fade_step_to_target, 0x00011A6Eu, 0x000105CEu);
     if (cpu().eq()) {
         const m_word substate = memory().readWord(kIntroSubstate);
         const m_word next     = static_cast<m_word>(substate + 2u);

@@ -378,7 +378,7 @@ it are code. The same state also selects the VBlank upload path through `$196B2
 
 States 4-10 are the base state plus 4 or plus 8, so the upload path stays
 correct through the excursion. Non-gameplay screens reuse the field only to pick
-an upload path. `$FE8 (init_game_start_screen)` and `$1260E` write 3, and the
+an upload path. `$FE8 (init_game_start_screen)` and `$1260E (build_top10_score_screen)` write 3, and the
 bad ending and round clear write 1. In both cases name tables are updated with
 no scroll DMA.
 
@@ -402,7 +402,7 @@ states 1/2: strip[0].x = X; strip[0].prev_x = prev X
 ### 6.1 Dead zones
 
 `$18F5C (compute_camera_follow_x_velocity)` reads the players' biased screen X at
-object `+$28`. That value is computed near `$A56C` as `world X + $80 - cam_x`.
+object `+$28`. That value is computed near `$A56C (object_update_screen_position)` as `world X + $80 - cam_x`.
 The dead zone is `$110`-`$130` biased, which is 144-176 px from the left edge:
 a 32-pixel window around the screen centre (160).
 
@@ -450,7 +450,7 @@ min_x < 4` and treats the corridor as a locked arena (`game-engine-and-levels.md
 `$FFFA56 (camera_scripted_left_pan)` overrides the follow velocity in state 0
 with a constant −4 px/frame. Pipeline state `$14` (`$4CA`) and the Mr. X offer
 logic at `$11E72 (mr_x_offer_wait_duel_end)` set it. It is cleared when the players reach their marks
-(`$50A6`, which then raises `$FFDE00 (mr_x_offer_flag)`) and by `$13E4C
+(`$50A6 (final_section_player_script_update)`, which then raises `$FFDE00 (mr_x_offer_flag)`) and by `$13E4C
 (mr_x_final_encounter_init)`. Round 8 is the only state-0 round that scrolls
 left, so this is the camera half of the scripted walk toward Mr. X. The
 attribution to Round 8 is inferred; it was not observed live.
@@ -930,7 +930,7 @@ VBlank:
 | Camera state tables, sizes, targets | ROM words at `$18C34 (primary_camera_state_table)` (11) and `$1933A (secondary_camera_state_table)` (8); the next word is code |
 | Upload path follows the primary state | `$196A4 (dispatch_background_vblank_upload)` indexes `$196B2 (background_vblank_upload_table)` with `+$00`; 12 decoded entries repeat strip/names/lines/names |
 | One-way ratchet every frame | `loc_195C0` runs unconditionally after the wave test |
-| Dead zones and clamps | immediates `$01100000`, `$01300000`, `±$30000` (X), `$780000`, `$A80000`, `±$40000` (Y); `+$28` / `+$2C` written as biased screen coordinates at `$A56C` |
+| Dead zones and clamps | immediates `$01100000`, `$01300000`, `±$30000` (X), `$780000`, `$A80000`, `±$40000` (Y); `+$28` / `+$2C` written as biased screen coordinates at `$A56C (object_update_screen_position)` |
 | 512-pixel resident window | `-$60` / `+$1A0` edge offsets in `$18B3C (queue_camera_tilemap_updates)`; `$1FF` X mask in `$19656 (resolve_blockmap_and_vdp_address)` |
 | Round configuration | decoded `$5F5B8 (level_graphics_package_table)`, `$5F788 (level_plane_layout_table)`, `$1998A (plane_layout_bounds_table)`, `$199B6 (level_hscroll_mode_table)`, `$19C4C (level_background_effect_init_table)` |
 | Round 5 drift and bob | `$19138` path selected by `level == 4 && a1 == $E100`; init `$19C62 (init_round5_ship_background)`; recurrence simulated |

@@ -263,12 +263,12 @@ void StreetsOfRage::test_shape_box_overlap(m_long /*entry_*/) {
 }
 
 // ---------------------------------------------------------------------------
-// $00ABF8 (sub_00abf8)
+// $00ABF8 (test_attacker_shape_box_overlap)
 //
 // Box overlap of objects a0 (shape id d1.w) and a1 (shape id d0.w): X, lane, height. d7 = 1 and Z clear
 // for an overlap, else Z set.
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_00abf8(m_long /*entry_*/) {
+void StreetsOfRage::test_attacker_shape_box_overlap(m_long /*entry_*/) {
     traceEnter(0x0000ABF8u);
     auto &cpu = this->cpu();
     auto &mem = memory();
@@ -339,7 +339,7 @@ void StreetsOfRage::queue_object_sound_id(m_long /*entry_*/) {
     queue_sound_id();
 }
 
-void StreetsOfRage::sub_0035d6(m_long /*entry_*/) {
+void StreetsOfRage::player_queue_sound_trampoline(m_long /*entry_*/) {
     traceEnter(0x000035D6u);
     queue_sound_id();
 }
@@ -423,7 +423,7 @@ void StreetsOfRage::init_object_animation_state_and_advance(m_long /*entry_*/) {
 // ---------------------------------------------------------------------------
 // $00B1D6: animation 0 of the set at a1 (d1 = timer word), state advanced.
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_00b1d6(m_long /*entry_*/) {
+void StreetsOfRage::object_init_animation_from_zero(m_long /*entry_*/) {
     traceEnter(0x0000B1D6u);
     cpu().d[0] = 0;
     tst(cpu(), 0, 32);
@@ -433,7 +433,7 @@ void StreetsOfRage::sub_00b1d6(m_long /*entry_*/) {
 // ---------------------------------------------------------------------------
 // $006ABC: +$01 bit 6 set, d1 = 0, then $B1D6. Entered at $6AC2 without the bit, at $6AC4 without d1.
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_006abc(m_long entry_) {
+void StreetsOfRage::object_start_animation_with_flag_bit6(m_long entry_) {
     auto &c   = cpu();
     auto &mem = memory();
 
@@ -451,7 +451,7 @@ void StreetsOfRage::sub_006abc(m_long entry_) {
     } else {
         traceEnter(0x00006AC4u);
     }
-    sub_00b1d6();
+    object_init_animation_from_zero();
 }
 
 // ---------------------------------------------------------------------------

@@ -51,23 +51,23 @@ Objects are 128 bytes in the table beginning at `$FFB900 (object_table)`.
 | `$01` | B | Visibility, collision and airborne flags | hit/death paths |
 | `$04` | L | Animation-set pointer | selected from `$27032 (ordinary_enemy_animation_set_pointer_table)` |
 | `$08` | W | Animation/action index | `$969E/$96C0` |
-| `$09` | B | Facing flags; bit 1 is left/right | `$96C0`, `$9E4C` |
+| `$09` | B | Facing flags; bit 1 is left/right | `$96C0 (enemy_set_action_facing_target)`, `$9E4C (enemy_face_target)` |
 | `$10/$14/$18` | L each | X, lane/depth, and vertical position | movement helpers |
-| `$1C/$20/$24` | L each | X, lane, and vertical velocity | `$973E`, `$9F96 (ordinary_enemy_advance_x_bounded)`, `$A00E (ordinary_enemy_advance_lane_bounded)` |
+| `$1C/$20/$24` | L each | X, lane, and vertical velocity | `$973E (enemy_apply_gravity_and_land)`, `$9F96 (ordinary_enemy_advance_x_bounded)`, `$A00E (ordinary_enemy_advance_lane_bounded)` |
 | `$30` | W | Primary state (`$0100`, `$0300`...) | reaction paths |
 | `$31` | B | Fine-grained reaction/physics flags | `$991A-$9D16` |
 | `$32` | W | Health/energy | `$93CE (ordinary_enemy_init_combat_values)`, `$9BC6`, `$A13A` |
 | `$33` | B | Low byte of current health word `$32`; initialized by type/variant and mirrored at `$38` | `$93CE (ordinary_enemy_init_combat_values)`, word damage subtraction at `$9BC6/$A13A` |
 | `$34` | B | Contact/attack damage | `$93CE (ordinary_enemy_init_combat_values)`, damage consumers |
 | `$37` | B | Hit/throw/death flags | shared collision paths |
-| `$39` | B | Score/palette/accounting selector | `$93B4`, `$9E26 (ordinary_enemy_award_score)` |
-| `$3E` | W | Current collision/attacker object pointer | `$969E`, `$9BC6` |
-| `$40-$41` | B/B | Spawn/variant metadata | `$945A`, visibility gates |
+| `$39` | B | Score/palette/accounting selector | `$93B4 (ordinary_enemy_init_accounting_selector)`, `$9E26 (ordinary_enemy_award_score)` |
+| `$3E` | W | Current collision/attacker object pointer | `$969E (enemy_set_action_facing_attacker)`, `$9BC6` |
+| `$40-$41` | B/B | Spawn/variant metadata | `$945A (ordinary_enemy_init_spawn_offsets)`, visibility gates |
 | `$42` | W | Current target player pointer | `$96EC (ordinary_enemy_select_target)` |
 | `$48-$4B` | B each | status, damage/reaction and substate scratch | reaction dispatchers |
 | `$50-$51` | B/B | General action timer/substate scratch | many states |
 | `$60/$62` | W/W | Desired X/lane point for scripted approach | `$9604-$9682` |
-| `$66/$68` | W/W | Type-derived approach offsets | `$945A` |
+| `$66/$68` | W/W | Type-derived approach offsets | `$945A (ordinary_enemy_init_spawn_offsets)` |
 
 Several offsets are polymorphic by state and type; the table lists only uses demonstrated across the common subsystem.
 
@@ -75,10 +75,10 @@ Several offsets are polymorphic by state and type; the table lists only uses dem
 
 `$938C (ordinary_enemy_init_type_data)` performs four data-driven steps:
 
-1. `$00945A` splits spawn byte `$41` into two nibbles and maps each through `$9484`, producing signed/unsigned approach offsets at `$68/$66`.
+1. `$945A (ordinary_enemy_init_spawn_offsets)` splits spawn byte `$41` into two nibbles and maps each through `$9484`, producing signed/unsigned approach offsets at `$68/$66`.
 2. `$93CE (ordinary_enemy_init_combat_values)` indexes six-byte records at `$26FCE (ordinary_enemy_combat_value_table)` by `type_index*6 + variant`. Bytes 0-2 are initial health for variants 0-2; bytes 3-5 are their attack damage. It writes health to the low byte `$33` of word `$32`, mirrors it at `$38`, and writes damage to `$34`. On highest difficulty health and damage both receive `+4`.
-3. `$0093B4` indexes `$27010 (ordinary_enemy_accounting_selector_table)` to choose `$39`, used by score/palette accounting.
-4. `$009406` selects palette/tile base, while `$27032[type_index]` supplies the animation/behavior resource pointer.
+3. `$93B4 (ordinary_enemy_init_accounting_selector)` indexes `$27010 (ordinary_enemy_accounting_selector_table)` to choose `$39`, used by score/palette accounting.
+4. `$9406 (ordinary_enemy_init_art_base)` selects palette/tile base, while `$27032[type_index]` supplies the animation/behavior resource pointer.
 
 Thus archetype differences are not eleven completely separate top-level functions. The shared state machinery is parameterized by type records, animation command streams, approach offsets, attack damage, palette and per-animation callbacks.
 
@@ -143,7 +143,7 @@ waves.
 
 The high bit on types `$28/$29` has engine meaning: `$810
 (prepare_next_spawn_section)` excludes those entries from the ordinary
-palette-family count, while `$9406` strips the bit when selecting the art
+palette-family count, while `$9406 (ordinary_enemy_init_art_base)` strips the bit when selecting the art
 family and uses its fixed residency path.
 
 Direct Nemesis decoding of all eight ELC streams gives a useful constraint on
@@ -220,7 +220,7 @@ The common engine divides responsibility:
 
 - distance/target helpers decide whether the enemy can reach its desired point;
 - animation command streams and type-selected callbacks decide exact attack phases;
-- contact routine `$AA22` reports interaction kind in `d7`;
+- contact routine `$AA22 (resolve_object_contact)` reports interaction kind in `d7`;
 - reaction dispatch uses flags/substate at `$31/$4A/$4B/$50`.
 
 Randomness is explicit rather than ambient. `$104D8 (rng_draw)` is used in reaction/landing paths, for example choosing a short recovery animation delay (`(rng & 3)*2+3` at `$9A32`). The code observed here does not support a claim that every attack is probability-driven.
@@ -239,7 +239,7 @@ their trampoline (`$D606 (garcia_type20_dispatcher)`/`$D99A (garcia_type21_dispa
 `$B186 (dispatch_object_primary_state_table)` (`d0 = byte at +$30`; jumps through `table[d0*2]`). Reading the four
 tables from ROM gives, notably, that **types `$21` and `$22` reuse identical
 handler addresses for states `$02`-`$07`** (`$9B36 (ordinary_enemy_hit_reaction_dispatch)`/`$991A (ordinary_enemy_begin_knockdown)`/`$A43E`/`$A04A`/
-`$9D16`/`$DBCC`) and **share the same attacking-state handler at `$E190`**
+`$9D16`/`$DBCC (ordinary_enemy_blocked_state)`) and **share the same attacking-state handler at `$E190`**
 for their own state `$0A` — confirming enemy-ai.md's existing claim that the
 four types are "separate state tables" built from a common toolkit, not
 independent implementations.
@@ -274,16 +274,16 @@ is the same shape id reached by two unrelated methods.
 
 **This table is not exhaustive.** Absence from it does not mean a shape is
 not a real strike — most ordinary-enemy attacks are never gated by this
-manual `$AD04` shortcut at all and rely solely on the generic per-frame
+manual `$AD04 (test_target_body_box_overlap)` shortcut at all and rely solely on the generic per-frame
 pipeline (whatever `+$02`/`+$03` the currently displayed animation frame
 sets, tested every object, every frame, by `$AAA0 (resolve_enemy_player_contact)`). In particular:
 
 - type `$20`'s **other** state, `$0A` (`$D8EC`, also documented as
-  `ATTACKING` from live testing), does not call `$AD04` at all — it toggles
+  `ATTACKING` from live testing), does not call `$AD04 (test_target_body_box_overlap)` at all — it toggles
   a linked-object pointer at `+$6A` and plays a sound, with no direct
   collision test in its own body; whatever it does hit is decided entirely
   by the generic pipeline against its animation's own `+$02`;
-- type `$23`'s attacking state `$09` (`$E47E`) likewise never calls `$AD04`;
+- type `$23`'s attacking state `$09` (`$E47E`) likewise never calls `$AD04 (test_target_body_box_overlap)`;
 - `$1FC70 (garcia_animation_set)` is **shared by all four types**, so it
   contains attack-capable shapes (at minimum `$14`, `$12`, `$3E`, plus an
   unconfirmed `$18` at animation index 24) that do not all belong to every
@@ -314,7 +314,7 @@ $00E57E  +$20(a0) = ±$00020000   ; ±2.0 px/frame (lane)
 sign chosen by comparing the enemy's own position against the target's
 (`cmp.w +$10(a0),d0` / `cmp.w +$14(a0),d1` against values staged earlier in
 the same state) — i.e. "move toward the target," not a fixed vector. This
-state never calls `$AD04` and its own animation carries no long-reach
+state never calls `$AD04 (test_target_body_box_overlap)` and its own animation carries no long-reach
 shape; the hit, when it lands, is decided by the generic per-frame
 `$AAA0 (resolve_enemy_player_contact)`/`$AB24 (test_shape_box_overlap)` pipeline testing Signal's *ordinary* body box once the
 slide's own velocity has carried it into the player, not by an extended
@@ -345,7 +345,7 @@ below: it is not a state worth its own row.
 | --- | --- | --- |
 | `$01` | `$F0E6 (nora_type26_state1_target_select)` | Re-select target, branch to next state |
 | `$02` | `$F062 (nora_type26_hit_reaction_state)` | Her own override of the shared hit-reaction entry — see below |
-| `$03`-`$07` | generic (`$991A (ordinary_enemy_begin_knockdown)`/`$A43E`/`$A04A`/`$9D16`/`$DBCC`) | Knockdown/scripted/grabbed/death/blocked, identical to every checked ordinary type |
+| `$03`-`$07` | generic (`$991A (ordinary_enemy_begin_knockdown)`/`$A43E`/`$A04A`/`$9D16`/`$DBCC (ordinary_enemy_blocked_state)`) | Knockdown/scripted/grabbed/death/blocked, identical to every checked ordinary type |
 | `$08` | `$F1B0 (nora_type26_whip_engage_state)` | Whip engage-and-swing (below) |
 | `$09` | `$F0FC (nora_type26_chase_approach_state)` | Ordinary chase toward an approach point |
 | `$0A` | `$DDE6` | The same "damaging special" entry already documented above for Garcia `$22` state `$13` |
@@ -364,7 +364,7 @@ with Jack"; those are Jack's states `$00`-`$0A` (see "Jack" below).
 
 `$F1B0 (nora_type26_whip_engage_state)` does not wait for a fixed windup
 before deciding whether the whip lands. Every tick it has not yet committed
-(object `+$31` bit 1 clear), it runs the manual `$AD04` shortcut — the same
+(object `+$31` bit 1 clear), it runs the manual `$AD04 (test_target_body_box_overlap)` shortcut — the same
 direct-collision test already confirmed above for Garcia `$20`/`$21`/`$22`
 — with shape `$22`/`$23` against the target's **current** position. A miss
 walks the target toward a `$38` (56px) approach offset — comfortably inside
@@ -449,7 +449,7 @@ twelve bytes are the relative table of his `$28` helper (`$103A2`, used by
 | `$04` | `$A43E` | Pepper freeze / scripted |
 | `$05` | `$A04A` | Held by a player |
 | `$06` | `$9D16` | Death |
-| `$07` | `$F2BC (ordinary_enemy_blocked_delegate_state)` -> `$DBCC` | Lane dodge, facing the target every update |
+| `$07` | `$F2BC (ordinary_enemy_blocked_delegate_state)` -> `$DBCC (ordinary_enemy_blocked_state)` | Lane dodge, facing the target every update |
 | `$08` | `$F5F2 (ordinary_enemy_special_lunge_lane_setup)` | Lane 8 or 56, then 40 px toward the target |
 | `$09` | `$F64A (ordinary_enemy_special_lunge_distance_gate)` | The X gate |
 | `$0A` | `$F6BC (ordinary_enemy_special_lunge)` | Diagonal back-off onto the target's lane |
@@ -480,7 +480,7 @@ batch, several two-player only) and personality 3 in round 5.
 - **1, retreat and ranged throw.** `$F4A6 (jack_retreat_to_screen_edge)` walks to the screen edge behind
   him (`cam_x + $120` facing left, `cam_x + $20` facing right) over eight legs
   at random lanes (`$F53C`) and speeds (2.5-5 px an update, `$DD68`), then
-  `$F410` throws. The target within 64 px on X (`$F482`) aborts either into
+  `$F410` throws. The target within 64 px on X (`$F482 (jack_abort_retreat_if_target_near)`) aborts either into
   `$07`.
 - **2, jumps.** `$F2E6` jumps at a point near the target (its approach offsets
   plus `$1031A[random]`), 1-4 px an update, v_z -6..-11, lands, holds 4
@@ -491,7 +491,7 @@ batch, several two-player only) and personality 3 in round 5.
   an update, `$102FA`), then `$1030A[random]` -- `$12` seven times in eight,
   `$0E` otherwise.
 
-`$07` (`$DBCC`, shared with the Garcia types' blocked state) moves him along
+`$07` (`$DBCC (ordinary_enemy_blocked_state)`, shared with the Garcia types' blocked state) moves him along
 the lane at 3 px an update away from the target's half (target above lane
 `$38`: down), to lane `$58` or `$18`, then walks on X toward and past the
 target until he is 80 px beyond it, and resets (`$01`). What matters in play:
@@ -507,13 +507,13 @@ target until he is 80 px beyond it, and resets (`$01`). What matters in play:
   10 or 5 updates, `+$50`); the sign is `+$31` bit 2, set at entry when he
   stood at or right of the target (walk left);
 - every step goes through `$9F6A`: with no floor under him he falls
-  (`$973E`); a hole or a wall 10 px ahead re-enters `$07`; a solid prop
-  (`$3B8A`) resets him (`$01`); and `$9F96 (ordinary_enemy_advance_x_bounded)`
+  (`$973E (enemy_apply_gravity_and_land)`); a hole or a wall 10 px ahead re-enters `$07`; a solid prop
+  (`$3B8A (resolve_solid_object_collisions)`) resets him (`$01`); and `$9F96 (ordinary_enemy_advance_x_bounded)`
   refuses a step to X < 0 (≤ `$2F0` in round 7) or ≥ `$1510` (`$1400` in
   round 8) and does nothing else. Traced live in round 5: walking right into
   `$1510` he stood at X 5390, off screen, for 65 s, because the player, held
   by the camera at 5344, never got 80 px behind him;
-- it calls `$9E4C` -- face the target -- on every update, after its contact
+- it calls `$9E4C (enemy_face_target)` -- face the target -- on every update, after its contact
   test: in this state he turns as the player walks past him.
 
 ### The juggle (`$F544`, `$00FC1C`, `$FCB6`)
@@ -525,14 +525,14 @@ juggled axes 8 updates apart and removes itself. A juggled axe (state 1,
 - on each arc's start sets z to **absolute 128** (`move.w #$0080,+$18`), v_z
   -9, v_x -1 and its offset `+$54` to +24 (Jack facing right) or -8 (left);
 - rides at Jack's lane + 8 and Jack's X + `+$54`, the offset drifting by
-  v_x; `$973E`'s gravity (1.125, capped at 16) brings it back to 128 after 15
+  v_x; `$973E (enemy_apply_gravity_and_land)`'s gravity (1.125, capped at 16) brings it back to 128 after 15
   updates -- heights 120, 113, 107, 103, 99, 97, 96, 96, 97, 99, 103, 107,
   113, 120, 128;
 - at 128, with Jack's animation word 0 or 2 (the juggle stance), walks back
   at +4 px an update until it reaches his hand (X + 24 facing right, X - 8
   facing left) and starts again -- or, in `$0B`, hands itself over to the
   throw; with his animation anything else (hit, held, throwing) it drops
-  (state 3, `$FED6`): `$100A4` moves it on its velocities and `$973E` drops
+  (state 3, `$FED6`): `$100A4 (object_integrate_xy_velocity)` moves it on its velocities and `$973E (enemy_apply_gravity_and_land)` drops
   it (1.125 an update, capped at 16) until it lands and is removed. It runs
   no contact test of its own, but its box (`$2B`) and damage (12) stay live
   in the player's hit test all the way down: traced live, an arc a front
@@ -560,7 +560,7 @@ reflects it back along the street.
 
 - `$F410` (ranged): face the target, animation `$14` at 3 updates a frame
   (`$0303`), clear `+$52`; on each loop's frame 0 spawn a thrown axe -- three,
-  12 updates apart -- and reset on the fourth. `$F482`'s 64 px abort drops the
+  12 updates apart -- and reset on the fourth. `$F482 (jack_abort_retreat_if_target_near)`'s 64 px abort drops the
   one still waiting.
 - `$F728` (aligned, after `$0A`): wait (80 updates at most) for a juggled axe
   to reach his hand. The first to arrive is tossed high (state 2, `$FE46`: up
@@ -680,8 +680,8 @@ actor wanders among them, and `--check` replays each update through the
 model. Over rounds 1-3: Garcia `$21`/`$22` 21,258 updates, Signal 5,164,
 HakuRo 4,727, Nora 3,790, every contact outcome (hit, grab, strike) predicted
 as the ROM resolved it; what still differs is terrain (a prop or a hole
-blocking `$9E68 (ordinary_enemy_move_with_collision)`, which the model does not carry) and `$DBCC`'s re-entry flip
-(`+$6C`/`+$6E` against the `$FFFB08` frame counter).
+blocking `$9E68 (ordinary_enemy_move_with_collision)`, which the model does not carry) and `$DBCC (ordinary_enemy_blocked_state)`'s re-entry flip
+(`+$6C`/`+$6E` against the `$FFFB08 (vblank_frame_counter)` frame counter).
 
 ### The state tables
 
@@ -704,12 +704,12 @@ lands in.
 States `$02`-`$07` are the shared `$9B36 (ordinary_enemy_hit_reaction_dispatch)` hitstun (Nora goes through `$F062 (nora_type26_hit_reaction_state)`
 first), `$991A (ordinary_enemy_begin_knockdown)` knockdown (`$D948` for `$20`/`$23`, `$EA5C` for HakuRo),
 `$A43E` pepper, `$A04A` held, `$9D16` death (`$D62A` for `$20`/`$23`) and
-`$DBCC` evade.
+`$DBCC (ordinary_enemy_blocked_state)` evade.
 
 ### Contact, in the order the ROM tests it
 
-`$A9BA` calls `$AA22`, whose `$AA34` first walks the registered attackers at
-`$FFFB22` (up to five: thrown bodies, a swung or thrown weapon) through
+`$A9BA (ordinary_enemy_contact_dispatch)` calls `$AA22 (resolve_object_contact)`, whose `$AA34` first walks the registered attackers at
+`$FFFB22 (enemy_attacker_count)` (up to five: thrown bodies, a swung or thrown weapon) through
 `$ABA4 (resolve_enemy_registered_attacker_contact)` -- the attacker's `+$02` box on this enemy's `+$03` body is code 5,
 this enemy's box on the attacker's body code 4 (both only with this enemy's
 screen X in `[$78, $1C8)`) -- and only then each player through `$AAA0 (resolve_enemy_player_contact)`:
@@ -722,7 +722,7 @@ screen X in `[$78, $1C8)`) -- and only then each player through `$AAA0 (resolve_
 2. otherwise the enemy's `+$02` box on the player's body (`+$70`): code 1, the
    hit.
 
-The hold itself is the player's to accept: on its next update `$3266` reads
+The hold itself is the player's to accept: on its next update `$3266 (player_resolve_grab_contact)` reads
 `+$7C` = 3 and takes a front hold (`$60`) when the two face each other, a back
 hold (`$66`) when they face the same way with the enemy ahead of the player
 -- and nothing at all when they face the same way with the enemy's origin
@@ -733,24 +733,24 @@ on its next update -- a contact the player can repeat every other update
 without ever holding (the autoplay AI did, for 60 s, against a Nora 3 px
 behind it).
 
-`$A9BA`'s table sends 2 to state 2, 3 to state 5, and 4/5 to `$A9DC`: state 3
-(knockdown) less the attacker's `+$34` (2 for a slot below `$FFC900`), or
+`$A9BA (ordinary_enemy_contact_dispatch)`'s table sends 2 to state 2, 3 to state 5, and 4/5 to `$A9DC`: state 3
+(knockdown) less the attacker's `+$34` (2 for a slot below `$FFC900 (object_pool_c900)`), or
 state 4 for the pepper. So a swung weapon knocks an enemy down outright, and a
 walking box already on his body takes the hold even through his own attack.
 
 ### Garcia `$22`: the jab
 
 - `$E124` (state 9, and `$21`'s `$0B`): toward 32 px short of the target on
-  its lane (`$9648`), 4.5 px an update (3 with `+$40` bit 5), 48 updates; after
+  its lane (`$9648 (enemy_aim_at_target_lane)`), 4.5 px an update (3 with `+$40` bit 5), 48 updates; after
   each move `$00E102` tests box `$12` (0-40 px ahead, lanes +-8, head height) on
   the target's body -- the punch.
 - `$E190` (state `$0A`): animation `$14` from frame 0, whose box is already
   `$12`: the jab lands on the update after its trigger. Frame 3 is the jab
   again, frames 7-9 the punch `$3E` (16-51 px) if it still reaches on frame 6.
-- `$E07C` (8) and `$E2DC` (`$0C`) stand; within 48 px on X it is `$DBCC`, box
+- `$E07C` (8) and `$E2DC` (`$0C`) stand; within 48 px on X it is `$DBCC (ordinary_enemy_blocked_state)`, box
   `$12` on the target the punch. `$E20A` (`$0B`) wanders toward a random offset
-  of the `$9654` point (`$1031A`) for one walk cycle, jab trigger included,
-  then the state `$10352` names for `$FB09 & 7`. State `$0E` stalks the `$9654` point at 2.5 for
+  of the `$9654 (enemy_aim_at_target_offset)` point (`$1031A`) for one walk cycle, jab trigger included,
+  then the state `$10352` names for `$FB09 & 7`. State `$0E` stalks the `$9654 (enemy_aim_at_target_offset)` point at 2.5 for
   80 updates. `$DEC6`/`$DF0A` (`$10`/`$11`) rush to 32 px at 5 and jab three
   times at reload 3.
 - `$DE78` (`$12`) lies in wait (animation 4, frame 3, no box and no body) for
@@ -763,8 +763,8 @@ walking box already on his body takes the hold even through his own attack.
 
 ### Garcia `$21`: the hold on the player
 
-`$D9BC` walks to the `$9654` point at 2 for 80 updates; `$DA10` (`$0C`) waits
-there 40 updates -- off the point (the target moved) it is `$DBCC` (`$0B` with
+`$D9BC` walks to the `$9654 (enemy_aim_at_target_offset)` point at 2 for 80 updates; `$DA10` (`$0C`) waits
+there 40 updates -- off the point (the target moved) it is `$DBCC (ordinary_enemy_blocked_state)` (`$0B` with
 `+$40` = 1). `$DA6C` returns 1 while **the target faces him**, and then
 `$DA98` (8) rushes the target's spot at 4.5 with `$02` forced to `$1E`
 (-13..+13, lanes +-10); its touch sets the player's `+$7D` to 3 -- his hold,
@@ -775,7 +775,7 @@ up (state 1).
 ### Garcia `$20`: the knife hurts by touching
 
 `$D64C` spawns the knife (type `$08`) in one of the eight slots from
-`$FFC900`, links it (`+$52` to him, his `+$6A` to it, `+$51` = 1) and sets his
+`$FFC900 (object_pool_c900)`, links it (`+$52` to him, his `+$6A` to it, `+$51` = 1) and sets his
 `+$48` bit 3. A held weapon never tests contact itself -- `$5E2E (update_held_weapon)`'s
 enemy-holder path only places it (`$60A0`, from animation `$1C` on, hidden
 below it) -- so everything that cuts is his own animation:
@@ -787,9 +787,9 @@ below it) -- so everything that cuts is his own animation:
   touch on that line is a hit, unless the player's walking box meets his body
   first (the hold).
 - `$D76A` (`$0D`, personality 0): armed walk (animation `$1C`, no box) to the
-  `$9654` point at 2.25.
+  `$9654 (enemy_aim_at_target_offset)` point at 2.25.
 - `$D7BE` (8): 24 updates facing the target; then more than 16 lanes off it
-  `$DBCC`, within 96 px on X the stab `$D856` (9), beyond it the throw `$D8EC`
+  `$DBCC (ordinary_enemy_blocked_state)`, within 96 px on X the stab `$D856` (9), beyond it the throw `$D8EC`
   (`$0A`).
 - `$D856`: toward 32 px short at 3 until box `$14` (32-56 px ahead) meets the
   target's body; then animation `$2C`, frame 0 box `$01` (his body again),
@@ -806,7 +806,7 @@ below it) -- so everything that cuts is his own animation:
 ### Garcia `$23`: the bat and the pipe
 
 `$E3A0` spawns a bat (`$0A`, `+$40` = 0) or pipe (`$0B`) and walks to the
-`$9654` point at 2.5 (animation `$20`/`$24`); `$E404` (8) stands 16 updates,
+`$9654 (enemy_aim_at_target_offset)` point at 2.5 (animation `$20`/`$24`); `$E404` (8) stands 16 updates,
 then within 32 lanes `$E348` (`$0C`): to 64 px from the target on its lane at
 3.5, 48 updates, and on screen the swing `$E47E` (9): animation `$30`/`$34`
 at reload 3, frames 0-2 wind-up, **box `$18` 24-72 px ahead** on frames 3-5 --
@@ -818,9 +818,9 @@ out of reach of the player's punch (Blaze 18-68).
 `$0D` (stand); his own box on the player -- `$3D` (-11..+11) on every frame he
 stands or walks -- is, with the player holding nobody and the heights within
 8, his hold on the player (`+$7D` = 2, state `$0C`, `$E6F2`: the player is
-placed 48 px in front and thrown on `+$0D` = 1). `$E4F6` walks to the `$9654`
+placed 48 px in front and thrown on `+$0D` = 1). `$E4F6` walks to the `$9654 (enemy_aim_at_target_offset)`
 point at 2 for 96 updates, facing; there `$E54E` (`$0A`) dashes 2.5/2 at it,
-X until past it then the lane; `$E5EC` (8) stands 24 updates (`$DBCC` off
+X until past it then the lane; `$E5EC` (8) stands 24 updates (`$DBCC (ordinary_enemy_blocked_state)` off
 screen or with the target in `$4A` or `$54`-`$5C`), then within 128 of
 `$98E8 (ordinary_enemy_distance_metric)` walks in (`$E684`, 9: at the target's own spot at 3.5, 48 updates) or,
 with `+$40` set and the target within 8 lanes, slides (`$E80A`, `$0B`):
@@ -830,7 +830,7 @@ lands on him -- then 8 updates getting up.
 
 ### HakuRo `$25`
 
-`$EB2A` (`$11`) walks to the `$9654` point at 2, facing; there `$EC88` (8)
+`$EB2A` (`$11`) walks to the `$9654 (enemy_aim_at_target_offset)` point at 2, facing; there `$EC88` (8)
 stalks it (with `+$40` set and the target within 64 px, the backflip `$0C`),
 counting changes of the target's X velocity word: five of them, or 48 moves,
 and `$ED44` (9) steps 4 lanes an update onto the target's lane, then `$0F`
@@ -862,11 +862,11 @@ backflip.
 
 ### Nora `$26`
 
-`$F0FC (nora_type26_chase_approach_state)` (9) walks to the `$9654` point at 1.5, facing; `+$52` is both its
+`$F0FC (nora_type26_chase_approach_state)` (9) walks to the `$9654 (enemy_aim_at_target_offset)` point at 1.5, facing; `+$52` is both its
 80-update timer and, in bit 1, a flag set while her animation word differs
 from the target's facing bit -- a match with it set clears it and counts one
 off `+$50` (2): twice, or 80 moves on the point, and the whip `$F1B0 (nora_type26_whip_engage_state)` (8).
-There, every update she has not committed, `$AD04` tests box `$22` (32-80 px
+There, every update she has not committed, `$AD04 (test_target_body_box_overlap)` tests box `$22` (32-80 px
 ahead, lanes -12..+10, z -44..-20) on the target's body; a miss walks her to
 56 px from the target on its lane, a hit commits animation `$14`, whose frame
 2 (10 updates on) is the lash; frame 4 ends it (three times running after the
@@ -880,7 +880,7 @@ pipe, `$46` (animation `$3C`) for the knife's stab -- only with an object in
 front within 144 px and 12 lanes, else it is thrown -- and `$44` (animation
 `$38`) for the bottle. `$5E2E (update_held_weapon)`'s player-holder path places the weapon from
 `$5FC8` (per animation pair, per character, per frame: X, Z and a collision
-bit) and, on frames with the bit, registers it (`$95CE`) so every enemy's
+bit) and, on frames with the bit, registers it (`$95CE (register_enemy_attacker)`) so every enemy's
 `$AA34` meets it first:
 
 | Weapon | Live frame's origin (Axel / Adam / Blaze) | Box | Damage |
@@ -895,7 +895,7 @@ three (bat, pipe; then nine of recovery) or five (knife, bottle).
 
 ## Collision, reactions, grabs, and death
 
-`$991A (ordinary_enemy_begin_knockdown)` starts the knockdown/airborne fall after the enemy has taken sufficient damage; it is not the generic reaction to every hit. It clears attack damage, selects facing from the attacker, and dispatches by fall subtype `$4A`. `$99A2 (ordinary_enemy_update_airborne_reaction)` advances airborne physics and landing, using `$973E` for vertical motion and `$9F22` for obstacle response.
+`$991A (ordinary_enemy_begin_knockdown)` starts the knockdown/airborne fall after the enemy has taken sufficient damage; it is not the generic reaction to every hit. It clears attack damage, selects facing from the attacker, and dispatches by fall subtype `$4A`. `$99A2 (ordinary_enemy_update_airborne_reaction)` advances airborne physics and landing, using `$973E (enemy_apply_gravity_and_land)` for vertical motion and `$9F22 (enemy_check_obstacle_ahead)` for obstacle response.
 
 `$9B88 (ordinary_enemy_apply_contact_damage)` is a common contact-damage/stun path. It obtains the attacker through `$3E`, subtracts attacker damage `$34` from health `$32`, and chooses:
 
@@ -932,7 +932,7 @@ The explicit same-type pair roles at boss helper `$17F2E (boss_link_same_type_pa
 
 ## Shared infrastructure and boss boundary
 
-Ordinary enemies and bosses share the 128-byte object format, fixed-point position/velocity, animation engine, collision routine `$AA22`, RNG `$104D8 (rng_draw)`, player interaction bytes, and some generic physics helpers. They do **not** share one tactical dispatcher.
+Ordinary enemies and bosses share the 128-byte object format, fixed-point position/velocity, animation engine, collision routine `$AA22 (resolve_object_contact)`, RNG `$104D8 (rng_draw)`, player interaction bytes, and some generic physics helpers. They do **not** share one tactical dispatcher.
 
 Boss type `$30` and types `$55-$58` use byte-sized primary/tactical states, bespoke target selectors, pair/link metadata and multi-object attack choreography. Their code is useful for understanding collision/grab conventions, but it is not evidence for ordinary-enemy archetypes.
 
@@ -951,7 +951,7 @@ Open questions:
 
 1. Separate Garcia types `$20-$23` and Haku-Ro types `$25/$2A` into exact behavioural variants.
 2. Name every behavior callback reachable from the eleven pointers at `$27032 (ordinary_enemy_animation_set_pointer_table)`.
-3. Fully enumerate collision result `d7` from `$AA22`.
+3. Fully enumerate collision result `d7` from `$AA22 (resolve_object_contact)`.
 4. Determine the later purpose, if any, of the initial-health mirror at object byte `$38`.
 5. Determine how often active states recalculate `$42` in 2P and whether particular archetypes deliberately retain a farther target.
 
@@ -1414,7 +1414,7 @@ then every object. `$16DA0 (antonio_state1_active_combat)` does, in order:
    `$17B0C (later_boss_face_and_measure)` (face the target; `+$50`/`+$52` absolute X and lane distance;
    `+$60`/`+$61` set when the target is left of / above him);
    `$17C36 (boss_apply_pending_damage)`; the held dispatch `$17CF2 (later_boss_held_dispatch)`; and the
-   contact test `$17B52 (later_boss_contact_test)` -> `$AA22` (see "Contact order" below);
+   contact test `$17B52 (later_boss_contact_test)` -> `$AA22 (resolve_object_contact)` (see "Contact order" below);
 2. boomerang upkeep (`$17206 (antonio_boomerang_link_or_spawn)`) while
    tactical is under 6;
 3. **the screen test.** `+$28` is his biased screen X, written by
@@ -1443,7 +1443,7 @@ then every object. `$16DA0 (antonio_state1_active_combat)` does, in order:
 
 | `+$67` | Handler | What it does |
 | ---: | --- | --- |
-| 0 | `$16F96` | near: back off 1.5 px/update for `$20` updates, lane from `$179AC`; far: stop, then the pose (`+$50 >= $C0`) or the lane approach |
+| 0 | `$16F96` | near: back off 1.5 px/update for `$20` updates, lane from `$179AC (later_boss_lane_step_from_delta)`; far: stop, then the pose (`+$50 >= $C0`) or the lane approach |
 | 1 | `$16FFE` | the pose (animation `$2C`) for `$1C` updates, then a 1 px/update walk -- toward from `$80` out, away inside it |
 | 2 | `$1703E` | that walk (`$28`), `$1C` updates, the lane wobbling by `$17A6E`; then the lane approach |
 | 3, 4 | `$1705C`, `$170B8` | stand (`$24`), then walk toward; reached only from tactical 2 with `+$50 < $14`, which "far" excludes |
@@ -1459,7 +1459,7 @@ the boomerang is a long-range move, and up close he has exactly two -- the
 dash, which is harmless idle animation 0 carrying him at 4 px/update into the
 kick gate, and the kick.
 
-**His lane (`$179AC`, tactical 0).** A target *below* him is kept 18-21 px
+**His lane (`$179AC (later_boss_lane_step_from_delta)`, tactical 0).** A target *below* him is kept 18-21 px
 down: 4 px/update away under 8, 1 px away at 8-17, still at 18-21, toward
 1/2/4 px at 22/26/32 and beyond. A target *above* him is rushed at 4
 px/update, through its lane. So he parks just outside his own below-gate, and
@@ -1489,7 +1489,7 @@ while walking, the walk animation's box, Axel 0..16, Adam 0..20, Blaze 0..19
 px ahead -- is tested against his body box *first*. On overlap with the
 player's `+$34` clear, `+$4C` clear and the two within 8 px of height it is
 grab code 3, and his attack box is not tested at all that update. All three
-axes compare inclusively (`$AB88`), so lanes 16 apart still touch. A walk
+axes compare inclusively (`$AB88 (test_axis_overlap_from_shape)`), so lanes 16 apart still touch. A walk
 that meets his leaning body -- 22 px out on frames 1-2, 40 px on frames 3-6
 -- therefore takes the hold through a kick already on its frames.
 
@@ -1593,7 +1593,7 @@ The "catch check" and "attached timer" names predate this decode; the
   (mirrored `$32`) runs records 0, 10, 12, 12, 12, 0 (1, 11, 13, 13, 13,
   0), so its **frame 2** launches it from 64 px in front of him at height
   48, about twelve updates into tactical 6.
-- **Out** (`$172B2 (antonio_boomerang_catch_check_a)`): first the `$AA22` contact test with the boomerang as
+- **Out** (`$172B2 (antonio_boomerang_catch_check_a)`): first the `$AA22 (resolve_object_contact)` contact test with the boomerang as
   the attacker (outcome 1: it hit a player, whose `+$7D` it sets; 2: a
   player's attack hit it, `$17286 (antonio_boomerang_reverse_and_return)`; 3: a walking box on it, whose grab code
   in `+$7C` it clears), then `0.4375` off its X speed and `0.1875` off its
@@ -1646,7 +1646,7 @@ single surviving Souther behave normally after its partner dies.
 #### Primary-state and tactical tables
 
 `$15E70 (souther_update)` runs the shared police-special entry (`$16AEC (later_boss_enter_police_special_reaction)`), the forced
-reaction consumer `$16A1A`, `$163B0`, and then dispatches through the word
+reaction consumer `$16A1A (later_boss_consume_forced_reaction)`, `$163B0 (souther_clear_attack_link_state)`, and then dispatches through the word
 table at `$15E84` via the shared `$15848`:
 
 | `+$30` | Handler | Role |
@@ -1926,7 +1926,7 @@ per two frames (`+$62` counts down every other frame in every lab trace), so
 the rates quoted per frame above are per *update*. The standoff's band-restore
 path moves him 1px per update on X and either mirrors the target's lane or
 drifts up 1px per update. The 4px-per-update rush, with its lane homing to
-18-21px above the target (`$179AC`), runs when the target faces away from him.
+18-21px above the target (`$179AC (later_boss_lane_step_from_delta)`), runs when the target faces away from him.
 
 **Grab beats hit.** `$AAA0 (resolve_enemy_player_contact)` tests the player's attack box `+$64` against the
 enemy's body box first, and when they overlap it returns without testing the
@@ -1941,10 +1941,10 @@ already swinging, as long as that box reaches his leaning body first.
 the same contact into a hit, and the hitstun `$163D0` buys is a state whose
 collision is not processed, so it cannot be grabbed from.
 
-**Holding him.** `$3266` takes a front hold `$60` when the two face each other
+**Holding him.** `$3266 (player_resolve_grab_contact)` takes a front hold `$60` when the two face each other
 and a back hold `$66` when the player is behind him. The held boss reacts
 through `$17CF2 (later_boss_held_dispatch)`, which indexes the table at `$17D10` by the holder's `+$7D`
-(set from the player action table at `$32F2`), and he never times the hold
+(set from the player action table at `$32F2 (player_hold_reaction_table)`), and he never times the hold
 out. Damage per move: knee 2 (`$6A`, `$6C`), third knee 3 plus the knockback
 that ends the hold (`$6E`), suplex 5, throw 4. `$17C36
 (boss_apply_pending_damage)` treats health ≤ 0 as lethal. The knee chain, the
@@ -1985,7 +1985,7 @@ raw slots with the game frame:
 - **The rush and the attack run end in a claw.** With the target facing away
   (`$1601A`) and with tactical `$01` (`$160D0 (souther_state1_close_lane)`,
   armed every `$78` updates of `+$7B` while the target's lane is `$10` or more)
-  he closes at 4px an update (`$48000`, 4.5, for role 2) and `$179AC` keeps the
+  he closes at 4px an update (`$48000`, 4.5, for role 2) and `$179AC (later_boss_lane_step_from_delta)` keeps the
   target 18-21px below him, which is inside the `$1C` below-side gate; the
   gate at the top of `$15EDA (souther_state1_active_combat)` fires as soon as
   `+$50` enters the target's X window. A holder faces the body in its hands,
@@ -2029,10 +2029,10 @@ The canonical Round 3 Abadede therefore has 32 health and hands 32 damage
 table at `$14466`; most handlers dispatch again on the substate `+$5B`
 (`$12B4C`), and every timer he runs is the word at `+$54`. His target is
 `+$5C` (`$129F8 (bespoke_boss_select_target)`: P1 in a one-player game, the player nearer on X with two).
-The linked type `$31` is a second sprite that follows him (`$1569C` copies
+The linked type `$31` is a second sprite that follows him (`$1569C (abadede_sync_linked_sprite)` copies
 his position with a per-pose offset) and has no collision of its own.
 `$13ED8 (bespoke_boss_collision_dispatch)` is Mr. X's; Abadede's own contact
-dispatch is `$154E0`. Everything runs once per object update, 30 Hz
+dispatch is `$154E0 (abadede_contact_reaction)`. Everything runs once per object update, 30 Hz
 (`$AD8E (update_objects_and_build_sprites)` waits a VBlank between the
 players and the objects).
 
@@ -2079,7 +2079,7 @@ players and the objects).
 
 #### What touches a player
 
-His update is the only place his contact is tested (`$154E0` calls `$AA22`),
+His update is the only place his contact is tested (`$154E0 (abadede_contact_reaction)` calls `$AA22 (resolve_object_contact)`),
 in states 1, 2, 3 and the charge's run and punch. The shake, the brake, the
 hold states, the knockdown and the getting-up test nothing: he can be
 neither hit nor grabbed there, and hurts no one. `$AAA0 (resolve_enemy_player_contact)` tests the player's
@@ -2128,7 +2128,7 @@ Substate 0 (`$1486E`) stands him 24 px in front of the holder (`+$3E`, the
 last collider), facing it, with `+$54` = 40. Substate 1 (`$148C8`) counts
 `+$54` down and dispatches the **holder's** `+$7D` through `$14992`. The
 holder writes its own `+$7D` from its action through the byte table at
-`$32F2` (`$32D8`): `$60` 1, `$66` 2, knees `$6A`/`$6C` 3, the third knee
+`$32F2 (player_hold_reaction_table)` (`$32D8 (player_write_hold_reaction)`): `$60` 1, `$66` 2, knees `$6A`/`$6C` 3, the third knee
 `$6E` 4, the throws `$62` 5 and `$64` (Blaze) 7, the suplex `$68` 6, the
 crossovers `$76`/`$80` 9.
 
@@ -2176,7 +2176,7 @@ Bongo uses the family-D table at `$174F4`: primary `$00` `$1750A` (init:
 ground `+$4C` from `+$18`, pair link, stats, animation set `$2EF62`), `$01`
 `$175BA` (approach), `$02` `$17682` (wind-up and charge), and the shared
 later-boss states `$03`-`$0A` (`$163D0`...`$16A60 (later_boss_police_special_reaction)`). `$174E0 (bongo_update)`
-runs `$16AEC (later_boss_enter_police_special_reaction)` and `$16A1A`, clears
+runs `$16AEC (later_boss_enter_police_special_reaction)` and `$16A1A (later_boss_consume_forced_reaction)`, clears
 his `+$34` -- he never deals damage with his own body -- and dispatches.
 Everything runs once per object update, 30 Hz (`$AD8E (update_objects_and_build_sprites)` waits a VBlank
 between the players and the objects).
@@ -2190,7 +2190,7 @@ thrown/knocked-down animations. His one weapon is the flame.
 
 #### State 1 (`$175BA`): face, approach, keep the lane gap
 
-After `$1753A (bongo_select_target)`, `$17AF6` (`+$50`/`+$52` absolute X and
+After `$1753A (bongo_select_target)`, `$17AF6 (later_boss_measure_x_and_side)` (`+$50`/`+$52` absolute X and
 lane distance, `+$60`/`+$61` target left/above -- it does *not* turn him),
 `$17C36 (boss_apply_pending_damage)`, `$17CF2 (later_boss_held_dispatch)` (the held dispatch) and the
 contact test `$17B52 (later_boss_contact_test)`:
@@ -2219,7 +2219,7 @@ The same preamble, then the tactical table at `$176AA`:
 |---:|---:|---|
 | 0 | `$176B4` | `+$68` from 5, drifting at state 1's last velocities; then animation `$28`, `+$68` = 5 |
 | 1 | `$176D6` | the same, then animation `$2C`, `+$68` = 10 |
-| 2 | `$176E6` | the same, then **the launch**: the flame (`$1781E`), sound `$B6`, X velocity 2 px/update on his facing, lane velocity `+$52 / (+$50 / 2)` in 8.8 (`divs.w`, so he would reach the target's lane as he reaches its X), capped at 6, toward the target's lane; animation `$04` |
+| 2 | `$176E6` | the same, then **the launch**: the flame (`$1781E (bongo_spawn_flame)`), sound `$B6`, X velocity 2 px/update on his facing, lane velocity `+$52 / (+$50 / 2)` in 8.8 (`divs.w`, so he would reach the target's lane as he reaches its X), capped at 6, toward the target's lane; animation `$04` |
 | 3 | `$17762` | the charge: both speeds + `$2000` (0.125) an update, capped at 6, the lane only while `+$52 >= 8`, each keeping its sign (`tst.w` of the high word) -- it never re-aims; with the target on his back side and `+$50 >= $50`, tactical 4 with `+$79` = `$14` |
 | 4 | `$177E2` | the run-out: 20 updates, or until his screen X `+$28` leaves `[$50, $1F0)`; then primary 1 facing the way he ran (`$177FE`), which the next update answers with the turn |
 
@@ -2227,9 +2227,9 @@ So the launch comes 21 updates after the `$B0` gate (1 + 5 + 5 + 10), and
 every charge ends past the target at a screen edge on a lane clamp -- the
 launch aims at the target's lane and the acceleration carries him past it.
 
-#### The flame (type `$97`, `$17858`)
+#### The flame (type `$97`, `$17858 (bongo_flame_update)`)
 
-`$1781E` takes the first free slot after his, copies his `+$4A` into its
+`$1781E (bongo_spawn_flame)` takes the first free slot after his, copies his `+$4A` into its
 `+$34` (32 on Normal), links both `+$6E` through `$17238
 (boss_link_child_object)` (flags `+$01` = `$0C`: animated, never culled)
 and starts animation `$38`. `$178D0` places it 20 px ahead of him on his
@@ -2237,7 +2237,7 @@ facing, his lane + 4, and `$33`/`$34` above his height (his frame 0 or
 not). Its update:
 
 - state 0, the **ignition** (`$38`/`$3A`: boxes `$9D`, `$9F`, `$A1`, four
-  updates each): the contact test (`$AA22`), then -- on its own `+$0D` == 1
+  updates each): the contact test (`$AA22 (resolve_object_contact)`), then -- on its own `+$0D` == 1
   and frame 2 -- animation `$3C`/`$3E` (box `$A3`/`$A2`, one update a frame)
   and state 1; placed on him either way, **whatever state he is in**;
 - state 1: the contact test, then gone (`$171F6`) the first update he is out
@@ -2683,7 +2683,7 @@ flowchart LR
 
 Key interactions with the shared framework:
 
-- **Forced reactions** `$16A1A`: if `$FFFA53 (boss_forced_reaction_flags)` is set, a living twin outside
+- **Forced reactions** `$16A1A (later_boss_consume_forced_reaction)`: if `$FFFA53 (boss_forced_reaction_flags)` is set, a living twin outside
   states `$00` and `$03`–`$09` is forced into the reaction path (3 px an
   update back, `+$24` = -5). `$9494` sets it to 3 when a player respawns
   (`$1E0E (player_spawn_or_respawn)`), so a respawn knocks both twins down. Pair role
@@ -2947,24 +2947,24 @@ lockstep):
 
 - The approach (state 9) walks at a point 32 px short of the target on its
   lane, re-aimed every update, at 4.5 px an update; within 4 px of it he turns
-  to `$DBCC` without striking. His jab triggers when box `$12` (0-40 px ahead)
+  to `$DBCC (ordinary_enemy_blocked_state)` without striking. His jab triggers when box `$12` (0-40 px ahead)
   meets the target's cached body `+$70`.
-- **Off screen the punch is refused** (`$92AC`: screen X outside
-  `[$80, $1C0)` sends it to `$DBCC`). A target pressed against the camera's
+- **Off screen the punch is refused** (`$92AC (enemy_cancel_attack_if_offscreen)`: screen X outside
+  `[$80, $1C0)` sends it to `$DBCC (ordinary_enemy_blocked_state)`). A target pressed against the camera's
   right clamp (cam + `$120`) puts the point of a Garcia coming from the right
   at screen X `$1C0`: from that side he never strikes. One step off the clamp,
   and at the left clamp (point at `$80`), he does.
 - The punch has four live stages -- the jab on frames 0 and 3, `$3E` on 7-9,
   four updates a frame -- and a player's hit reaction is shorter than the gap
   between them: caught inside it, a player takes two to four in a row.
-- A thrown body goes on the list at `$FFFB24` (`$95CE`; `$95E8` takes it off
+- A thrown body goes on the list at `$FFFB24 (enemy_attacker_list)` (`$95CE (register_enemy_attacker)`; `$95E8 (unregister_enemy_attacker)` takes it off
   on landing), which every ordinary enemy tests first (`$AA34`): a thrown Mr.
   X knocks a Garcia down, and a thrown Garcia knocks Mr. X down. A held Mr. X
   struck that way (codes 2 and 5 in `$13598 (mr_x_held_read_holder)`) loses a
   point and is knocked down out of the hold.
 
 The player side matters as much: after getting up from a knockdown, and on a
-respawn, `$4F62` sets `+$4B` bit 1 with 48 updates in `+$49` (`$4F4C` counts
+respawn, `$4F62 (player_start_respawn_timer)` sets `+$4B` bit 1 with 48 updates in `+$49` (`$4F4C (player_tick_respawn_timer)` counts
 it down), and `$4140 (player_cache_boxes)` caches no body while it runs --
 nothing lands on the player then, and no Garcia's jab trigger fires on it.
 
@@ -3064,7 +3064,7 @@ registers combat objects; the engine advances the campaign.
   animation/contact synchronization are proved, while whether every state is a
   visible projectile, hitbox, or afterimage needs framebuffer/VRAM tracing.
 - Exact semantic names for the several collision-result values returned in
-  `d7` by `$AA22`/the older collision framework.
+  `d7` by `$AA22 (resolve_object_contact)`/the older collision framework.
 
 #### Open questions
 
@@ -3140,3 +3140,84 @@ FFF50F, boss_pair_display_variant, "90% - B - Late-phase boss pair/display varia
 FFFA53, boss_forced_reaction_flags, "95% - B - Coordination/forced-reaction bitfield used by paired bosses and Abadede multi-instance logic"
 FFFA77, final_boss_presentation_active, "95% - B - Set by Mr. X final encounter initialization; selects final-stage branch in stage_clear_monitor"
 ```
+
+## Shared enemy helpers identified from the call map
+
+Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidence and exact contract of each name are in `code-analysis/labels.csv`.
+
+| Routine | What it does |
+| --- | --- |
+| `$7EA8 (find_free_object_slot_c900)` | First free slot of the 8 from $FFC900 in a6; Z clear when none |
+| `$7EBE (find_free_object_slot_d100)` | First free slot of the 18 from $FFD100 in a6; Z clear when none |
+| `$7EEA (find_free_object_slot_cd00)` | First free slot of the 8 from $FFCD00 in a6; Z clear when none |
+| `$7E92 (find_free_object_slot_down_from_d080)` | First free slot of 48 going down from $FFD080 in a6; Z clear when none |
+| `$B19A (object_set_animation_and_tile_base)` | Stores a1 in +$04 and d1 in +$0E and falls into the animation start at $B1A2 |
+| `$B1D6 (object_init_animation_from_zero)` | Clears d0 and branches to init_object_animation_state_and_advance |
+| `$B1DA (object_init_animation_branch)` | Branch to init_object_animation_state_and_advance with the caller d0 |
+| `$B17E (clear_object_slot_a0)` | Fills the 128-byte object at a0 with zero |
+| `$AB88 (test_axis_overlap_from_shape)` | Tests one axis of a shape record against the box at a2: inclusive, d7 = 1 on overlap |
+| `$AD18 (probe_floor_at_x_offset)` | probe_floor_at_object_offset with no lane or height offset; d1 is the X offset |
+| `$AA22 (resolve_object_contact)` | Runs the contact test $AA34; on a hit writes +$3E here and +$7E, +$7C on the other object; Z set when there is none |
+| `$A9BA (ordinary_enemy_contact_dispatch)` | resolve_object_contact, then the table at $A9C8 by contact result |
+| `$ABF8 (test_attacker_shape_box_overlap)` | Box overlap test used by resolve_enemy_registered_attacker_contact |
+| `$AD04 (test_target_body_box_overlap)` | Tests a shape against the +$70 body box of the target in +$42; d7 = 0 when the box is empty |
+| `$A56C (object_update_screen_position)` | Writes +$28 and +$2C from world position, cam_x and camera_y unless +$01 bit 1 is set |
+| `$9E4C (enemy_face_target)` | Sets +$09 bit 1 from the X of the target in +$42 |
+| `$96C0 (enemy_set_action_facing_target)` | Sets the facing in d0 from the target in +$42, stores it in +$08 and starts the animation; flags from the facing bit |
+| `$969E (enemy_set_action_facing_attacker)` | As enemy_set_action_facing_target for the attacker in +$3E, following a player holder or a weapon owner |
+| `$9842 (ordinary_enemy_vector_abs_deltas)` | Reduces X and lane deltas to absolute values with sign bits in d2 for ordinary_enemy_vector_to_velocity |
+| `$92C8 (ordinary_enemy_floor_contact_gate)` | Floor probe; returns when clear and otherwise goes to the wall-contact path, stepping X back on a result of 3 |
+| `$92D0 (ordinary_enemy_floor_contact_reaction)` | The contact part of ordinary_enemy_floor_contact_gate, without the probe |
+| `$973E (enemy_apply_gravity_and_land)` | Adds $12000 to +$24 up to $100000, moves +$18, handles pits and the landing, deregisters and enters state $0600 at the bottom |
+| `$9654 (enemy_aim_at_target_offset)` | Stores the walk goal in +$60/+$62 from the target and offsets +$66/+$68, reflected at the lane limits |
+| `$9648 (enemy_aim_at_target_lane)` | Stores the walk goal from the target lane and the +$66 X offset |
+| `$997E (enemy_play_death_sound_once)` | Sets +$48 bit 4 and plays the type and variant death sound the first time |
+| `$95CE (register_enemy_attacker)` | Inserts a0 in the five-word list enemy_attacker_list and counts it; d0 = 0 when full |
+| `$95E8 (unregister_enemy_attacker)` | Removes a0 from enemy_attacker_list and uncounts it |
+| `$9F22 (enemy_check_obstacle_ahead)` | Round 7 deck version: probes the floor ahead and otherwise runs the obstacle tests from $9F56 |
+| `$92AC (enemy_cancel_attack_if_offscreen)` | With screen X outside $80-$1C0 enters state $0700; d7 = 0 otherwise |
+| `$9328 (copy_position_to_linked_object)` | Copies +$10, +$14 and +$18 words to a1 |
+| `$100A4 (object_integrate_xy_velocity)` | Adds +$1C and +$20 to +$10 and +$14 |
+| `$93B4 (ordinary_enemy_init_accounting_selector)` | Writes +$39 from ordinary_enemy_accounting_selector_table by type and variant |
+| `$9406 (ordinary_enemy_init_art_base)` | Finds the resident art family in pal_correct and builds the tile word from it |
+| `$945A (ordinary_enemy_init_spawn_offsets)` | Fills the spawn metadata from +$41 and the approach offsets +$66/+$68 by type |
+| `$F7C0 (ordinary_enemy_special_lunge_contact)` | ordinary_enemy_contact_dispatch for the lunge; a negative result clears +$52 and returns d7 = -1 |
+| `$F482 (jack_abort_retreat_if_target_near)` | With the target within 64 px on X enters state $0700 and returns d7 = -1 |
+| `$DBCC (ordinary_enemy_blocked_state)` | Primary state shared by the ordinary types for a blocked enemy |
+| `$966 (select_deferred_spawn_family_art)` | Checks that an ordinary-enemy spawn record has its art family resident, or claims a free residency slot |
+| `$A66 (select_deferred_spawn_variant_art)` | Checks that an ordinary-enemy spawn record has its art variant resident through the list at $FFFA6A |
+
+## Boss helpers identified from the call map
+
+Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidence and exact contract of each name are in `code-analysis/labels.csv`.
+
+| Routine | What it does |
+| --- | --- |
+| `$16A1A (later_boss_consume_forced_reaction)` | Consumes boss_forced_reaction_flags for this boss in the update of types $55-$58 and leaves its caller when the primary state permits the reaction |
+| `$163B0 (souther_clear_attack_link_state)` | For primaries from 3 clears +$6D, and +$67 with +$01 bit 2 set outside primary 9 |
+| `$162C4 (souther_measure_target_side_and_lane)` | Measures X distance, whether the target faces him and absolute lane distance into d1, d5 and d3 |
+| `$17AF6 (later_boss_measure_x_and_side)` | Writes absolute X distance to +$50 and the side to +$60, then later_boss_measure_lane |
+| `$179AC (later_boss_lane_step_from_delta)` | Picks the lane velocity step from +$52 and +$61 |
+| `$1781E (bongo_spawn_flame)` | Takes the first free slot after his, creates the type $97 flame and links it |
+| `$17858 (bongo_flame_update)` | Type $97: contact test, follows the parent animation and advances to the end state |
+| `$16C60 (souther_claw_type98_update)` | Type $98: deleted when the parent in +$6E leaves primary 2 |
+| `$16C24 (souther_afterimage_type99_update)` | Type $99: counts +$78 down and deletes itself at 0 |
+| `$154E0 (abadede_contact_reaction)` | Abadede contact test: stores a player attacker in +$5C and dispatches by contact result through the table at $15504 |
+| `$1569C (abadede_sync_linked_sprite)` | Copies his position to the type $31 sprite in +$50 plus the d0 offset of table $35054 |
+| `$156E0 (abadede_sync_facing_from_velocity)` | Sets +$09 bit 1 on him and the linked sprite from the X velocity sign |
+| `$1573C (abadede_init_linked_sprite_pose)` | Sets his and the linked sprite animation to their base pose with tile word $225C |
+| `$1588A (later_boss_start_action_mirrored)` | Sets the facing bit from +$60 and starts the type-indexed animation set |
+| `$15898 (later_boss_restart_current_action)` | Restarts +$08 from the animation set table indexed by type minus $55 |
+| `$166D4 (boss_death_sound_and_stop_clock)` | Plays the type death sound and raises stop_clock for the last boss of a section |
+| `$B36C (abadede_update_trampoline)` | Type $30: jmp abadede_update |
+| `$B372 (abadede_linked_sprite_update_trampoline)` | Type $31: jmp $15794 |
+| `$B378 (mr_x_boss_update_trampoline)` | Type $35: jmp mr_x_boss_update |
+| `$B37E (mr_x_office_controller_update_trampoline)` | Type $33: jmp mr_x_office_controller_update |
+| `$B384 (mr_x_office_scene_type34_trampoline)` | Type $34: jmp $12F14 |
+| `$B38A (mr_x_bullet_update_trampoline)` | Type $36: jmp mr_x_bullet_update |
+| `$B390 (mr_x_shell_update_trampoline)` | Type $37: jmp mr_x_shell_update |
+| `$B396 (mr_x_type38_update_trampoline)` | Type $38: jmp $12FB4 |
+| `$B39C (abadede_variant_type39_trampoline)` | Type $39: jmp $14318 |
+| `$B3A2 (souther_update_trampoline)` | Type $55: jmp souther_update |
+| `$B3AE (bongo_update_trampoline)` | Type $57: jmp bongo_update |
+| `$B3B4 (onihime_yasha_update_trampoline)` | Type $58: jmp onihime_yasha_update |

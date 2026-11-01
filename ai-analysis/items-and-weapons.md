@@ -38,14 +38,14 @@ The global object dispatcher at `$B236 (object_type_update_jt)` indexes a word t
 | `$11` | `$6AF4 (phone_booth_dispatcher)` | Telephone booth; shatters into up to ten type-$11 glass/booth fragments. |
 | `$19` | `$6C84 (breakable_type19_dispatcher)` | Second breakable prop family; launches/bounces when struck, then despawns. |
 | `$1E` | `$61BE (bottle_shard_dispatcher)` | Bottle-shard/debris projectile emitted by type `$09`. |
-| `$3F` | `$68E2` | 3,000-point pickup. |
-| `$40` | `$6904` | 10,000-point pickup. |
+| `$3F` | `$68E2 (points_3000_pickup_dispatcher)` | 3,000-point pickup. |
+| `$40` | `$6904 (points_10000_pickup_dispatcher)` | 10,000-point pickup. |
 | `$47` | `$6988 (full_health_pickup_dispatcher)` | Full-health food pickup (`+$50`, 80 health; visually the large food). |
 | `$48` | `$67A4 (wave_go_prompt_dispatcher)` | Flashing wave-advance prompt spawned after a camera boundary opens; not a collectible pickup. |
 | `$49` | `$6862 (player_contact_effect_dispatcher)` | Short-lived player/contact visual effect spawned by attack/collision helpers; not a collectible pickup. |
 | `$4B` | `$6926 (small_health_pickup_dispatcher)` | Small-health food pickup (`+$14`, 20 health; visually the apple). |
-| `$4C` | `$6948` | Extra-life pickup. |
-| `$4F` | `$6968` | Extra police-special pickup. |
+| `$4C` | `$6948 (extra_life_pickup_dispatcher)` | Extra-life pickup. |
+| `$4F` | `$6968 (extra_special_pickup_dispatcher)` | Extra police-special pickup. |
 
 The six pickup handlers are tiny wrappers. Each chooses an item-effect index in object `+$50`, installs its art/animation pointer, and then enters the shared pickup logic at `$699E`.
 The adjacent type `$48/$49` handlers share the same object-dispatch region but
@@ -82,7 +82,7 @@ Consumable pickups use the ordinary 128-byte object structure but only a small s
 | Offset | Size | Meaning |
 |---:|---:|---|
 | `+$00` | byte | Object type, which determines the visible pickup wrapper. |
-| `+$01` | byte | Visibility/activity flags; level-dependent bits are ORed by `$6AA6`. |
+| `+$01` | byte | Visibility/activity flags; level-dependent bits are ORed by `$6AA6 (object_apply_level_flags)`. |
 | `+$10`, `+$14`, `+$18` | word/fixed pair | World X, ground-plane Y, and height. |
 | `+$24` | long | Vertical velocity while an item is falling into place. |
 | `+$30` | byte | Pickup object state. |
@@ -109,7 +109,7 @@ handling. `$3028 (player_normal_attack_input)` and the adjacent held-weapon
 attack path call `$3136 (find_close_interaction_target)` before they commit to
 an ordinary punch or weapon swing. If the search succeeds, it consumes the
 button action and sends the player to action family `$28`, preserving the
-current facing bit through `$2DE6`.
+current facing bit through `$2DE6 (player_set_action_faced_weapon_adjust)`.
 
 `$3136 (find_close_interaction_target)` first refuses to run when the player is
 already in action family `$28`; this prevents the pickup animation from
@@ -180,7 +180,7 @@ object-table entry. Its next dispatcher pass reaches the shared hold/update path
 at `$5E2E (update_held_weapon)`, follows the holder pointer in weapon `+$52`,
 checks that the player's `+$5E` still points back to the same object, and then
 places the sprite from the character/action attachment tables. The player-side
-state helper at `$2E32` also checks action families `$28` and `$30`; when
+state helper at `$2E32 (player_weapon_pickup_animation_adjust)` also checks action families `$28` and `$30`; when
 player `+$60` is nonzero it applies a weapon-specific animation adjustment from
 the small table at `$2E5A`. This is why picking up a knife, bottle, bat, pipe,
 or pepper spray looks like a dedicated grab animation even though the logical
@@ -216,7 +216,7 @@ Effect 3 at `$6A2A (apply_extra_special_pickup)` deliberately points `a6` one by
 
 ### Score items
 
-Effects 4 and 5 select an end pointer at `$FFFF0C` for P1 or `$FFFF14` for P2 and call the three-byte packed-BCD score adder at `$10DA6 (add_bcd_score_value)`:
+Effects 4 and 5 select an end pointer at `$FFFF0C (score_p1_end)` for P1 or `$FFFF14 (score_p2_end)` for P2 and call the three-byte packed-BCD score adder at `$10DA6 (add_bcd_score_value)`:
 
 - effect 4 uses table index `$0E`, packed value `$00003000`: 3,000 points;
 - effect 5 uses table index `$0A`, packed value `$00010000`: 10,000 points.
@@ -319,7 +319,7 @@ not rewrite these weapon constants.
 ### Damage application law
 
 While damaging, a weapon is registered in the short attacker list at
-`$FFFB22` (`$95CE` insert / `$95E8` remove). Ordinary enemies call `$AA22`,
+`$FFFB22 (enemy_attacker_count)` (`$95CE (register_enemy_attacker)` insert / `$95E8 (unregister_enemy_attacker)` remove). Ordinary enemies call `$AA22 (resolve_object_contact)`,
 resolve box overlap, then:
 
 ```c
@@ -401,7 +401,7 @@ what matters.
 | Quantity | Value |
 | --- | ---: |
 | Hold pose (pipe) | \(w_x-p_x=-3\), \(w_z-p_z=-61\) |
-| Hit frames (in `$FFFB22`) | player action `$48` |
+| Hit frames (in `$FFFB22 (enemy_attacker_count)`) | player action `$48` |
 | Max origin \(\lvert w_x-p_x\rvert\) | **36** |
 | At peak | \(w_z-p_z=-42\); damage 4 |
 
@@ -420,8 +420,8 @@ On ground impact in `$5D34`: \(v_x \leftarrow -v_x/4\) (live: \(-16\rightarrow+4
 ### Melee reach (bat / pipe)
 
 Bat and pipe remain linked via `$5E2E (update_held_weapon)`. On attachment
-frames whose collision enable bit is set, the weapon registers in `$FFFB22`,
-runs `$AA22`, and deals **4**. Attach tables: `$5FC8` (player), `$60A0` (enemy).
+frames whose collision enable bit is set, the weapon registers in `$FFFB22 (enemy_attacker_count)`,
+runs `$AA22 (resolve_object_contact)`, and deals **4**. Attach tables: `$5FC8` (player), `$60A0` (enemy).
 
 Collision shapes are 5-byte records at `$1A68E`. For shape id with bytes
 \((b_0,b_1,\ldots)\):
@@ -448,7 +448,7 @@ per frame (`$61E0`). Treated as debris (not re-collectable weapons).
 | 1 | −7 | +4 |
 | 2 | −7 | −4 |
 
-**Shards deal no damage.** Type `$1E` never writes `+$34`, never calls `$95CE`
+**Shards deal no damage.** Type `$1E` never writes `+$34`, never calls `$95CE (register_enemy_attacker)`
 (attacker-list registration), and only runs gravity + ground-delete
 (`$61CA`/`$61E0`). Confirmed in ROM and by play observation.
 
@@ -604,8 +604,8 @@ handled by shared routine `$A43E` with a **160-frame** (`$A0`) timer on enemy
 ## Collision, damage, and credit
 
 Weapon objects participate in the shared object collision routines at `$97E6 (object_on_screen_margin_test)`
-(on-screen gate) and `$AA22` / `$ABA4 (resolve_enemy_registered_attacker_contact)` (shape AABB via `$1A68E`). Damaging
-phases register the weapon in `$FFFB22` through `$95CE`. Their `+$34` field is
+(on-screen gate) and `$AA22 (resolve_object_contact)` / `$ABA4 (resolve_enemy_registered_attacker_contact)` (shape AABB via `$1A68E`). Damaging
+phases register the weapon in `$FFFB22 (enemy_attacker_count)` through `$95CE (register_enemy_attacker)`. Their `+$34` field is
 the damage offered to a struck player/enemy, just as player attack frames expose
 damage in player `+$34`. The common handlers use collision result `+$7C` and the
 collided object returned in `a1` to:
@@ -660,7 +660,7 @@ and the decoded ROM data narrows where the missing producer can be sought.
 
 ## Spawning, despawning, and level behavior
 
-Items and weapons enter through the ordinary level object stream and share the global 128-byte object pool. Initializers call `$6AA6`, which ORs level-specific flag bits into object `+$01`; this accounts for round-dependent orientation/priority behavior without separate item classes.
+Items and weapons enter through the ordinary level object stream and share the global 128-byte object pool. Initializers call `$6AA6 (object_apply_level_flags)`, which ORs level-specific flag bits into object `+$01`; this accounts for round-dependent orientation/priority behavior without separate item classes.
 
 The common off-screen cleanup at `$6A70 (delete_pickup_behind_camera)` compares object X to the camera. In ordinary rounds, objects sufficiently behind the camera are deleted. Round 8 reverses/changes the boundary because its scrolling direction and arena behavior differ. Weapon-specific falling states also consume durability and delete objects that cannot settle, have exhausted their wear state, or reach a terminal timer.
 
@@ -733,9 +733,9 @@ void apply_pickup_effect(Player *p, unsigned effect) {
 | `$6256 (pepper_spray_weapon_dispatcher)` | Type-$0C pepper dispatcher; damage 2 at `$627A`. |
 | `$62DA (throw_pepper_spray)` | Pepper launch: ±48 X / +16 Z, \(v_x=\pm 6\), \(v_z=-3\). |
 | `$6312` / `$6328 (begin_pepper_smoke_emission)` / `$6372 (emit_pepper_smoke_sequence)` | Pepper flight gravity `+$A800`, smoke emission sequence. |
-| `$95CE` / `$95E8` | Register/unregister weapon in attacker list `$FFFB22`. |
+| `$95CE (register_enemy_attacker)` / `$95E8 (unregister_enemy_attacker)` | Register/unregister weapon in attacker list `$FFFB22 (enemy_attacker_count)`. |
 | `$9B88 (ordinary_enemy_apply_contact_damage)` | `health -= attacker[+$34]`; pepper branch `$9C1E` → state `$0400`. |
-| `$AA22` / `$ABA4 (resolve_enemy_registered_attacker_contact)` / `$1A68E` | Attacker-list collision and shape AABB table. |
+| `$AA22 (resolve_object_contact)` / `$ABA4 (resolve_enemy_registered_attacker_contact)` / `$1A68E` | Attacker-list collision and shape AABB table. |
 | `$26FCE (ordinary_enemy_combat_value_table)` | Enemy HP/damage by type×variant for hits-to-kill. |
 | `$67A4 (wave_go_prompt_dispatcher)` | Type-$48 screen-space prompt flashed after a wave camera boundary opens. |
 | `$6862 (player_contact_effect_dispatcher)` | Type-$49 short-lived player/contact visual effect emitted by player attack/collision helpers. |
@@ -781,9 +781,9 @@ dispatcher and remains correctly listed below.
 | Same B → knife melee `$46` / throw `$44` | **Closed** | `$3084 (player_held_object_attack_input)` front cone `$90`; `$21E6 (player_release_thrown_weapon)` only on `$44` |
 | Launch \(\Delta x=\pm48\), \(\Delta z=+16\) vs **hold** | **Closed** | ROM + natural Axel knife |
 | Knife \(v_x=\pm16\), flight ≥160 px sample | **Closed** | Natural throw, level \(Z=115\) |
-| Pipe/bat origin reach 36 px (Axel) | **Closed** | Natural pipe equip + swings in `$FFFB22` |
+| Pipe/bat origin reach 36 px (Axel) | **Closed** | Natural pipe equip + swings in `$FFFB22 (enemy_attacker_count)` |
 | Pepper immobilize 160 frames | **Closed** | `$A43E` timer `$A0` |
-| Shards non-damaging | **Closed** | `$61BE (bottle_shard_dispatcher)` no `+$34` / no `$95CE` |
+| Shards non-damaging | **Closed** | `$61BE (bottle_shard_dispatcher)` no `+$34` / no `$95CE (register_enemy_attacker)` |
 | `+$51` ∈ {0,1,2,3} | **Closed** | Static writers |
 | Adam/Blaze long-weapon reach | Deferred | Unmeasured; not required for base model |
 | Hang-time per map cell | Deferred | Launch law fixed; `$AD2A (probe_floor_at_object)` floor varies |
@@ -791,3 +791,45 @@ dispatcher and remains correctly listed below.
 
 Companion matrices and formulas:
 [weapons-range-and-damage.md](weapons-range-and-damage.md).
+
+## Object routines identified from the call map
+
+Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidence and exact contract of each name are in `code-analysis/labels.csv`.
+
+| Routine | What it does |
+| --- | --- |
+| `$68E2 (points_3000_pickup_dispatcher)` | Type $3F: 3,000-point pickup wrapper |
+| `$6904 (points_10000_pickup_dispatcher)` | Type $40: 10,000-point pickup wrapper |
+| `$6948 (extra_life_pickup_dispatcher)` | Type $4C: extra-life pickup wrapper |
+| `$6968 (extra_special_pickup_dispatcher)` | Type $4F: extra police-special pickup wrapper |
+| `$6A66 (delete_unheld_object_behind_camera)` | Unless +$51 is 1 (held) goes to delete_pickup_behind_camera; the weapon dispatchers end here |
+| `$6AD0 (object_contact_knockback_direction)` | Runs the contact test and on a hit gives d6 0 or 2 from the velocity sign, or from the other object facing when not moving |
+| `$6A60 (play_extra_special_pickup_sound)` | Plays sound $C7 through object_queue_sound_trampoline |
+| `$6A98 (object_set_flag_bit4)` | Sets +$01 bit 4 |
+| `$6AA6 (object_apply_level_flags)` | ORs the level-indexed byte table $6AB4 into +$01 |
+| `$6ABC (object_start_animation_with_flag_bit6)` | Sets +$01 bit 6 and starts the animation through object_init_animation_from_zero |
+| `$67F8 (wave_go_prompt_state_init)` | Type $48 first state: plays $CF, loads the frame timer, clears +$01 bit 0 and advances the state |
+| `$7E54 (spawn_object_from_drop_selector)` | Consumes +$41 and spawns the type from table $7E85 at this object position, taking a slot from $CD00 or going down from $D080 |
+| `$6E2A (object_type12_dispatcher)` | Type $12: state table $6E3E; a police special forces state 3 |
+| `$6DDC (object_type13_dispatcher)` | Type $13: sets +$01 bit 7, state table $6DEA |
+| `$6D40 (object_type14_dispatcher)` | Type $14: state table $6D48 |
+| `$760C (object_type15_dispatcher)` | Type $15: state table $7618, deleted behind the camera |
+| `$7214 (object_type16_dispatcher)` | Type $16: sets +$01 bit 7, state table $7226, deleted behind the camera |
+| `$6F7C (object_type17_dispatcher)` | Type $17: state table $6F8C; a police special takes the $706E path |
+| `$70C4 (object_type18_dispatcher)` | Type $18: state table $70D0, deleted behind the camera |
+| `$7370 (object_type1b_dispatcher)` | Type $1B: state table $737C, deleted behind the camera |
+| `$7448 (object_type1c_dispatcher)` | Type $1C: state table $7454, deleted behind the camera |
+| `$746A (object_type1d_dispatcher)` | Type $1D: state table $7476, deleted behind the camera |
+| `$7CBC (object_type1f_dispatcher)` | Type $1F: state table $7CC8, deleted behind the camera |
+| `$673C (demo_mode_type3e_dispatcher)` | Type $3E: state table $6744; created by load_demo_mode_scene_art |
+| `$791A (object_type41_dispatcher)` | Type $41: state table $7926, deleted behind the camera |
+| `$7A6C (object_type42_dispatcher)` | Type $42: state table $7A7C, skipped during a police special |
+| `$7C70 (object_type43_dispatcher)` | Type $43: state table $7C78 |
+| `$7644 (object_type44_dispatcher)` | Type $44: state table $764C |
+| `$7662 (final_section_type46_dispatcher)` | Type $46: state table $766A; spawned once by final_section_player_script_update |
+| `$6E9E (object_type4d_dispatcher)` | Type $4D: state table $6EA6 |
+| `$71DC (round3_controller_type4e_dispatcher)` | Type $4E: sets +$01 bit 7, state table $71EA; two of them are created in level index 2 |
+| `$7D4A (round7_fixed_type50_dispatcher)` | Type $50: state table $7D52; seeded in level index 6 |
+| `$7D7A (round7_fixed_type51_dispatcher)` | Type $51: state table $7D82; seeded in level index 6 |
+| `$7DF0 (round7_fixed_type52_dispatcher)` | Type $52: state table $7DF8; seeded in level index 6 |
+| `$7E20 (round7_fixed_type53_dispatcher)` | Type $53: state table $7E28; seeded in level index 6 |

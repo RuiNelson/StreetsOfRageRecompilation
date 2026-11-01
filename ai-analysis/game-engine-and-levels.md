@@ -197,10 +197,10 @@ The important calls and their proven effects are:
 | Address | Role |
 |---:|---|
 | `$19848 (load_level_graphics_maps_and_camera)` | clear camera RAM; load/decompress per-round plane data and tile maps; initialize both camera-plane objects |
-| `$110AC` | load round/HUD resources and construct HUD tile data |
+| `$110AC (load_round_hud_resources)` | load round/HUD resources and construct HUD tile data |
 | `$1119E (init_animated_palette_sequences)` | build per-round animated-palette descriptors at `$FFEE00 (animated_palette_descriptors)` |
-| `$10E42` | load/remap HUD character art (skipped in demo mode) |
-| `$11564` | load additional HUD/display assets |
+| `$10E42 (load_status_screen_graphics)` | load/remap HUD character art (skipped in demo mode) |
+| `$11564 (load_status_palette_and_art)` | load additional HUD/display assets |
 | `$E5C (start_round_setup)` | unpack ELC data, select difficulty, seed the spawn stream and initial objects |
 
 ### 3.2 Round banner state machine
@@ -752,7 +752,7 @@ special global `BOSS` game state.
 
 `$502C (end_level_player_exit_update)`, called from player logic, then removes
 ordinary control and walks each active player to the stage's exit target. Once
-the player reaches the target, it waits on `$FFFA74`, sets `$FFFA71 (fade_out_flag)`, and
+the player reaches the target, it waits on `$FFFA74 (end_of_level_exit_timer)`, sets `$FFFA71 (fade_out_flag)`, and
 initializes `$FFFB0C (palette_fade_counter)` to `$40`.
 
 After the fade, `$108CC (ingame_finish_fade)` writes `game_state = $18` in normal campaign
@@ -936,3 +936,148 @@ camera_state, camera_x, min_x, max_x, elc_spawn_stream_cursor
 
 That small trace would validate the static state graph without requiring a full
 instruction log.
+
+## Routines identified from the call map
+
+Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidence and exact contract of each name are in `code-analysis/labels.csv`.
+
+| Routine | What it does |
+| --- | --- |
+| `$188BE (round_clear_player_tally_dispatch)` | From round_clear_substate $14 to $51, outside level index 7, dispatches on player_mode through the table at $188EC |
+| `$1260E (build_top10_score_screen)` | Loads the screen, starts music $8D and draws the ten entries with colour from each entry flag |
+| `$12730 (high_score_check_player_entry)` | Compares a player score with the 10th entry and marks the name entry in +$4B bit 7 when it beats it |
+
+## Object type map
+
+`$B236 (object_type_update_jt)` holds one word per type. `$B36A` is a plain `rts` and marks an unused type; those rows are left out. Types `$96`-`$99` are words whose handlers are in bank `$1xxxx`: the call map observed `$17858 (bongo_flame_update)`, `$16C60 (souther_claw_type98_update)` and `$16C24 (souther_afterimage_type99_update)` for `$97`-`$99`, and the table's low words match. A name of the form `object_typeNN_dispatcher` means the type is certain and its visual identity is not.
+
+| Type | Handler |
+| --- | --- |
+| `$01` | `$1C44 (update_player_object)` |
+| `$04` | `$8E2C` |
+| `$05` | `$597C (police_vehicle_dispatcher)` |
+| `$06` | `$18D4 (char_select_cursor_dispatcher)` |
+| `$07` | `$1A12 (char_select_character_preview_dispatcher)` |
+| `$08` | `$5C1E (knife_weapon_dispatcher)` |
+| `$09` | `$6114 (bottle_weapon_dispatcher)` |
+| `$0A` | `$61F6 (baseball_bat_weapon_dispatcher)` |
+| `$0B` | `$6226 (steel_pipe_weapon_dispatcher)` |
+| `$0C` | `$6256 (pepper_spray_weapon_dispatcher)` |
+| `$0D` | `$63F6 (p2_police_bombardment_dispatcher)` |
+| `$0E` | `$654E (p1_police_blast_dispatcher)` |
+| `$0F` | `$5218 (continue_object_dispatcher)` |
+| `$10` | `$56E6 (high_score_name_entry_dispatcher)` |
+| `$11` | `$6AF4 (phone_booth_dispatcher)` |
+| `$12` | `$6E2A (object_type12_dispatcher)` |
+| `$13` | `$6DDC (object_type13_dispatcher)` |
+| `$14` | `$6D40 (object_type14_dispatcher)` |
+| `$15` | `$760C (object_type15_dispatcher)` |
+| `$16` | `$7214 (object_type16_dispatcher)` |
+| `$17` | `$6F7C (object_type17_dispatcher)` |
+| `$18` | `$70C4 (object_type18_dispatcher)` |
+| `$19` | `$6C84 (breakable_type19_dispatcher)` |
+| `$1A` | `$77B6` |
+| `$1B` | `$7370 (object_type1b_dispatcher)` |
+| `$1C` | `$7448 (object_type1c_dispatcher)` |
+| `$1D` | `$746A (object_type1d_dispatcher)` |
+| `$1E` | `$61BE (bottle_shard_dispatcher)` |
+| `$1F` | `$7CBC (object_type1f_dispatcher)` |
+| `$20` | `$D606 (garcia_type20_dispatcher)` |
+| `$21` | `$D99A (garcia_type21_dispatcher)` |
+| `$22` | `$DD78 (garcia_type22_32_dispatcher)` |
+| `$23` | `$E326 (garcia_type23_dispatcher)` |
+| `$24` | `$E4D2 (signal_type24_dispatcher)` |
+| `$25` | `$E8F0 (haku_ro_type25_dispatcher)` |
+| `$26` | `$F038 (nora_type26_dispatcher)` |
+| `$27` | `$F27E (jack_type27_dispatcher)` |
+| `$28` | `$FFFC14 (elc_spawn_stream_cursor)` |
+| `$29` | `$B3C0 (police_special_enemy_sweep_trampoline)` |
+| `$2A` | `$F7D0 (haku_ro_type2a_dispatcher)` |
+| `$30` | `$B36C (abadede_update_trampoline)` |
+| `$31` | `$B372 (abadede_linked_sprite_update_trampoline)` |
+| `$32` | `$DD78 (garcia_type22_32_dispatcher)` |
+| `$33` | `$B37E (mr_x_office_controller_update_trampoline)` |
+| `$34` | `$B384 (mr_x_office_scene_type34_trampoline)` |
+| `$35` | `$B378 (mr_x_boss_update_trampoline)` |
+| `$36` | `$B38A (mr_x_bullet_update_trampoline)` |
+| `$37` | `$B390 (mr_x_shell_update_trampoline)` |
+| `$38` | `$B396 (mr_x_type38_update_trampoline)` |
+| `$39` | `$B39C (abadede_variant_type39_trampoline)` |
+| `$3E` | `$673C (demo_mode_type3e_dispatcher)` |
+| `$3F` | `$68E2 (points_3000_pickup_dispatcher)` |
+| `$40` | `$6904 (points_10000_pickup_dispatcher)` |
+| `$41` | `$791A (object_type41_dispatcher)` |
+| `$42` | `$7A6C (object_type42_dispatcher)` |
+| `$43` | `$7C70 (object_type43_dispatcher)` |
+| `$44` | `$7644 (object_type44_dispatcher)` |
+| `$45` | `$7534 (round8_table_dispatcher)` |
+| `$46` | `$7662 (final_section_type46_dispatcher)` |
+| `$47` | `$6988 (full_health_pickup_dispatcher)` |
+| `$48` | `$67A4 (wave_go_prompt_dispatcher)` |
+| `$49` | `$6862 (player_contact_effect_dispatcher)` |
+| `$4A` | `$6894 (object_ground_shadow_dispatcher)` |
+| `$4B` | `$6926 (small_health_pickup_dispatcher)` |
+| `$4C` | `$6948 (extra_life_pickup_dispatcher)` |
+| `$4D` | `$6E9E (object_type4d_dispatcher)` |
+| `$4E` | `$71DC (round3_controller_type4e_dispatcher)` |
+| `$4F` | `$6968 (extra_special_pickup_dispatcher)` |
+| `$50` | `$7D4A (round7_fixed_type50_dispatcher)` |
+| `$51` | `$7D7A (round7_fixed_type51_dispatcher)` |
+| `$52` | `$7DF0 (round7_fixed_type52_dispatcher)` |
+| `$53` | `$7E20 (round7_fixed_type53_dispatcher)` |
+| `$54` | `$B3BA (object_type54_dispatcher)` |
+| `$55` | `$B3A2 (souther_update_trampoline)` |
+| `$56` | `$B3A8 (antonio_update_trampoline)` |
+| `$57` | `$B3AE (bongo_update_trampoline)` |
+| `$58` | `$B3B4 (onihime_yasha_update_trampoline)` |
+| `$60` | `$CD22 (presentation_type60_plane_fill_dispatcher)` |
+| `$61` | `$D112 (presentation_type61_palette_fade_dispatcher)` |
+| `$62` | `$D210 (presentation_type62_dispatcher)` |
+| `$63` | `$D2A4 (presentation_type63_palette_swap_dispatcher)` |
+| `$64` | `$CBE6 (presentation_type64_tile_strip_anim_dispatcher)` |
+| `$65` | `$CCE8 (presentation_type65_camera_y_drift_dispatcher)` |
+| `$66` | `$D32C (presentation_type66_dispatcher)` |
+| `$67` | `$D362 (presentation_type67_dispatcher)` |
+| `$68` | `$D39C (presentation_type68_dispatcher)` |
+| `$69` | `$CD66 (presentation_type69_dispatcher)` |
+| `$6A` | `$CA7C (presentation_type6a_dispatcher)` |
+| `$6B` | `$CFB8 (presentation_type6b_dispatcher)` |
+| `$6C` | `$D150 (presentation_type6c_dispatcher)` |
+| `$6D` | `$D08E (presentation_type6d_dispatcher)` |
+| `$6E` | `$C6E0 (presentation_type6e_slide_in_sprite_dispatcher)` |
+| `$6F` | `$C756 (presentation_type6f_slide_in_sprite_dispatcher)` |
+| `$70` | `$C618 (presentation_type70_dispatcher)` |
+| `$71` | `$D3D6 (presentation_type71_dispatcher)` |
+| `$72` | `$D444 (presentation_type72_dispatcher)` |
+| `$73` | `$D4B2 (presentation_type73_dispatcher)` |
+| `$74` | `$D0AC (presentation_type74_dispatcher)` |
+| `$75` | `$C7D0 (presentation_type75_slide_in_sprite_dispatcher)` |
+| `$76` | `$C846 (presentation_type76_slide_in_sprite_dispatcher)` |
+| `$77` | `$C394 (presentation_type77_dispatcher)` |
+| `$78` | `$C924 (presentation_type78_blinking_sprite_dispatcher)` |
+| `$79` | `$C58C (presentation_type79_palette_cycle_dispatcher)` |
+| `$7A` | `$C97A (presentation_type7a_vertical_sprite_dispatcher)` |
+| `$7B` | `$C9D0 (presentation_type7b_horizontal_sprite_dispatcher)` |
+| `$7C` | `$CA26 (presentation_type7c_horizontal_sprite_dispatcher)` |
+| `$7D` | `$D548 (presentation_type7d_dispatcher)` |
+| `$7E` | `$C36E (presentation_type7e_region_select)` |
+| `$7F` | `$D5C8 (presentation_type7f_palette_fade_signal_dispatcher)` |
+| `$80` | `$C89C` |
+| `$81` | `$C492` |
+| `$82` | `$C114 (presentation_type82_dispatcher)` |
+| `$83` | `$C17C (presentation_type83_dispatcher)` |
+| `$84` | `$BF76 (presentation_type84_dispatcher)` |
+| `$85` | `$BEBA (presentation_type85_dispatcher)` |
+| `$86` | `$BF00 (presentation_type86_dispatcher)` |
+| `$87` | `$BBEE (presentation_type87_dispatcher)` |
+| `$88` | `$C8F2` |
+| `$89` | `$BC5C (presentation_type89_dispatcher)` |
+| `$8A` | `$BCA2 (presentation_type8a_dispatcher)` |
+| `$8B` | `$BD10 (presentation_type8b_dispatcher)` |
+| `$8C` | `$BB94 (presentation_type8c_dispatcher)` |
+| `$8D` | `$BB18 (presentation_type8d_dispatcher)` |
+| `$8E` | `$BB58 (presentation_type8e_static_sprite_dispatcher)` |
+| `$96` | `$17262 (antonio_linked_attack_dispatcher)` |
+| `$97` | `$17858 (bongo_flame_update)` |
+| `$98` | `$16C60 (souther_claw_type98_update)` |
+| `$99` | `$16C24 (souther_afterimage_type99_update)` |

@@ -630,7 +630,7 @@ inserts the object's 16-bit RAM pointer into
 The `calls.csv` sample exposes two distinct call classes under `$AD8E
 (update_objects_and_build_sprites)`. Fixed helper calls run once per object pass:
 `$B132 (ensure_object_ground_shadow)` may allocate a linked type-$4A shadow in
-the `$C900` auxiliary slots, `$51CC (nudge_players_to_walkable_floor)` probes
+the `$FFC900 (object_pool_c900)` auxiliary slots, `$51CC (nudge_players_to_walkable_floor)` probes
 nearby collision-floor samples for active players, and `$43AA
 (clamp_players_to_gameplay_bounds)` clamps players to the gameplay camera/lane
 window. The high-volume calls at `$AE30` are different: they are object-type
@@ -742,7 +742,7 @@ An attack box id on a frame is **not** by itself evidence of a damaging
 attack: `$1FC70 (garcia_animation_set)`'s idle animations select box `$3D`, a body-sized box
 centred on the origin, and `$22948 (signal_animation_set)` does the same on
 its idle frames. Outgoing damage comes from `+$34`, which the enemy's own
-state code sets, so a frame can present a contact box purely so `$AA22`
+state code sets, so a frame can present a contact box purely so `$AA22 (resolve_object_contact)`
 reports interaction (the grab/push path) without dealing damage.
 
 Reach follows from the shape record alone once the animation identifies the
@@ -1170,3 +1170,30 @@ The principal new RAM symbols cover:
 
 The central renderer, frame transaction, RAM/VRAM layout, map streamer, sprite
 builder, and palette pipeline are nevertheless established at high confidence.
+
+## Routines identified from the call map
+
+Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidence and exact contract of each name are in `code-analysis/labels.csv`.
+
+| Routine | What it does |
+| --- | --- |
+| `$1A0D6 (upload_player_art_dma_one_player)` | Consumes +$51 of one player art record and DMAs the upper and lower art from player_art_dma_upper_table |
+| `$1844 (char_select_upload_preview_art_dma_one)` | Character-select version of upload_player_art_dma_one_player |
+| `$190EA (camera_update_parallax_strip_rows)` | Scales the camera delta by each strip ratio of a camera record for the scroll rows |
+| `$10B2E (prepend_sprite_records_to_sat)` | Copies d7+1 fixed sprite records to a buffer, appends the current SAT with links raised by d6 and writes it back |
+| `$10B70 (prepend_continue_overlay_sprites)` | While continue_sprite_overlay_active is set prepends the overlay sprites, with level index 6 variants, and advances the sprite counters |
+| `$19AF4 (initialize_visible_tilemap_plane)` | Fills one plane of a camera record from the blockmap for initialize_visible_tilemaps |
+| `$11708 (hud_write_tile_string)` | Reads count, base and tile bytes and writes base plus byte as tile words, stopping at a negative byte |
+| `$11876 (hud_draw_object_health_bar)` | Draws one health bar from +$32 of the object in the list, with special tiles above 80 |
+| `$10CCC (hud_draw_round_timer_digits)` | Writes the two BCD digits at a6 to the window-plane timer position with tile base $6C0 |
+| `$105CE (palette_fade_step_to_target)` | Moves one colour channel of the active palette towards target_palette_buffer, the channel from palette_fade_counter |
+| `$81DC (nemesis_read_next_code)` | Peeks eight payload bits and resolves the token through nemesis_decode_table |
+| `$110AC (load_round_hud_resources)` | Loads the round art, HUD bundles and starting HUD tile data |
+| `$11564 (load_status_palette_and_art)` | Loads palette list and art bundle 5 and writes eight longs of tile data at VRAM $1B20 |
+| `$119AC (load_demo_mode_scene_art)` | In demo mode decompresses the Kosinski art at $389A0, uploads a tile list and creates type $3E at $FFD100 |
+| `$10E42 (load_status_screen_graphics)` | Outside demo mode decodes the Nemesis art at $6F3D4 for HUD and round-clear screens with level-indexed RAM tables |
+| `$7F18 (clear_vdp_plane_c000)` | Sets the VDP address to $C000 and fills the plane |
+| `$7F24 (clear_vdp_plane_e000)` | Sets the VDP address to $E000 and fills the plane |
+| `$125FA (load_tilemap_bundle_2_trampoline)` | load_vdp_tilemap_bundle with d0 = 2 |
+| `$12604 (load_tilemap_bundle_8_trampoline)` | load_vdp_tilemap_bundle with d0 = 8 |
+| `$1BDC (char_select_preview_jump_reaction)` | Runs the preview jump when +$5C is set, plays $A6, and lands back on the floor when it ends |

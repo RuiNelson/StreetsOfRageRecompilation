@@ -244,7 +244,7 @@ which one the ROM selects:
 | **B and C on the same decision** (held+edge either order) | Rear / escape attack | `$20+` via `$322A (player_attack_jump_chord)` |
 | **C only** to leave the ground, then **B later** while airborne | Jump-kick | `$10 → $12 → $16` |
 
-`$322A (player_attack_jump_chord)` runs **before** `$2FCC` in the ground
+`$322A (player_attack_jump_chord)` runs **before** `$2FCC (player_try_jump)` in the ground
 priority chain, so a simultaneous B+C chord never becomes a jump. Jump-kick is
 strictly sequential: jump edge first, attack edge only after free flight.
 
@@ -283,7 +283,7 @@ Three consequences for anything that issues this chord:
 
 The chord genuinely reaches behind the player: Axel covers 8–40 px of his own
 back, Blaze 5–53 px, and Adam's hop box spans 42 px behind through 14 px in
-front. `$450C` compares the attacker's `+$64` against the victim's `+$70`, so
+front. `$450C (player_vs_player_test_boxes)` compares the attacker's `+$64` against the victim's `+$70`, so
 `+$64` is the **attack** box and `+$70` is the **body** box — an idle player's
 `+$70` is X +0..+13, Y ±8, which is what a body-sized reading of this move was
 actually observing.
@@ -353,12 +353,12 @@ ground ──C ($2FCC)──► $10 JUMP_START ──(timer)──► $12 FREE F
 
 ### Jump press and crouch
 
-`$2FCC` on a new jump edge (object `+$55` bit 5):
+`$2FCC (player_try_jump)` on a new jump edge (object `+$55` bit 5):
 
-1. queues sound id `$A0` through `$35D6`;
-2. sets action `$10` (plus facing) via `$2EE8`.
+1. queues sound id `$A0` through `$35D6 (player_queue_sound_trampoline)`;
+2. sets action `$10` (plus facing) via `$2EE8 (player_set_action_faced_restore_frame)`.
 
-`$2EE8` / `$2EF2` always call `$3614`, which loads character walk speeds from
+`$2EE8 (player_set_action_faced_restore_frame)` / `$2EF2` always call `$3614 (player_load_action_velocity)`, which loads character walk speeds from
 the tables at `$3670` / `$3706` / `$379C`. **Jump rows of those tables are
 zero**, so entering `$10` clears horizontal and lane velocity. Walk momentum
 does not carry into a jump.
@@ -383,12 +383,12 @@ lockstep" below for the whole flight.
 When the crouch timer expires, `$1FC0`:
 
 1. advances action by 2 (`$10 → $12`);
-2. `$2EF2` re-enters free-flight anim and again zeros X/Y via `$3614`;
+2. `$2EF2` re-enters free-flight anim and again zeros X/Y via `$3614 (player_load_action_velocity)`;
 3. `$3832` writes initial Z velocity from the character table at `$3842`;
 4. `$384E` sets X velocity to **±`$00030000` (±3.0 px/update)** if Left or
    Right is held, and updates facing; if neither is held, **X stays 0**.
 
-On that same transition update, gravity is **not** applied yet; `$442C`
+On that same transition update, gravity is **not** applied yet; `$442C (player_integrate_velocity)`
 integrates position once with the launch velocities.
 
 | Character | ID | `$3842` long | Launch \(v_z\) |
@@ -409,11 +409,11 @@ Each free-flight update (`$1FDC`), in this order:
 | Gravity | `$389A` | \(v_z \mathrel{+}= `$E800`\) (**+0.90625** px/update²) |
 | Air steer | `$38C0` | Left/Right adds **±`$6000` (±0.375)** to \(v_x\); clamp **±`$38000` (±3.5)**; updates facing |
 | Kick edge | `$3914` | If attack bit 4 is newly pressed: set `+$58` bit 2, action ← `(action & $FE) + 4` (`$12 → $16`), re-init anim, play kick sound |
-| Fall clamp | `$3886` | \(v_z \le `$C0000` (**12.0**) |
-| Integrate | `$442C` | \(x \mathrel{+}= v_x\), \(y \mathrel{+}= v_y\), \(z \mathrel{+}= v_z\) |
+| Fall clamp | `$3886 (player_clamp_fall_speed)` | \(v_z \le `$C0000` (**12.0**) |
+| Integrate | `$442C (player_integrate_velocity)` | \(x \mathrel{+}= v_x\), \(y \mathrel{+}= v_y\), \(z \mathrel{+}= v_z\) |
 
 There is **no mid-air lane (Up/Down) control**. Lane Y is frozen at takeoff.
-`$3914` sets `+$58` bit 2 before `$2EE8` so `$3614` **preserves** the current
+`$3914` sets `+$58` bit 2 before `$2EE8 (player_set_action_faced_restore_frame)` so `$3614 (player_load_action_velocity)` **preserves** the current
 X velocity when entering the kick (it does not re-zero it).
 
 ### Jump-kick gravity and damage
@@ -438,7 +438,7 @@ Free flight (anim `$10`) has **0** damage on frame 0. A duel flag at
 
 `$4140 (player_cache_boxes)` builds the attack AABB (`+$64`, from box id `+$02`) and the body AABB
 (`+$70`, from box id `+$03`) out of anim frame box IDs and tables `$1ABA8 (player_shape_table)` /
-`$1AB8E`. The direction is fixed by `$450C`, which tests the attacker's `+$64`
+`$1AB8E`. The direction is fixed by `$450C (player_vs_player_test_boxes)`, which tests the attacker's `+$64`
 against the victim's `+$70` and only then reads the attacker's `+$34`.
 
 Jump-kick attack boxes measured live from `+$64` during action `$16`
@@ -454,7 +454,7 @@ Lane half-width is about **8** pixels. The Z band sits high on the body, so a
 kick connects best while the player is not at maximum apex against a grounded
 foe—timing the B edge on the way down (or early at close range) matters.
 
-On connect, `$21B4` can set `+$59` bit 7 (hit freeze); `$442C` then skips
+On connect, `$21B4` can set `+$59` bit 7 (hit freeze); `$442C (player_integrate_velocity)` then skips
 position integration for the jump-attack anim group.
 
 ### Landing
@@ -469,7 +469,7 @@ ground idle `$02` via `(action & $FE) − $12`.
 `$21B4`, the first thing the kick handler `$2000` calls, starts a freeze on
 the update after a damaging contact (`+$7C` = 2): `+$59` bit 7 is set and
 `+$4F` loaded with 4, and while it counts down the handler skips gravity and
-`$442C` skips integration. The flight stands still for 4 updates and then
+`$442C (player_integrate_velocity)` skips integration. The flight stands still for 4 updates and then
 resumes along the same path, so which bodies a kick crosses does not depend on
 the freezes -- only when it crosses them.
 
@@ -592,7 +592,7 @@ restarts the chain at one.
 
 **The release.** Holding the stick *back* (Left/Right opposite the facing
 bit) in a front or back hold, with no B/C edge, runs `loc_235A`: `+$63` counts
-down and the hold drops on the step it goes negative. `$3266` seeds `+$63`
+down and the hold drops on the step it goes negative. `$3266 (player_resolve_grab_contact)` seeds `+$63`
 with 3 when the hold is taken and nothing resets it mid-hold, so partial back
 presses accumulate. Measured: a fresh hold released on the 8th back frame. On
 the release the player's facing bit flips (`bchg #0,+$30`), `+$4C`/`+$7D`
@@ -602,8 +602,8 @@ reads the cleared `+$7D` through `$17CF2 (later_boss_held_dispatch)` and goes st
 **One crossover per hold.** `$2FE4 (player_hold_crossover_start)` turns a C edge into crossover `$76`
 from the front hold and `$80` from the back hold. `$26E2 (player_hold_crossover_update)` finishes it on
 animation frame 6, landing in `$66` from `$76` or `$60` from `$80` (the
-`$AD18` probe at frame 3 can swap the two families). The same frame sets
-`+$4B` bit 7, and only a fresh grab (`$3266`) clears it; a crossover that finds
+`$AD18 (probe_floor_at_x_offset)` probe at frame 3 can swap the two families). The same frame sets
+`+$4B` bit 7, and only a fresh grab (`$3266 (player_resolve_grab_contact)`) clears it; a crossover that finds
 it already set branches to `loc_278A`, which lands the player (`$14`, or `$40`
 armed) outside the hold. Measured against Souther: the second crossover of one
 hold dropped him 24 px from the player, he committed on his next update, and
@@ -660,7 +660,7 @@ A separate, narrow tech can skip the knockdown bounce and land like a jump:
 | Latch | `+$46 = 1` (clears `+$45`) |
 | Land effect | if `+$46` set at `$3F24`, branch to `$3EDC` → action **`$14`** (~5-frame jump land → idle `$02`) instead of bounce → `$54` |
 
-Sampling windows (player collision path `$3B00` → `$3CE2`):
+Sampling windows (player collision path `$3B00 (player_update_world_collision)` → `$3CE2`):
 
 - rising (`vz < 0`): `$3D12`;
 - floor-test path: `$3D64` (same C-edge + Up test when `+$45` is set).
@@ -735,7 +735,7 @@ while the main pause path only considers players whose bits are already set in
 | `$3028 (player_normal_attack_input)` | Logical attack path that gives original pickup/search priority over a normal attack. |
 | `$3136 (find_close_interaction_target)` | Close-range search for pickup and weapon acquisition targets. |
 | `$322A (player_attack_jump_chord)` | Same-decision B+C rear/escape attack (blocks jump-kick). |
-| `$2FCC` | Jump edge → action `$10`. |
+| `$2FCC (player_try_jump)` | Jump edge → action `$10`. |
 | `$1CE2` | Player primary-state jump table (includes jump family). |
 | `$1FC0` / `$1FDC` / `$2000` / `$1FE8` | Jump start / free flight / kick / land handlers. |
 | `$3832` / `$3842` | Character launch Z-velocity table. |
@@ -744,8 +744,8 @@ while the main pause path only considers players whose bits are already set in
 | `$3914` | Free-flight attack edge → jump-kick action `$16`. |
 | `$41EA (compute_player_attack_descriptor)` | Per-frame kick damage / reaction nibbles. |
 | `$4140 (player_cache_boxes)` / `$1ABA8 (player_shape_table)` | Body and attack AABB construction. |
-| `$442C` | Position integrate (`+$1C`/`+$20`/`+$24` → `+$10`/`+$14`/`+$18`). |
-| `$3B00` / `$3CE2` | Per-frame vertical collision: rising `$3D12`, floor dispatch `$3D5C`. |
+| `$442C (player_integrate_velocity)` | Position integrate (`+$1C`/`+$20`/`+$24` → `+$10`/`+$14`/`+$18`). |
+| `$3B00 (player_update_world_collision)` / `$3CE2` | Per-frame vertical collision: rising `$3D12`, floor dispatch `$3D5C`. |
 | `$3D12` / `$3D64` | C-edge + Up held while `+$45` set → latch `+$46` (landing tech). |
 | `$3E78` / `$3F24` | Floor land for throw-air families; bounce or tech branch. |
 | `$3EDC` | Tech land: clear `vz`, action `$14` (jump-land recovery). |

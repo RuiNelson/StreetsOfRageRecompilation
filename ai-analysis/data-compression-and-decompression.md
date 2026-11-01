@@ -122,7 +122,7 @@ bits 3..0 = pixel nibble
 
 ### Data bitstream and inline escape
 
-The payload is read MSB-first. `$0081DC` peeks the next eight bits and normally resolves them through `$FFF600 (nemesis_decode_table)`. The decoder then emits one through eight copies of the token's low nibble into the 32-bit row accumulator `d4`.
+The payload is read MSB-first. `$81DC (nemesis_read_next_code)` peeks the next eight bits and normally resolves them through `$FFF600 (nemesis_decode_table)`. The decoder then emits one through eight copies of the token's low nibble into the 32-bit row accumulator `d4`.
 
 Prefixes `$FC-$FF` are reserved. `$008228` consumes six one-bits and then reads a raw seven-bit token with the same `rrr0vvvv` meaning (three repeat bits and four value bits). This escape permits values that are not economical enough to appear in the stream's prefix table.
 
@@ -187,12 +187,12 @@ ROM validation gives the following enemy-load-cue sizes:
 | 6 | `$01BD12` | 15 | 480 |
 | 7 | `$01BEBE` | 28 | 896 |
 
-`$010E42` also uses the RAM entry:
+`$10E42 (load_status_screen_graphics)` also uses the RAM entry:
 
 - `$06F3D4`: XOR-mode, 26 tiles, 832 output bytes. A level-indexed 64-byte portion beginning at `$FF8060` is remapped and uploaded.
 - `$01D0DA`: XOR-mode, 87 tiles, 2,784 output bytes. The code masks every long with `$11111111`, retaining one bit from each pixel nibble before several VDP uploads.
 
-The exact visual identity of every `$010E42` region remains less certain than the codec behavior; its use during both level and round-clear setup indicates shared HUD/status-screen graphics.
+The exact visual identity of every `$10E42 (load_status_screen_graphics)` region remains less certain than the codec behavior; its use during both level and round-clear setup indicates shared HUD/status-screen graphics.
 
 ### Incremental art queue
 
@@ -525,7 +525,7 @@ section remain separate visual/asset-identification questions.
 
 - Broad content classifications such as UI map, level map, and ending art, inferred from destinations and immediate consumers.
 - `$01CAEC` as attract/demo input. It expands to 8 KiB in the demo-only branch and matches the separate demo input cursor mechanism, but the pointer initialization chain deserves its own focused trace.
-- `$010E42` as shared HUD/status graphics; the transformations are clear, while exact named screen regions remain to be mapped.
+- `$10E42 (load_status_screen_graphics)` as shared HUD/status graphics; the transformations are clear, while exact named screen regions remain to be mapped.
 
 ### Open questions
 
