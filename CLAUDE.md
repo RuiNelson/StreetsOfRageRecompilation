@@ -143,6 +143,8 @@ console drivers, RADV and `tools/link-title.sh`, which refuses any import that w
 - In the console's CONTROLS menu a pad's inputs have a DualSense's names (user): the four symbols, L1, L2, R1, R2, L3, R3,
   CLICK for the touch pad (SDL's Back) and OPTIONS for Start. The font has no symbols, so `SoRControlsMenu` loads them into
   tiles `$31`-`$34`, blank on the OPTIONS screen, while it is open, and blanks them on closing.
+- The default JOYSTICK DEADZONE is 1 there, not 24 (user): `prospero/src/platform.c` removes a 12% dead zone before the
+  game sees the stick. A saved `controls.yaml` keeps its own value.
 - `sce_sys/icon0.png` is `prospero_icon.png` (the user's) at 512x512. There is no `pic0.dds` or `pic1.dds` yet.
 - The game and FLAC playback work on the user's console (2026-10-31).
 
