@@ -12,6 +12,10 @@ using namespace sorops;
 // The vehicle, the fire or shells and the enemy sweep then run twice an update, so their timers, moves and
 // child objects keep their ROM values and stay in step with one another. What is timed from outside is set
 // where it starts: the screen shake, and how long a later boss waits for the hit.
+//
+// The ROM brings the enemies' art and palette back at -$220 on the way home, just as its camera leaves the car
+// behind. At -$200 that would be with the car on screen, so here it waits for the game to cull the car, which
+// backs out on the way home to be gone before the street comes in.
 // ---------------------------------------------------------------------------
 namespace {
 
@@ -34,6 +38,11 @@ constexpr m_long kPoliceCaller   = 0xFFFFFA1Cu;
 constexpr m_long kObjectTable    = 0xFFFFB900u;
 constexpr int    kObjectSlots    = 32;
 constexpr m_word kVehicleCloser  = 0x0100u;
+constexpr m_word kVehicleBackOut = 0x0030u; // px an update, on top of the camera's 16
+constexpr m_word kCameraHomeFrom = 8u;      // primary_camera states 8-10, the way home
+constexpr m_long kObjectPoolD100 = 0xFFFFD100u;
+constexpr int    kObjectPoolSlots = 18;
+constexpr m_byte kVehicleType    = 0x05u;
 // Updates a later boss in state $0A still has on +$54 ($16B4A) when the fire starts, in the ROM: measured,
 // 300 and 390 less the 178 and 220 updates it takes to get there. Half, as the fire runs at twice the speed.
 constexpr m_word kBossWaitFromFireP1 = 61u;
@@ -46,6 +55,13 @@ bool shortCall() {
 // The first object of its kind, on its first update: state 0, not created by another (+$0B).
 bool startingRootObject(CPU68K &c, SystemMemory &mem) {
     return mem.readByte(c.a[0] + 0x30u) == 0u && mem.readByte(c.a[0] + 0x0Bu) == 0u;
+}
+
+bool vehicleIsAlive(SystemMemory &mem) {
+    for (int slot = 0; slot < kObjectPoolSlots; ++slot)
+        if (mem.readByte(kObjectPoolD100 + static_cast<m_long>(slot) * 0x80u) == kVehicleType)
+            return true;
+    return false;
 }
 
 void setLaterBossWait(SystemMemory &mem) {
@@ -142,12 +158,101 @@ void StreetsOfRage::begin_police_special_camera_excursion(m_long /*entry_*/) {
         }                                                                                               \
     } while (false)
 
+// $018E3C (restore_police_special_palette_and_art)
+void StreetsOfRage::restore_police_special_palette_and_art(m_long /*entry_*/) {
+    traceEnter(0x00018E3Cu);
+    auto &c   = cpu();
+    auto &mem = memory();
+
+    constexpr m_long kArtArrayCue      = 0xFFFFDCD0u;
+    constexpr m_long kPaletteDirty     = 0xFFFFFA01u;
+    constexpr m_long kVehicleSpawned   = 0xFFFFFA1Du;
+    constexpr m_long kLevelSpawnFlow   = 0xFFFFFA05u;
+    constexpr m_long kPaletteSnapshot  = 0xFFFFDD80u;
+    constexpr m_long kPalette          = 0xFFFFF400u;
+
+    const auto restorePalette = [&] {
+        for (m_long offset = 0; offset < 0x80u; offset += 4u)
+            mem.writeLong(kPalette + offset, mem.readLong(kPaletteSnapshot + offset));
+    };
+
+    if (mem.readLong(kArtArrayCue) != 0u) {
+        c.ssp += 4;
+        return;
+    }
+    mem.writeByte(kPaletteDirty, 1);
+    c.setDw(0, static_cast<m_word>(mem.readWord(c.a[1] + 0x8Cu) - 0x0220u));
+    const bool held = shortCall() && mem.readWord(kLevel) != kRound7Level && vehicleIsAlive(mem);
+    if (c.dw(0) > mem.readWord(c.a[1] + 0x02u) || held) {
+        c.ssp += 4;
+        return;
+    }
+    mem.writeByte(kVehicleSpawned, 0);
+
+    constexpr m_long kArtCueFA63  = 0xFFFFFA63u;
+    constexpr m_long kArtCueFA61 = 0xFFFFFA61u;
+    constexpr m_long kFlagFA5A  = 0xFFFFFA5Au;
+    restorePalette();
+    if ((mem.readByte(kLevelSpawnFlow) & 0x40u) != 0u) {
+        c.setDw(0, mem.readWord(kLevel));
+        if (c.dw(0) == 4u) {
+            mem.writeByte(kFlagFA5A, 1);
+            c.ssp += 4;
+            return;
+        }
+    } else if (mem.readByte(kArtCueFA63) == 0u) {
+        const m_byte level = mem.readByte(kArtCueFA61);
+        c.d[0] = level;
+        if (level == 0u) {
+            c.ssp += 4;
+            return;
+        }
+        c.setDw(0, static_cast<m_word>((level - 1u) * 3u + 0x0Cu));
+        queue_nemesis_art_cues();
+        return;
+    }
+    c.d[0] = mem.readByte(kArtCueFA63);
+    queue_nemesis_art_cues();
+}
+
+// $008454 (queue_nemesis_art_cues): d0's list of cues, appended to the queue of 6-byte entries at $FFDCD0.
+void StreetsOfRage::queue_nemesis_art_cues(m_long /*entry_*/) {
+    traceEnter(0x00008454u);
+    auto &c   = cpu();
+    auto &mem = memory();
+
+    constexpr m_long kNemesisArtCueOffsetTable = 0x00008672u;
+    constexpr m_long kArtArrayCue              = 0xFFFFDCD0u;
+    c.setDw(0, static_cast<m_word>(c.dw(0) * 2u));
+    c.setDw(0, mem.readWord(kNemesisArtCueOffsetTable + sext16(c.dw(0))));
+    m_long source = kNemesisArtCueOffsetTable + sext16(c.dw(0));
+    m_long queue  = kArtArrayCue;
+    while (mem.readLong(queue) != 0u)
+        queue += 6u;
+    c.setDw(0, mem.readWord(source));
+    source += 2u;
+    if ((c.dw(0) & 0x8000u) == 0u) {
+        for (int count = c.dw(0); count >= 0; --count) {
+            mem.writeLong(queue, mem.readLong(source));
+            mem.writeWord(queue + 4u, mem.readWord(source + 4u));
+            queue += 6u;
+            source += 6u;
+        }
+        c.setDw(0, 0xFFFFu);
+    }
+    c.ssp += 4;
+}
+
 // $00597C (police_vehicle_dispatcher)
 void StreetsOfRage::police_vehicle_dispatcher(m_long /*entry_*/) {
     traceEnter(0x0000597Cu);
     if (shortCall() && startingRootObject(cpu(), memory()) && memory().readWord(kLevel) != kRound7Level) {
         const m_long x = cpu().a[0] + 0x10u;
         memory().writeWord(x, static_cast<m_word>(memory().readWord(x) + kVehicleCloser));
+    }
+    if (shortCall() && memory().readWord(kLevel) != kRound7Level && memory().readWord(kPrimaryCamera) >= kCameraHomeFrom) {
+        const m_long x = cpu().a[0] + 0x10u;
+        memory().writeWord(x, static_cast<m_word>(memory().readWord(x) - kVehicleBackOut));
     }
     SOR_RUN_POLICE_STATES(0x00005984u);
 }
