@@ -35,15 +35,6 @@
 003A14 # player_load_frame_timer
 003614 # player_load_action_velocity
 
-# --qol police (SoRPoliceCall.cpp): the camera's way back, and the police objects twice an update.
-0192A4 # begin_police_special_camera_excursion
-00597C # police_vehicle_dispatcher
-0063F6 # p2_police_bombardment_dispatcher
-00654E # p1_police_blast_dispatcher
-00B3C0 # police_special_enemy_sweep_trampoline
-018E3C # restore_police_special_palette_and_art
-008454 # queue_nemesis_art_cues
-
 # OPTIONS' EXIT row, one row lower for QUALITY-OF-LIFE (SoRMainMenus.cpp, with its neighbours).
 0014BC # options_highlight_exit
 
