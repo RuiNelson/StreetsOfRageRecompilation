@@ -114,7 +114,7 @@ static there and the C++ runtime is linked in (`-static-libstdc++`), so only
 `SDL3.dll`/`SDL3_mixer.dll` sit next to `sor.exe`. The meta-repository README
 has the complete command. Built and run on a real Windows machine (user, 2026-10-30).
 
-## The PS5 title (`prospero/`, work in progress)
+## The PS5 title (`prospero/`)
 
 `../scripts/build_ps5.py` builds it in Docker into ignored `dist-ps5/PPSA99872/`, with the build tree in the volume
 `sor-ps5-build`; `../scripts/deploy_ps5.py` copies it to a console. Under `PS5` (set by the SDK's toolchain) `CMakeLists.txt` drops shared libraries, and
@@ -148,7 +148,7 @@ console drivers, RADV and `tools/link-title.sh`, which refuses any import that w
 - The default JOYSTICK DEADZONE is 1 there, not 24 (user): `prospero/src/platform.c` removes a 12% dead zone before the
   game sees the stick. A saved `controls.yaml` keeps its own value.
 - `sce_sys/icon0.png` is `prospero_icon.png` (the user's) at 512x512. There is no `pic0.dds` or `pic1.dds` yet.
-- The game and FLAC playback work on the user's console (2026-10-31).
+- The port is complete (user, 2026-11-01): the game, FLAC playback and AI Assist work on the user's console (2026-10-31).
 
 ## The Python AI in the process (`SoRPython`, `--ai-path`)
 
