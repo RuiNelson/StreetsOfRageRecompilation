@@ -777,7 +777,7 @@ at Y `$500` (the bottom chunk row).
 
 The platform stays still while the walls slide down. The climb is a camera
 effect: no gameplay object moves vertically. Objects that ride the scenery
-(`$7DAA (round7_fixed_type51_state1)`, `$7DC4 (round7_fixed_type51_state2)`) check `$FFFA15 (round7_elevator_moving)`. `$3FCC (try_activate_police_special)`
+(`$7DAA (round7_fixed_type51_wait_elevator_state)`, `$7DC4 (round7_fixed_type51_move_state)`) check `$FFFA15 (round7_elevator_moving)`. `$3FCC (try_activate_police_special)`
 refuses while `$FFFA14 (round7_jolt_active)` or `$FFFA15 (round7_elevator_moving)` is set.
 
 `$FFFA27 (scripted_spawn_release_flag)` is the acknowledgement that level-pipeline state `$10` (`$748`) waits
@@ -803,7 +803,7 @@ states 8-10: vx = +16 px/frame
             ($18DD2 police_excursion_return_check)
 ```
 
-The vehicle code at `$5BEC (police_vehicle_statea)` is a dynamic entry with no label. When the vehicle's
+The vehicle code at `$5BEC (police_vehicle_return_on_frame3_state)` is a dynamic entry with no label. When the vehicle's
 `+$0A` reaches 3 it deletes itself, then either adds 4 to the primary state or,
 in Round 7, adds 1 to the secondary state. While the excursion runs, the
 ratchet, the dead zone, and the shake are all bypassed. Activation clears both
@@ -937,7 +937,7 @@ VBlank:
 | Round 4 ripple | `$191E0 (update_round4_line_scroll_ripple)`; init `$19C92 (init_round4_ripple_effect)` (`$4000`, `$20000`, `$00100010`) |
 | Round 3 tile band | `$11346 (update_level_index2_background_effect)`, frame table `$11398 (round3_wave_tile_frame_sequence)`, palette lists `$1139E`, upload on the `$114DA (vblank_upload_gameplay_vdp_updates)` path to `$6B800003`/`$6BC00003`; `$104B6 (vdp_copy_long_22)` measured as 16 longs |
 | Round 7 elevator | `$18ECA (update_round7_elevator_jolt)`, `$18F32 (advance_round7_vertical_wave)`, `$1938E (secondary_camera_state_round7_shaft)`, tables `$18F20 (round7_elevator_floor_table)`/`$18F2C`, grid tables `$19AC0`/`$19ACA` |
-| Excursion return trigger | ROM `$5BEC (police_vehicle_statea)`: `cmpi.b #3,$A(a0)` … `addq.w #4,$E000` / `addq.w #1,$E100` |
+| Excursion return trigger | ROM `$5BEC (police_vehicle_return_on_frame3_state)`: `cmpi.b #3,$A(a0)` … `addq.w #4,$E000` / `addq.w #1,$E100` |
 | Animated palettes | decoded `$1C400 (animated_palette_table)`; gating at `$11272` with thresholds `$112B8 (round8_palette_stage_thresholds)` |
 | Copy helper lengths | opcode `$2499` runs from `$10496 (vdp_copy_long_38)` (32), `$104B2 (vdp_copy_long_24)` (18), `$104B6 (vdp_copy_long_22)` (16), `$104C6 (vdp_copy_long_8)` (8) |
 

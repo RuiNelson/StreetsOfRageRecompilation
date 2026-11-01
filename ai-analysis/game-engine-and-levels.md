@@ -695,7 +695,7 @@ Bit 0 of `$FFFA0D (wave_advance_pending)` is the common “advance camera/wave p
 - scripted object completion paths;
 - the art/flow sequencer after a phase is ready;
 - particular entity/controller types such as the destructible/scripted objects
-  at `$7678 (final_section_type46_state1)` and `$7E42 (round7_fixed_type53_state1)`.
+  at `$7678 (final_section_type46_shatter_state)` and `$7E42 (round7_fixed_type53_delay_delete_state)`.
 
 It is consumed with `bclr`, so it is an edge-like request rather than a durable
 mode. The ordinary camera machine (`$19570 (advance_wave_camera_boundary)`) consumes it for most rounds; round
@@ -1091,7 +1091,7 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 
 ## Object state tables
 
-Each object update hands `+$30` to `$B186 (dispatch_object_primary_state_table)` (absolute words) or `$12B3C (dispatch_presentation_object_state_table)` (offsets from the table). A name of the form `<object>_stateN` comes from the table alone: the binding is certain and the role is unread. A handler reached from several states lists them all in its name.
+Each object update hands `+$30` to `$B186 (dispatch_object_primary_state_table)` (absolute words) or `$12B3C (dispatch_presentation_object_state_table)` (offsets from the table). A name of the form `<object>_stateN` comes from the table alone: the binding is certain and the role is unread. `$103A2 (jack_projectile_type28_state_table)` is relative and has six words. A handler reached from several states lists them all in its name.
 
 | Object | Table | States |
 | --- | --- | --- |
@@ -1190,7 +1190,7 @@ Each object update hands `+$30` to `$B186 (dispatch_object_primary_state_table)`
 | signal_type24 | `$E4DA (signal_type24_state_table)` | 14 |
 | haku_ro_type25 | `$E8F8 (haku_ro_type25_state_table)` | 20 |
 | nora_type26 | `$10362 (nora_type26_state_table)` | 13 |
-| jack_type27 | `$1037C (jack_type27_state_table)` | 21 |
+| jack_type27 | `$1037C (jack_type27_state_table)` | 19 |
 | haku_ro_type2a | `$103AE (haku_ro_type2a_state_table)` | 17 |
 | mr_x_office_controller | `$12B64 (mr_x_office_controller_state_table)` | 24 |
 | mr_x_office_scene_type34 | `$12F1C (mr_x_office_scene_type34_state_table)` | 6 |
@@ -1199,3 +1199,372 @@ Each object update hands `+$30` to `$B186 (dispatch_object_primary_state_table)`
 | mr_x_shell | `$1426E (mr_x_shell_state_table)` | 2 |
 | abadede_variant_type39 | `$14320 (abadede_variant_type39_state_table)` | 2 |
 | abadede | `$14466 (abadede_state_table)` | 15 |
+
+### State roles
+
+Read from the code; the street enemies, Jack and Abadede also from `enemy-ai.md`. The confidence of each name is in `code-analysis/labels.csv`.
+
+| State handler | Role |
+| --- | --- |
+| `$5256 (continue_object_init_state)` | State 0: rebuilds the slot as type $0F |
+| `$5278 (continue_object_countdown_state)` | State 1: the first one sets the overlay flag and plays $82; counts +$60 down |
+| `$529A (continue_object_game_over_fade_state)` | State 2: sets $FFFA4B and starts the fade |
+| `$56F4 (high_score_name_entry_idle_state)` | State 2: rts |
+| `$56F6 (high_score_name_entry_init_state)` | State 0: clears the player side of the HUD and draws the entry |
+| `$57D2 (high_score_name_entry_input_state)` | State 1: letter input on the press bits |
+| `$5A12 (police_vehicle_arrive_state)` | State 1: waits for the art queue, plays $CE, loads a palette list and spawns a linked slot |
+| `$5A96 (police_vehicle_drive_in_state)` | State 2: decelerates and stops at cam_x + $80 |
+| `$5ACC (police_vehicle_spawn_rising_child_state)` | State 3: after 20 updates creates a child type $05 rising from this one |
+| `$5B14 (police_vehicle_idle_state)` | State 4: rts |
+| `$5B16 (police_vehicle_follow_parent_state)` | State 5: follows the X of the object in +$50 |
+| `$5B22 (police_vehicle_rise_state)` | State 6: moves until +$60, then waits 12 updates |
+| `$5B40 (police_vehicle_spawn_child_state)` | State 7: after +$52 creates another type $05 child |
+| `$5B94 (police_vehicle_show_from_frame2_state)` | State 8: clears +$01 bit 2 from frame 2 |
+| `$5BA4 (police_vehicle_spawn_timed_child_state)` | State 9: after +$52 creates a type $05 child with +$52 = $40 |
+| `$5BE2 (police_object_delete_state)` | State 2 of the shell, and exit of the shell and vehicle: clears the slot |
+| `$5BEC (police_vehicle_return_on_frame3_state)` | State $0A: from frame 3 ends the excursion through state $0C |
+| `$5BF8 (police_vehicle_end_excursion_state)` | State $0C: advances the camera state of the excursion and clears the slot |
+| `$5C0E (police_vehicle_timed_end_state)` | State $0B: counts +$54 down and ends the excursion |
+| `$6132 (bottle_weapon_init_state)` | State 0: damage 3 and art $6FC1A |
+| `$6532 (p2_police_bombardment_end_on_frame7_state)` | State 4: deletes itself on frame 7 |
+| `$65BE (p1_police_blast_delay_state)` | State 1: counts +$50 down, then starts the fall |
+| `$65DC (p1_police_blast_fall_state)` | State 2: falls to the floor and starts the next animation |
+| `$6748 (demo_mode_type3e_init_state)` | State 0: fixed position and flags, no animation data |
+| `$676C (demo_mode_type3e_idle_state)` | State 1: rts |
+| `$67B6 (wave_go_prompt_init_state)` | State 0: art $6F06E, screen space, position by round |
+| `$67F2 (wave_go_prompt_start_flash_state)` | State 1: four flashes, sound $CF, shown for 12 updates |
+| `$6810 (wave_go_prompt_shown_state)` | State 2: counts down shown, then hides for 6 |
+| `$6828 (wave_go_prompt_hidden_state)` | State 3: counts down hidden, then flashes again or ends the flashes |
+| `$6856 (wave_go_prompt_repeat_state)` | State 4: counts down and goes back to state 1 |
+| `$68F8 (points_3000_pickup_init_state)` | State 0: effect 4 |
+| `$691A (points_10000_pickup_init_state)` | State 0: effect 5 |
+| `$693C (small_health_pickup_init_state)` | State 0: effect 1 |
+| `$695E (extra_life_pickup_init_state)` | State 0: effect 2 |
+| `$697E (extra_special_pickup_init_state)` | State 0: effect 3 |
+| `$699E (full_health_pickup_init_state)` | State 0: effect 0; the shared body of the pickup inits |
+| `$6B0A (phone_booth_init_state)` | State 0: the booth, or a fragment when +$31 is set |
+| `$6C52 (phone_booth_fragment_wait_state)` | State 3: counts +$47 down and goes to state 4 |
+| `$6C66 (phone_booth_fragment_end_state)` | State 4: counts +$47 down and deletes it |
+| `$6C96 (breakable_type19_init_state)` | State 0: on the floor at height $A0, solid |
+| `$6CAC (breakable_type19_contact_state)` | State 1: waits for a hit, then loses solidity, drops its item and launches |
+| `$6D0E (breakable_type19_launched_state)` | State 2: flies and bounces until +$47 deletes it |
+| `$6D56 (object_type14_init_state)` | State 0: height $50 kept in +$60, 20-update timer |
+| `$6D72 (object_type14_frame_step_state)` | States 1, 2 and 5: counts +$47 down and steps the frame and the state |
+| `$6D88 (object_type14_start_fall_state)` | State 3: starts falling at 3 px |
+| `$6D94 (object_type14_fall_state)` | State 4: falls to a floor 24 px under it |
+| `$6DB2 (object_type14_respawn_state)` | State 6: deletes itself and reinstalls type $14 at the starting height |
+| `$6DEE (object_type13_init_state)` | State 0: height from the table at $6E06 by +$49 |
+| `$6E0E (object_type13_wait_flag_state)` | State 1: with +$40 set waits on $FFFA54 and then hides |
+| `$6E46 (object_type12_init_state)` | State 0: art $6D32E, animation by +$60 |
+| `$6E60 (object_type12_launch_state)` | State 1: launches and advances |
+| `$6E7E (object_type12_fly_state)` | State 2: flies up until screen X $60 deletes it |
+| `$6E94 (object_type12_offscreen_delete_state)` | State 3: deleted off screen |
+| `$6EB2 (object_type4d_init_state)` | State 0: flags $4B |
+| `$6EC2 (object_type4d_spawn_schedule_state)` | State 1: reads the X table $6F3E against the camera; a negative entry deletes it |
+| `$6F4A (object_type4d_wait_state)` | States 2 and 3: counts +$62 down and spawns |
+| `$6F5E (object_type4d_start_wait_state)` | State 4: loads a 64-update wait |
+| `$6F6A (object_type4d_finish_wait_state)` | State 5: at the end goes back to state 1 and clears $FFFA54 |
+| `$6F94 (object_type17_wait_on_screen_state)` | State 0: waits until the camera reaches it |
+| `$6FEE (object_type17_spawn_children_state)` | State 1: cycles the palette and spawns copies of the type |
+| `$7056 (object_type17_wait_batch_state)` | State 2: cycles the palette and counts down to the next batch |
+| `$707C (object_type17_fall_state)` | State 3: moves until height $A0, then deleted |
+| `$70D6 (object_type18_init_state)` | State 0: art $6D628 |
+| `$7142 (object_type18_contact_state)` | State 1: waits for a hit, then breaks |
+| `$71EE (round3_controller_type4e_init_state)` | State 0: height $60, art $6D672 |
+| `$71FE (round3_controller_type4e_frame_flag_state)` | State 1: with $FFFA05 bit 6 and $FFF50E set shows frame 1 |
+| `$7238 (object_type16_init_state)` | State 0: starts in the state +$40 selects |
+| `$7250 (object_type16_idle_state)` | State 1: rts |
+| `$7252 (object_type16_random_drift_state)` | State 2: picks a random X velocity |
+| `$728A (object_type16_random_wait_state)` | State 3: picks a random wait and velocity |
+| `$72E2 (object_type16_wait_state)` | State 5: counts +$50 down and returns to state 3 |
+| `$72F4 (object_type16_wait_wave_step_state)` | State 4: at round3_wave_tile_step 1 moves up the lanes |
+| `$7312 (object_type16_move_out_state)` | State 6: moves up the lanes until lane $30 |
+| `$733A (object_type16_turn_wait_state)` | State 7: counts +$50 down, then moves back |
+| `$7356 (object_type16_move_back_state)` | State 8: moves back down to lane $58 |
+| `$7382 (object_type1b_init_state)` | State 0: art $6DB60 |
+| `$745A (object_type1c_init_state)` | State 0: art $6DB94 |
+| `$747C (object_type1d_init_state)` | State 0: art $6DBC8, or a fragment when +$0B is set |
+| `$74A6 (object_type1d_contact_state)` | State 1: waits for a hit, then breaks |
+| `$761C (object_type15_init_state)` | State 0: art $6EDC2, animation by +$40 |
+| `$763C (object_type15_keep_priority_state)` | State 1: keeps +$01 bit 7 set |
+| `$7650 (object_type44_init_state)` | State 0: art $6ED4A, frame from +$0B |
+| `$766E (final_section_type46_init_state)` | State 0: art $6EDBC |
+| `$7678 (final_section_type46_shatter_state)` | State 1: plays $C2, sets $FFFA0D and spawns fragments from the table $773E |
+| `$77EC (object_type1a_init_state)` | State 0: art $6EDBC, plays $C2 |
+| `$77FC (object_type1a_build_layout_state)` | State 1: clears $FFA000 and builds a layout by player_mode |
+| `$792E (object_type41_init_state)` | State 0: art $6E46C, or a fragment when +$0B is set |
+| `$795A (object_type41_contact_state)` | State 1: waits for a hit, then breaks |
+| `$7A62 (object_type41_delete_timer_state)` | State 2: counts +$47 down and deletes it |
+| `$7A8E (object_type42_init_state)` | State 0: height $40, damage $14 |
+| `$7AA4 (object_type42_wait_player_near_state)` | State 1: waits for a player in a box around its X |
+| `$7ADE (object_type42_shake_state)` | State 2: requests tile updates during +$57, then falls |
+| `$7B48 (object_type42_fall_state)` | State 3: falls with two contact boxes |
+| `$7BFA (object_type42_bounce_state)` | State 4: falls, plays $C6 on landing and bounces |
+| `$7C36 (object_type42_wait_state)` | States 5 and 7: counts +$50 down, then starts rising |
+| `$7C4A (object_type42_rise_state)` | State 6: rises to height $40, then waits 50 updates |
+| `$7C68 (object_type42_restart_state)` | State 8: back to state 1 |
+| `$7C7C (object_type43_init_state)` | State 0: 27 px above, art shared with type $42 |
+| `$7C94 (object_type43_follow_parent_state)` | State 1: follows the type $42 in +$50, deleted from its state 7 |
+| `$7CCE (object_type1f_init_state)` | State 0: art $6DEBE, solid |
+| `$7CEA (object_type1f_contact_state)` | State 1: waits for a hit, then breaks |
+| `$7D56 (round7_fixed_type50_init_state)` | State 0: fixed at X $3B0 |
+| `$7D78 (round7_fixed_type50_idle_state)` | State 1: rts |
+| `$7D88 (round7_fixed_type51_init_state)` | State 0: fixed at X $300, lane 0 |
+| `$7DAA (round7_fixed_type51_wait_elevator_state)` | State 1: waits on round7_elevator_moving, then plays $C8 and moves |
+| `$7DC4 (round7_fixed_type51_move_state)` | State 2: moves while the elevator runs, wrapping at height $160 |
+| `$7DFC (round7_fixed_type52_init_state)` | State 0: fixed at X $300, lane 1 |
+| `$7E1E (round7_fixed_type52_idle_state)` | State 1: rts |
+| `$7E2C (round7_fixed_type53_init_state)` | State 0: 8-update timer |
+| `$7E42 (round7_fixed_type53_delay_delete_state)` | State 1: at the end sets $FFFA0D and deletes it |
+| `$8E3E (object_type04_init_state)` | State 0: art and position by the story index $FFF90C |
+| `$8E7A (object_type04_idle_state)` | State 1: rts |
+| `$8E7C (object_type04_start_pose_state)` | State 2: pose 2 and a 90-update timer in $FFF91C |
+| `$8E96 (object_type04_wait_pose_state)` | State 3: at the end advances $FFF910 and returns to pose 0 |
+| `$8EAA (object_type04_final_idle_state)` | State 4: rts |
+| `$BB2E (presentation_type8d_init_state)` | State 0: initialization |
+| `$BB40 (presentation_type8d_scroll_state)` | State 1: counts +$54 down, scrolling rows with presentation_add_hscroll_rows |
+| `$BB64 (presentation_type8e_static_sprite_init_state)` | State 0: initialization |
+| `$BB92 (presentation_type8e_static_sprite_idle_state)` | State $1: rts |
+| `$BBAA (presentation_type8c_init_state)` | State 0: initialization |
+| `$BBE2 (presentation_type8c_fade_in_state)` | State 1: steps line 3 in |
+| `$BC04 (presentation_type87_init_state)` | State 0: initialization |
+| `$BC72 (presentation_type89_init_state)` | State 0: initialization |
+| `$BCB8 (presentation_type8a_init_state)` | State 0: initialization |
+| `$BCF0 (presentation_type8a_move_to_y78_state)` | State 1: moves until height $78 |
+| `$BD2C (presentation_type8b_init_state)` | State 0: initialization |
+| `$BD42 (presentation_type8b_timed_step1_state)` | State 1: at the timer loads the next palette list and the next four colours |
+| `$BD5E (presentation_type8b_timed_step2_state)` | State 2: at the timer loads the next palette list |
+| `$BD76 (presentation_type8b_timed_step3_state)` | State 3: at the timer loads the next four colours |
+| `$BD8E (presentation_type8b_timed_step4_state)` | State 4: at the timer loads palette and colours |
+| `$BDAA (presentation_type8b_timed_step5_state)` | State 5: at the timer loads the next palette list |
+| `$BDBC (presentation_type8b_spawn_87_89_state)` | State 6: with +$5A set creates types $87 and $89 |
+| `$BDF4 (presentation_type8b_timed_step7_state)` | State 7: at the timer loads the palette and starts $BE74 |
+| `$BE10 (presentation_type8b_timed_step8_state)` | State 8: at the timer runs $BE74 |
+| `$BE22 (presentation_type8b_timed_step9_state)` | State 9: at the timer runs $BE74 |
+| `$BEEC (presentation_type85_cycle_state)` | State 1: every 4 updates runs $BF2A with d6 = 0 |
+| `$BF16 (presentation_type86_cycle_state)` | State 1: every 4 updates runs $BF2A with d6 = 1 |
+| `$BF8C (presentation_type84_init_state)` | State 0: initialization |
+| `$BFAE (presentation_type84_write_priority_on_state)` | State 1: every 2 updates writes tiles with priority set |
+| `$BFFA (presentation_type84_wait_a_state)` | State 2: counts down and goes to state 3 |
+| `$C00C (presentation_type84_write_priority_off_state)` | State 3: every 2 updates writes tiles with priority clear |
+| `$C05E (presentation_type84_wait_restart_state)` | State 4: counts down and goes back to state 1 |
+| `$C076 (presentation_type84_wait_flag_state)` | State 5: waits on +$37 and goes to state 6 |
+| `$C088 (presentation_type84_write_priority_final_state)` | State 6: every 2 updates writes tiles with priority set |
+| `$C12C (presentation_type82_init_state)` | State 0: initialization |
+| `$C160 (presentation_type82_fade_in_state)` | State 1: steps line +$58 in |
+| `$C16E (presentation_type82_fade_out_state)` | State 2: steps line +$58 out |
+| `$C192 (presentation_type83_init_state)` | State 0: initialization |
+| `$C1BA (presentation_type83_timed_step1_state)` | State 1: at the timer spawns a type $82 |
+| `$C1DA (presentation_type83_timed_step2_state)` | State 2: at the timer draws the next tilemap with palette 1 |
+| `$C218 (presentation_type83_timed_step3_state)` | State 3: at the timer spawns two type $82 |
+| `$C244 (presentation_type83_timed_step4_state)` | State 4: at the timer draws the next tilemap with palette 3 |
+| `$C26C (presentation_type83_timed_step5_state)` | State 5: at the timer spawns a type $82 |
+| `$C28C (presentation_type83_timed_step6_state)` | State 6: at the timer draws the next tilemap with palette 4 |
+| `$C3A6 (presentation_type77_init_state)` | State 0: initialization |
+| `$C3DE (presentation_type77_spawn_type76_state)` | State 1: at the timer creates a type $76 |
+| `$C3FE (presentation_type77_draw_tilemaps_state)` | State 2: at the timer draws tilemaps 9 and $0A |
+| `$C442 (presentation_type77_fade_in_state)` | State 3: steps line 0 in until the timer ends |
+| `$C46E (presentation_type77_spawn_type79_state)` | State 4: at the timer creates a type $79 |
+| `$C4A2 (presentation_type81_init_state)` | State 0: initialization |
+| `$C4E6 (presentation_type81_draw_tilemaps_state)` | State 1: at the timer draws tilemaps $0B and $0C |
+| `$C536 (presentation_type81_fade_in_state)` | State 2: steps line 0 in until the timer ends |
+| `$C562 (presentation_type81_spawn_type79_state)` | State 3: at the timer creates a type $79 |
+| `$C59A (presentation_type79_palette_cycle_init_state)` | State 0: initialization |
+| `$C5AC (presentation_type79_palette_cycle_step_state)` | State 1: every 5 updates copies the next of four palettes |
+| `$C604 (presentation_type79_palette_cycle_wait_state)` | State 2: waits 5 updates, then state 1 |
+| `$C628 (presentation_type70_init_state)` | State 0: initialization |
+| `$C642 (presentation_type70_draw_tilemap_state)` | State 1: draws tilemap 8 |
+| `$C65A (presentation_type70_clear_blockmap_state)` | State 2: clears the start of $FF0000 and sets $FFFA0E |
+| `$C690 (presentation_type70_animate_state)` | State 3: every 6 updates runs $C6B2 until the timer ends |
+| `$C6EE (presentation_type6e_slide_in_sprite_init_state)` | State 0: initialization |
+| `$C732 (presentation_type6e_slide_in_sprite_slide_state)` | State 1: accelerates until X $78 |
+| `$C754 (presentation_type6e_slide_in_sprite_idle2_state)` | State $2: rts |
+| `$C764 (presentation_type6f_slide_in_sprite_init_state)` | State 0: initialization |
+| `$C7AC (presentation_type6f_slide_in_sprite_slide_state)` | State 1: accelerates until X $D0 |
+| `$C7CE (presentation_type6f_slide_in_sprite_idle2_state)` | State $2: rts |
+| `$C7DE (presentation_type75_slide_in_sprite_init_state)` | State 0: initialization |
+| `$C854 (presentation_type76_slide_in_sprite_init_state)` | State 0: initialization |
+| `$C8AA (presentation_type80_init_state)` | State 0: initialization |
+| `$C8FE (presentation_type88_init_state)` | State 0: initialization |
+| `$C922 (presentation_type88_idle_state)` | State $1: rts |
+| `$C930 (presentation_type78_blinking_sprite_init_state)` | State 0: initialization |
+| `$C956 (presentation_type78_blinking_sprite_blink_state)` | State 1: toggles the render flag every $14 updates |
+| `$C986 (presentation_type7a_vertical_sprite_init_state)` | State 0: initialization |
+| `$C9BE (presentation_type7a_vertical_sprite_move_state)` | State 1: moves until height $C8 |
+| `$C9DC (presentation_type7b_horizontal_sprite_init_state)` | State 0: initialization |
+| `$CA14 (presentation_type7b_horizontal_sprite_move_state)` | State 1: moves until X $80 |
+| `$CA32 (presentation_type7c_horizontal_sprite_init_state)` | State 0: initialization |
+| `$CA6A (presentation_type7c_horizontal_sprite_move_state)` | State 1: moves until X $C8 |
+| `$CA8E (presentation_type6a_init_state)` | State 0: initialization |
+| `$CAA2 (presentation_type6a_wait_state)` | State 1: counts down, then state 2 and $CBAA |
+| `$CAB4 (presentation_type6a_sound_step_state)` | State 2: every 4 updates plays $A1 and steps |
+| `$CB36 (presentation_type6a_wait_flag_state)` | State 3: waits on +$58 |
+| `$CB5C (presentation_type6a_timed_tile_state)` | State 4: every 16 updates writes a tile until the timer ends |
+| `$CBFE (presentation_type64_tile_strip_anim_init_state)` | State 0: initialization |
+| `$CC1E (presentation_type64_tile_strip_anim_step_state)` | State 1: every 64 updates writes the next tile strip |
+| `$CCAC (presentation_type64_tile_strip_anim_repeat_state)` | State 2: every 64 updates writes the strips from $3FB0E |
+| `$CCFE (presentation_type65_camera_y_drift_init_state)` | State 0: initialization |
+| `$CD10 (presentation_type65_camera_y_drift_state)` | State 1: every 4 updates adds 1 to camera_y |
+| `$CD38 (presentation_type60_plane_fill_init_state)` | State 0: initialization |
+| `$CD4A (presentation_type60_plane_fill_scroll_state)` | State 1: every 4 updates moves the scroll rows by -1 |
+| `$CD82 (presentation_type69_init_state)` | State 0: initialization |
+| `$CDCA (presentation_type69_scroll_a_state)` | State 1: moves rows until the timer ends |
+| `$CE06 (presentation_type69_wait_flag_a_state)` | State 2: on +$58 plays $A1 and goes to state 3 |
+| `$CE30 (presentation_type69_camera_down_state)` | State 3: moves the secondary camera by 8 and the linked object against it |
+| `$CE88 (presentation_type69_scroll_b_state)` | State 4: moves rows until the timer ends |
+| `$CEC2 (presentation_type69_wait_flag_b_state)` | State 5: on +$58 plays $A1 and goes to state 6 |
+| `$CEEC (presentation_type69_camera_up_state)` | State 6: moves camera_y by -8 and the linked object against it |
+| `$CF38 (presentation_type69_scroll_c_state)` | State 7: moves rows until the timer ends |
+| `$CF72 (presentation_type69_wait_flag_c_state)` | State 8: on +$58 creates a type $6A and sets a colour |
+| `$CF96 (presentation_type69_delay_next_state)` | State 9: counts +$56 down, then the state in +$59 |
+| `$CFCE (presentation_type6b_init_state)` | State 0: initialization |
+| `$D014 (presentation_type6b_slide_apart_state)` | State 1: moves its linked objects apart by 8 until the timer ends |
+| `$D0B8 (presentation_type74_init_state)` | State 0: initialization |
+| `$D0E6 (presentation_type74_slide_state)` | State 1: moves its linked objects by 10 until the timer ends |
+| `$D128 (presentation_type61_palette_fade_init_state)` | State 0: initialization |
+| `$D146 (presentation_type61_palette_fade_step_state)` | State 1: steps line 1 in |
+| `$D168 (presentation_type6c_init_state)` | State 0: initialization |
+| `$D19E (presentation_type6c_draw_tilemap_state)` | State 1: sets the plane size and draws tilemap 1 |
+| `$D206 (presentation_type6c_fade_in_state)` | State 2: steps line 1 in |
+| `$D22C (presentation_type62_init_state)` | State 0: initialization |
+| `$D246 (presentation_type62_fade_out_state)` | State 1: steps line 1 out |
+| `$D250 (presentation_type62_clear_palette_and_plane_state)` | State 2: clears line 0 and plane C000h and sets the plane size |
+| `$D280 (presentation_type62_draw_tilemaps_state)` | State 3: draws tilemaps from 7 down |
+| `$D2C2 (presentation_type63_palette_swap_init_state)` | State 0: initialization |
+| `$D2D4 (presentation_type63_palette_swap_wait_state)` | State 1: counts down, then state 2 |
+| `$D2E2 (presentation_type63_palette_swap_cycle_state)` | State 2: every 16 updates moves to the next of six colours |
+| `$D33A (presentation_type66_init_state)` | State 0: initialization |
+| `$D35C (presentation_type66_idle_state)` | State $1: rts |
+| `$D35E (presentation_type66_delete_state)` | State $2: clears the object |
+| `$D370 (presentation_type67_init_state)` | State 0: initialization |
+| `$D396 (presentation_type67_idle_state)` | State $1: rts |
+| `$D398 (presentation_type67_delete_state)` | State $2: clears the object |
+| `$D3AA (presentation_type68_init_state)` | State 0: initialization |
+| `$D3D0 (presentation_type68_idle_state)` | State $1: rts |
+| `$D3D2 (presentation_type68_delete_state)` | State $2: clears the object |
+| `$D3EE (presentation_type71_init_state)` | State 0: initialization |
+| `$D40E (presentation_type71_fade_in_state)` | State 1: steps line 2 in until the timer ends |
+| `$D438 (presentation_type71_fade_out_state)` | State 2: steps line 2 out |
+| `$D45C (presentation_type72_init_state)` | State 0: initialization |
+| `$D47C (presentation_type72_fade_in_state)` | State 1: steps line 3 in until the timer ends |
+| `$D4A6 (presentation_type72_fade_out_state)` | State 2: steps line 3 out |
+| `$D4CA (presentation_type73_init_state)` | State 0: initialization |
+| `$D4EA (presentation_type73_fade_in_state)` | State 1: steps line 1 in until the timer ends |
+| `$D53C (presentation_type73_fade_out_state)` | State 2: steps line 1 out |
+| `$D556 (presentation_type7d_init_state)` | State 0: initialization |
+| `$D57E (presentation_type7d_fade_in_state)` | State 1: steps line 0 in until the timer ends |
+| `$D5B0 (presentation_type7d_fade_out_state)` | State 2: steps line 0 out until the timer ends |
+| `$D5D4 (presentation_type7f_palette_fade_signal_init_state)` | State 0: initialization |
+| `$D5F4 (presentation_type7f_palette_fade_signal_step_state)` | State 1: steps the palettes until the timer ends |
+| `$D6AC (garcia_type20_personality_reset_state)` | State 1: reset, picks the walk $0D or the run $0C from +$40 |
+| `$D6C0 (garcia_type20_entry_run_state)` | State $0C: the entry run at 5 px, every frame with attack box $01, braking past the target |
+| `$D76A (garcia_type20_armed_walk_state)` | State $0D: armed walk to the approach point at 2.25 |
+| `$D7BE (garcia_type20_face_target_state)` | State 8: 24 updates facing the target, then dodge, stab or throw |
+| `$D856 (garcia_type20_stab_state)` | State 9: closes to 32 px and stabs with box $14 |
+| `$D8EC (garcia_type20_throw_knife_state)` | State $0A: animation $28, releasing the knife on frame 1 |
+| `$D9BC (garcia_type21_walk_to_point_state)` | State 1: walks to the approach point at 2 for 80 updates |
+| `$DA10 (garcia_type21_wait_at_point_state)` | State $0C: waits there 40 updates |
+| `$DA98 (garcia_type21_rush_hold_state)` | State 8: rushes the target at 4.5 while it faces him; the touch is his hold |
+| `$DB18 (garcia_type21_hold_player_state)` | State 9: holds the player |
+| `$DDA8 (garcia_type22_32_activate_state)` | State 0: activation, setting +$01 bit 0 for personality 4 |
+| `$DDCA (garcia_type22_32_personality_reset_state)` | State 1: reset through the personality table $DDDA |
+| `$DE78 (garcia_type22_32_lie_in_wait_state)` | State $12: lies in wait 128 updates or until the target is within 80 px |
+| `$DEC6 (garcia_type22_32_rush_state)` | State $10: rushes to 32 px at 5 |
+| `$DF0A (garcia_type22_32_triple_jab_state)` | State $11: jabs three times at reload 3 |
+| `$FFE01E (camera_x_min)` | State $0E: stalks the approach point at 2.5 for 80 updates |
+| `$E07C (garcia_type22_32_stand_state)` | State 8: stands; close by it dodges, box $12 on the target is the punch |
+| `$E20A (garcia_type22_32_wander_state)` | State $0B: wanders towards a random offset of the approach point for one walk cycle |
+| `$E2DC (garcia_type22_32_stand_close_state)` | State $0C: stands, as state 8 |
+| `$E348 (garcia_type23_approach_state)` | State $0C: to 64 px from the target on its lane at 3.5, 48 updates |
+| `$E3A0 (garcia_type23_spawn_weapon_walk_state)` | States 1 and $0A: spawns the bat or pipe and walks to the approach point at 2.5 |
+| `$E404 (garcia_type23_stand_state)` | State 8: stands 16 updates |
+| `$E47E (garcia_type23_swing_state)` | State 9: the swing, wind-up on frames 0-2 and box $18 on frames 3-5 |
+| `$E4F6 (signal_type24_walk_to_point_state)` | State 1: walks to the approach point at 2 for 96 updates |
+| `$E54E (signal_type24_dash_state)` | State $0A: dashes at the point, X until past it, then the lane |
+| `$E5EC (signal_type24_stand_decide_state)` | State 8: stands 24 updates, then dodges, walks in or slides |
+| `$E684 (signal_type24_walk_in_state)` | State 9: at the target spot at 3.5, 48 updates |
+| `$E6F2 (signal_type24_hold_throw_state)` | State $0C: holds the player 48 px in front and throws on +$0D = 1 |
+| `$E80A (signal_type24_slide_state)` | State $0B: the slide, box $0F on the feet and no body |
+| `$E8B8 (signal_type24_stand_state)` | State $0D: stands, entered when the target is in action $5C |
+| `$E920 (haku_ro_type25_activate_state)` | State 0: activation, setting +$01 bit 0 for personality 3 |
+| `$E942 (haku_ro_type25_personality_reset_state)` | State 1: reset through the personality table $E94A |
+| `$EA5C (haku_ro_type25_knockdown_state)` | State 3: his knockdown |
+| `$EA8A (haku_ro_type25_hop_state)` | State $10: plays $B2 and hops at X 5, height -10 away from the attacker |
+| `$EB2A (haku_ro_type25_walk_to_point_state)` | State $11: walks to the approach point at 2, facing |
+| `$EBAC (haku_ro_jump_kick_state)` | State $0D of $25 and $2A: the strike animation in a hop |
+| `$EC88 (haku_ro_type25_stalk_state)` | State 8: stalks the point, counting changes of the target X velocity |
+| `$ED44 (haku_ro_type25_lane_step_state)` | State 9: steps 4 lanes per update onto the target lane |
+| `$EDD8 (haku_ro_flying_kick_state)` | State $0B of $25 and $2A: the flying kick, 10 px per update with box $0C |
+| `$EFB6 (haku_ro_type25_rush_turn_back_state)` | State $0F: rushes at 5 and turns back 64 px short |
+| `$FFF040 (sound_music_fm0)` | State 0: activation, setting +$01 bit 0 for personality 1 |
+| `$F286 (jack_juggle_walk_state)` | State $12: the juggle walk, going on to the wander state |
+| `$F2E6 (jack_jump_state)` | State $0F: the jump |
+| `$F3B6 (jack_look_about_state)` | State $10: looks about, with no contact test |
+| `$F410 (jack_ranged_throw_state)` | State $0E: the ranged throw, three axes |
+| `$F55E (jack_juggle_approach_state)` | State $0C: the juggle approach |
+| `$F728 (jack_aligned_throw_state)` | State $0B: the aligned throw of both juggled axes |
+| `$F7D8 (haku_ro_type2a_spawn_trio_state)` | State 0: spawns two more of the type and links the three |
+| `$F876 (haku_ro_type2a_formation_state)` | State 1: keeps the formation around the screen centre |
+| `$F9B6 (haku_ro_type2a_charge_wait_state)` | State 9: the 16-update wait after the charge |
+| `$F9F0 (haku_ro_type2a_formation_handoff_b_state)` | State $10: formation, handing off as a group |
+| `$FA92 (haku_ro_type2a_formation_handoff_a_state)` | State $0F: formation, handing off as a group |
+| `$FFFB40 (police_special_blast_lane)` | State 8: the charge at 4 px with the lane snapped to the target |
+| `$FFFC1C (round4_ripple_phase)` | State 5: the juggle, creating the axes |
+| `$FC66 (jack_projectile_init_state)` | State 0: art and flags |
+| `$FCB6 (jack_projectile_juggle_state)` | State 1: the juggled axe |
+| `$FE46 (jack_projectile_falling_state)` | State 2: falls and lands |
+| `$FED6 (jack_projectile_flight_state)` | State 3: flies on its velocities and falls |
+| `$FEE4 (jack_projectile_catch_state)` | State 4: back with Jack, setting his +$31 bit 4 |
+| `$12B94 (mr_x_office_controller_init_state)` | State 0: pose $28 and creates the type $34 scene object |
+| `$12C0A (mr_x_office_controller_wait_signal_a_state)` | State 1: on $FFFA78 bit 0 queues next state 2 with a 60-update pose |
+| `$12C26 (mr_x_office_controller_raise_signal_state)` | State 2: sets $FFFA78 bit 1 and starts a pose with next state 3 |
+| `$12C3E (mr_x_office_controller_wait_signal_b_state)` | State 3: waits on $FFFA78 bit 0 |
+| `$12CA4 (mr_x_office_controller_trigger_type38_state)` | State 4: moves the type $38 object to state 3 and queues state 5 |
+| `$12CCA (mr_x_office_controller_wait_flow_state)` | State 5: waits on level_flow_flags bit 1, queuing state 6 |
+| `$12D22 (mr_x_office_controller_start_delay_state)` | State 7: a 10-update delay, then state $15 |
+| `$12D30 (mr_x_office_controller_queue_state9_state)` | State 8: starts a pose with next state 9 |
+| `$12D42 (mr_x_office_controller_wait_signal_c_state)` | State 9: waits on $FFFA78 bit 0 |
+| `$12D84 (mr_x_office_controller_wait_signal_d_state)` | State $17: on $FFFA78 bit 0 starts a pose with next state 4 |
+| `$12DB4 (mr_x_office_controller_trigger_both_state)` | State $15: after +$56 triggers the scene objects |
+| `$12DDA (mr_x_office_controller_wait_clear_signal_state)` | State $16: after +$54 clears $FFFA78 bit 0 and queues state 8 |
+| `$12DF4 (mr_x_office_controller_trigger_scene_state)` | State $0A: after +$56 triggers the scene object +$58 |
+| `$12E10 (mr_x_office_controller_raise_signal_late_state)` | State $0B: after +$54 sets $FFFA78 bit 1 |
+| `$12E1E (mr_x_office_controller_pose_2a_state)` | State $0C: pose $2A |
+| `$12E34 (mr_x_office_controller_pose_2a_wait_state)` | State $0D: after +$54 pose $28 and the queued state |
+| `$12E52 (mr_x_office_controller_pose_28_state)` | State $0E: pose $28 |
+| `$12E68 (mr_x_office_controller_pose_28_wait_state)` | State $0F: after +$54 frame 0 and the queued state |
+| `$12E82 (mr_x_office_controller_pose_2a_signal_state)` | State $10: pose $2A |
+| `$12E98 (mr_x_office_controller_pose_2a_signal_wait_state)` | State $11: on $FFFA78 bit 0 frame 0 and the queued state |
+| `$12EB6 (mr_x_office_controller_pose_2c_state)` | State $12: pose $2C, 10 updates |
+| `$12ED2 (mr_x_office_controller_pose_2c_step_state)` | State $13: steps the frame, then 20 updates |
+| `$12EE8 (mr_x_office_controller_pose_2c_end_state)` | State $14: pose $28 and sets a level_flow_flags bit chosen by +$58 |
+| `$12F28 (mr_x_office_scene_type34_init_state)` | State 0: pose $26 |
+| `$12F42 (mr_x_office_scene_type34_wait_trigger_state)` | State 1: waits on +$58 bit 0 |
+| `$12F5E (mr_x_office_scene_type34_delay_state)` | State 2: 13 updates hidden |
+| `$12F78 (mr_x_office_scene_type34_shake_state)` | State 3: after 30 updates starts the screen shake |
+| `$12F92 (mr_x_office_scene_type34_step_frame_state)` | State 4: steps the frame, 20 updates |
+| `$12FA0 (mr_x_office_scene_type34_step_wait_state)` | State 5: at the end frame 0 and back to state 1 |
+| `$12FC4 (mr_x_type38_init_state)` | State 0: art $6FB5A |
+| `$12FD8 (mr_x_type38_wait_launch_state)` | State 1: on +$58 launches |
+| `$1300C (mr_x_type38_fall_state)` | State 2: falls to the floor |
+| `$13048 (mr_x_type38_spawn_pipe_state)` | State 3: creates a type $0B pipe at its place and clears itself |
+| `$14204 (mr_x_bullet_bounce_state)` | State 2: mr_x_projectile_bounce_update until it ends |
+| `$14272 (mr_x_shell_init_state)` | State 0: art and animation $24 |
+| `$14308 (mr_x_shell_bounce_state)` | State 1: mr_x_projectile_bounce_update until it ends |
+| `$14324 (abadede_variant_type39_init_state)` | State 0: creates a type $30 and links it |
+| `$1434C (abadede_variant_type39_monitor_state)` | State 1: on +$59 = 3 runs kill_ordinary_enemies_and_release_players, then watches the boss in +$50 |
+| `$145EC (abadede_approach_state)` | State 1: approach, substate 0 aims and 1 walks |
+| `$14656 (abadede_pause_decide_state)` | State 2: the pause, then the decision |
+| `$146F0 (abadede_retreat_state)` | State 3: retreat, substate 0 aims and 1 walks away |
+| `$1477A (abadede_strike_shake_a_state)` | State 4: a strike landed, the shake with no contact test |
+| `$147A6 (abadede_strike_shake_b_state)` | State 5: a strike landed, then primary 3 |
+| `$147C0 (abadede_type0c_hit_state)` | State $0F: hit by a type $0C object |
+| `$1485C (abadede_held_state)` | State $0B: held |
+| `$14A8A (abadede_get_up_state)` | State $0A: getting up, 8 updates, then primary 1 |
+| `$14B0E (abadede_knocked_down_state)` | State 6: knocked down: flight, floor, then $0A or death |
+| `$14BDC (abadede_charge_state)` | State 7: the charge: set-up, run, brake, punch |
+| `$14D04 (abadede_hold_throw_state)` | State 8: holds and throws a player |
+| `$14EA2 (abadede_held_from_behind_state)` | State $0D: held from behind |
+| `$14F46 (abadede_thrown_state)` | State $0E: thrown, 4 points on landing |
+| `$1512E (abadede_suplexed_state)` | State 9: suplexed, 5 points |
+| `$15266 (abadede_death_state)` | State $0C: the death |

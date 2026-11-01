@@ -514,7 +514,7 @@ FFFA5F, type17_palette_cycle_timer, "95% - B - Countdown of object_type17_palett
 00E4DA, signal_type24_state_table, "100% - W[14] - State table of signal_type24"
 00E8F8, haku_ro_type25_state_table, "100% - W[20] - State table of haku_ro_type25"
 010362, nora_type26_state_table, "100% - W[13] - State table of nora_type26"
-01037C, jack_type27_state_table, "100% - W[21] - State table of jack_type27"
+01037C, jack_type27_state_table, "100% - W[19] - State table of jack_type27"
 0103AE, haku_ro_type2a_state_table, "100% - W[17] - State table of haku_ro_type2a"
 012B64, mr_x_office_controller_state_table, "100% - W[24] - State table of mr_x_office_controller"
 012F1C, mr_x_office_scene_type34_state_table, "100% - W[6] - State table of mr_x_office_scene_type34"
@@ -523,3 +523,4 @@ FFFA5F, type17_palette_cycle_timer, "95% - B - Countdown of object_type17_palett
 01426E, mr_x_shell_state_table, "100% - W[2] - State table of mr_x_shell"
 014320, abadede_variant_type39_state_table, "100% - W[2] - State table of abadede_variant_type39"
 014466, abadede_state_table, "100% - W[15] - State table of abadede"
+0103A2, jack_projectile_type28_state_table, "100% - W[6] - Relative state table of jack_projectile_type28, each word a signed offset from the table"

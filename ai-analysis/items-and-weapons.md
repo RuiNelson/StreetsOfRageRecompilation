@@ -47,7 +47,7 @@ The global object dispatcher at `$B236 (object_type_update_jt)` indexes a word t
 | `$4C` | `$6948 (extra_life_pickup_dispatcher)` | Extra-life pickup. |
 | `$4F` | `$6968 (extra_special_pickup_dispatcher)` | Extra police-special pickup. |
 
-The six pickup handlers are tiny wrappers. Each chooses an item-effect index in object `+$50`, installs its art/animation pointer, and then enters the shared pickup logic at `$699E (full_health_pickup_state0)`.
+The six pickup handlers are tiny wrappers. Each chooses an item-effect index in object `+$50`, installs its art/animation pointer, and then enters the shared pickup logic at `$699E (full_health_pickup_init_state)`.
 The adjacent type `$48/$49` handlers share the same object-dispatch region but
 are effect/prompt objects rather than consumables; `$3136
 (find_close_interaction_target)` never accepts them.
@@ -621,7 +621,7 @@ The weapon remains an object rather than becoming a player damage bonus. This is
 
 ### Type `$11`: telephone booth
 
-`$6AF4 (phone_booth_dispatcher)` / `$6B0A (phone_booth_state0)` initializes the collision-enabled telephone booth. Its `+$31` byte selects fragment variants: zero is the intact booth; a nonzero value chooses an already shattered glass/booth fragment animation and begins in a later state.
+`$6AF4 (phone_booth_dispatcher)` / `$6B0A (phone_booth_init_state)` initializes the collision-enabled telephone booth. Its `+$31` byte selects fragment variants: zero is the intact booth; a nonzero value chooses an already shattered glass/booth fragment animation and begins in a later state.
 
 On an accepted damaging collision (`$6B34 (shatter_phone_booth)`) the intact booth:
 

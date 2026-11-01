@@ -133,7 +133,7 @@ without collapsing the remaining behavioural differences.
 
 The exact duplicate animation pointers prove that `$20-$23` share the Garcia
 animation resource, `$25/$2A` share Haku-Ro, and Jack's type `$27` plus its
-type-`$28` projectile share the Jack resource. `$00FC1C` creates type `$28` from
+type-`$28` projectile share the Jack resource. `$00FC1C (jack_projectile_juggle_spawn_state)` creates type `$28` from
 Jack, copies its target and damage, and the `$FC66-$FE3E` path launches,
 collides, returns, or removes the axe/torch helper. Type `$29` is created by
 `$9566 (prepare_ordinary_enemies_for_police_special)` and dispatches directly
@@ -201,7 +201,7 @@ distance ~= major + 3/8 * minor
 
 (`cmp.l d0,d1; bpl` keeps the larger in `d1`, and the `*3 >> 3` is applied
 to `d0`, the smaller. An earlier reading had the axes the other way round;
-Signal's `$E5EC (signal_type24_state8)` decision, which compares this against 128, only replays
+Signal's `$E5EC (signal_type24_stand_decide_state)` decision, which compares this against 128, only replays
 update for update in lockstep with the larger axis whole -- see "The street
 enemies, state by state".)
 
@@ -264,7 +264,7 @@ on — that a specific shape id is a genuine strike, for:
 
 | Type(s) | State | Handler | Box id (R/L) | Shape (facing right) |
 | --- | --- | --- | --- | --- |
-| `$20` | `$09` | `$D856 (garcia_type20_state9)` | `$14`/`$15` | forward `+32..+56` |
+| `$20` | `$09` | `$D856 (garcia_type20_stab_state)` | `$14`/`$15` | forward `+32..+56` |
 | `$21`, `$22` (shared) | `$0A` | `$E190 (garcia_type21_22_attack_state)` (+ `$E0EC (garcia_far_head_box_check)` sub-check) | `$12`/`$13` then `$3E`/`$3F` | forward `0..+40`, then `+16..+51` |
 | `$26` (Nora) | `$08` | `$F1B0 (nora_type26_whip_engage_state)` | `$22`/`$23` | forward `+32..+80` |
 
@@ -278,12 +278,12 @@ manual `$AD04 (test_target_body_box_overlap)` shortcut at all and rely solely on
 pipeline (whatever `+$02`/`+$03` the currently displayed animation frame
 sets, tested every object, every frame, by `$AAA0 (resolve_enemy_player_contact)`). In particular:
 
-- type `$20`'s **other** state, `$0A` (`$D8EC (garcia_type20_statea)`, also documented as
+- type `$20`'s **other** state, `$0A` (`$D8EC (garcia_type20_throw_knife_state)`, also documented as
   `ATTACKING` from live testing), does not call `$AD04 (test_target_body_box_overlap)` at all — it toggles
   a linked-object pointer at `+$6A` and plays a sound, with no direct
   collision test in its own body; whatever it does hit is decided entirely
   by the generic pipeline against its animation's own `+$02`;
-- type `$23`'s attacking state `$09` (`$E47E (garcia_type23_state9)`) likewise never calls `$AD04 (test_target_body_box_overlap)`;
+- type `$23`'s attacking state `$09` (`$E47E (garcia_type23_swing_state)`) likewise never calls `$AD04 (test_target_body_box_overlap)`;
 - `$1FC70 (garcia_animation_set)` is **shared by all four types**, so it
   contains attack-capable shapes (at minimum `$14`, `$12`, `$3E`, plus an
   unconfirmed `$18` at animation index 24) that do not all belong to every
@@ -436,7 +436,7 @@ like every ordinary enemy he dies only on a *negative* health word.
 ### States (`$1037C (jack_type27_state_table)`, nineteen words)
 
 `$F27E (jack_type27_dispatcher)` indexes nineteen words at `$1037C (jack_type27_state_table)`. The next
-twelve bytes are the relative table of his `$28` helper (`$103A2`, used by
+twelve bytes are the relative table of his `$28` helper (`$103A2 (jack_projectile_type28_state_table)`, used by
 `$FFFC14 (elc_spawn_stream_cursor)` through `$101CC`), and Haku-Ro
 `$2A`'s table follows at `$103AE (haku_ro_type2a_state_table)`.
 
@@ -453,14 +453,14 @@ twelve bytes are the relative table of his `$28` helper (`$103A2`, used by
 | `$08` | `$F5F2 (ordinary_enemy_special_lunge_lane_setup)` | Lane 8 or 56, then 40 px toward the target |
 | `$09` | `$F64A (ordinary_enemy_special_lunge_distance_gate)` | The X gate |
 | `$0A` | `$F6BC (ordinary_enemy_special_lunge)` | Diagonal back-off onto the target's lane |
-| `$0B` | `$F728 (jack_type27_stateb)` | Aligned throw (both juggled axes) |
-| `$0C` | `$F55E (jack_type27_statec)` | Juggle approach |
+| `$0B` | `$F728 (jack_aligned_throw_state)` | Aligned throw (both juggled axes) |
+| `$0C` | `$F55E (jack_juggle_approach_state)` | Juggle approach |
 | `$0D` | `$F4A6 (jack_retreat_to_screen_edge)` | Retreat to the screen edge |
-| `$0E` | `$F410 (jack_type27_statee)` | Ranged throw, three axes |
-| `$0F` | `$F2E6 (jack_type27_statef)` | Jump |
-| `$10` | `$F3B6 (jack_type27_state10)` | Look about: **no contact test at all** |
+| `$0E` | `$F410 (jack_ranged_throw_state)` | Ranged throw, three axes |
+| `$0F` | `$F2E6 (jack_jump_state)` | Jump |
+| `$10` | `$F3B6 (jack_look_about_state)` | Look about: **no contact test at all** |
 | `$11` | `$991A (ordinary_enemy_begin_knockdown)` | Knockdown |
-| `$12` | `$F286 (jack_type27_state12)` -> `$E20A (garcia_type22_32_stateb)` | Juggle walk |
+| `$12` | `$F286 (jack_juggle_walk_state)` -> `$E20A (garcia_type22_32_wander_state)` | Juggle walk |
 
 `$F2DE` holds `$0C00, $0D00, $0F00, $1200`: every reset (`$0100`) of his lands
 in the state his ELC record's `+$40` low nibble names, so each Jack runs one
@@ -469,24 +469,24 @@ personality 0 in rounds 2, 4, 6 and 8, personality 1 in rounds 6 and 8 (one of
 them two-player only), personality 2 in round 5 (eight records in one timed
 batch, several two-player only) and personality 3 in round 5.
 
-- **0, approach and aligned throw.** `$F55E (jack_type27_statec)` spawns his juggle (`$F544 (jack_spawn_juggle)`) if
+- **0, approach and aligned throw.** `$F55E (jack_juggle_approach_state)` spawns his juggle (`$F544 (jack_spawn_juggle)`) if
   `+$52` bit 0 was clear, faces the target, and walks at 2 px an update to
   108 px on his side of it, on its lane (a 160-update timeout resets him).
   `$F5F2 (ordinary_enemy_special_lunge_lane_setup)` then walks to lane 8 when the target is below lane `$20`, lane 56
   otherwise, and 40 px toward it. `$F64A (ordinary_enemy_special_lunge_distance_gate)` gates on the X gap: past 64 px the
   back-off `$0A`, 40-64 px a reset, closer a 40 px back-off at 3.5 px an
   update and the gate again. `$F6BC (ordinary_enemy_special_lunge)`'s diagonal ends within 8 lanes of the
-  target (off screen, in `$07`), and `$F728 (jack_type27_stateb)` stands and throws.
+  target (off screen, in `$07`), and `$F728 (jack_aligned_throw_state)` stands and throws.
 - **1, retreat and ranged throw.** `$F4A6 (jack_retreat_to_screen_edge)` walks to the screen edge behind
   him (`cam_x + $120` facing left, `cam_x + $20` facing right) over eight legs
   at random lanes (`$F53C`) and speeds (2.5-5 px an update, `$DD68`), then
-  `$F410 (jack_type27_statee)` throws. The target within 64 px on X (`$F482 (jack_abort_retreat_if_target_near)`) aborts either into
+  `$F410 (jack_ranged_throw_state)` throws. The target within 64 px on X (`$F482 (jack_abort_retreat_if_target_near)`) aborts either into
   `$07`.
-- **2, jumps.** `$F2E6 (jack_type27_statef)` jumps at a point near the target (its approach offsets
+- **2, jumps.** `$F2E6 (jack_jump_state)` jumps at a point near the target (its approach offsets
   plus `$1031A[random]`), 1-4 px an update, v_z -6..-11, lands, holds 4
   updates, then `$F3A2[+$11 & 3]`: look about (`$10`, 10-17 updates, sometimes
   flipping his facing every 3), throw (`$0E`) or jump again.
-- **3, juggle walk.** `$F286 (jack_type27_state12)` spawns the juggle and runs `$E20A (garcia_type22_32_stateb)` with Jack's
+- **3, juggle walk.** `$F286 (jack_juggle_walk_state)` spawns the juggle and runs `$E20A (garcia_type22_32_wander_state)` with Jack's
   own tables: one walk-animation cycle toward a point near the target (1-5 px
   an update, `$102FA`), then `$1030A[random]` -- `$12` seven times in eight,
   `$0E` otherwise.
@@ -516,11 +516,11 @@ target until he is 80 px beyond it, and resets (`$01`). What matters in play:
 - it calls `$9E4C (enemy_face_target)` -- face the target -- on every update, after its contact
   test: in this state he turns as the player walks past him.
 
-### The juggle (`$F544 (jack_spawn_juggle)`, `$00FC1C`, `$FCB6`)
+### The juggle (`$F544 (jack_spawn_juggle)`, `$00FC1C (jack_projectile_juggle_spawn_state)`, `$FCB6 (jack_projectile_juggle_state)`)
 
-`$F544 (jack_spawn_juggle)` creates a type-`$28` spawner (helper state 5, `$00FC1C`) that spawns two
+`$F544 (jack_spawn_juggle)` creates a type-`$28` spawner (helper state 5, `$00FC1C (jack_projectile_juggle_spawn_state)`) that spawns two
 juggled axes 8 updates apart and removes itself. A juggled axe (state 1,
-`$FCB6`):
+`$FCB6 (jack_projectile_juggle_state)`):
 
 - on each arc's start sets z to **absolute 128** (`move.w #$0080,+$18`), v_z
   -9, v_x -1 and its offset `+$54` to +24 (Jack facing right) or -8 (left);
@@ -532,7 +532,7 @@ juggled axes 8 updates apart and removes itself. A juggled axe (state 1,
   at +4 px an update until it reaches his hand (X + 24 facing right, X - 8
   facing left) and starts again -- or, in `$0B`, hands itself over to the
   throw; with his animation anything else (hit, held, throwing) it drops
-  (state 3, `$FED6`): `$100A4 (object_integrate_xy_velocity)` moves it on its velocities and `$973E (enemy_apply_gravity_and_land)` drops
+  (state 3, `$FED6 (jack_projectile_flight_state)`): `$100A4 (object_integrate_xy_velocity)` moves it on its velocities and `$973E (enemy_apply_gravity_and_land)` drops
   it (1.125 an update, capped at 16) until it lands and is removed. It runs
   no contact test of its own, but its box (`$2B`) and damage (12) stay live
   in the player's hit test all the way down: traced live, an arc a front
@@ -547,9 +547,9 @@ near the bottom of the arc and on the way back to the hand. Each axe tests
 contact in its own update: any contact code but 2 (a player strike on it) is
 a hit, 1 on `+$7C`/`+$7D`, the damage the helper's own `+$34` (12/16/20).
 
-### The throws (`$F410 (jack_type27_statee)`, `$F728 (jack_type27_stateb)`, `$FE46`, `$FEE4`)
+### The throws (`$F410 (jack_ranged_throw_state)`, `$F728 (jack_aligned_throw_state)`, `$FE46 (jack_projectile_falling_state)`, `$FEE4 (jack_projectile_catch_state)`)
 
-A thrown axe (state 4, `$FEE4`) sets Jack's `+$31` bit 4 on entry and waits
+A thrown axe (state 4, `$FEE4 (jack_projectile_catch_state)`) sets Jack's `+$31` bit 4 on entry and waits
 16 px behind his hand, at his lane - 1, 64 px above his feet -- over every
 head -- until his animation shows frame 1. It is then released from 32 px in
 front of him, 48 px above his feet (a standing player's head: 3 px into
@@ -558,12 +558,12 @@ lane, until it leaves the screen or hits. A player strike on it (code 2)
 knocks it harmlessly away; a held bat or pipe swinging into it (code 5, `$48`)
 reflects it back along the street.
 
-- `$F410 (jack_type27_statee)` (ranged): face the target, animation `$14` at 3 updates a frame
+- `$F410 (jack_ranged_throw_state)` (ranged): face the target, animation `$14` at 3 updates a frame
   (`$0303`), clear `+$52`; on each loop's frame 0 spawn a thrown axe -- three,
   12 updates apart -- and reset on the fourth. `$F482 (jack_abort_retreat_if_target_near)`'s 64 px abort drops the
   one still waiting.
-- `$F728 (jack_type27_stateb)` (aligned, after `$0A`): wait (80 updates at most) for a juggled axe
-  to reach his hand. The first to arrive is tossed high (state 2, `$FE46`: up
+- `$F728 (jack_aligned_throw_state)` (aligned, after `$0A`): wait (80 updates at most) for a juggled axe
+  to reach his hand. The first to arrive is tossed high (state 2, `$FE46 (jack_projectile_falling_state)`: up
   past z -20, 32 updates hung behind him, then down), the second is thrown at
   once; the tossed one is thrown in turn if it comes back down while his throw
   animation still plays, else dropped.
@@ -694,15 +694,15 @@ lands in.
 | Type | Table | States | Personality (`+$40` low nibble -> state) |
 | --- | --- | --- | --- |
 | `$20` Garcia (knife) | `$D60E (garcia_type20_state_table)` | `$00`-`$0D` | `$D6BC`: 0 -> `$0D` walk, 1 -> `$0C` run |
-| `$21` Garcia | `$D9A2 (garcia_type21_state_table)` | `$00`-`$0C` | none (state 1 is `$D9BC (garcia_type21_state1)`) |
+| `$21` Garcia | `$D9A2 (garcia_type21_state_table)` | `$00`-`$0C` | none (state 1 is `$D9BC (garcia_type21_walk_to_point_state)`) |
 | `$22` Garcia | the words after `$DD78 (garcia_type22_32_dispatcher)`'s `lea` | `$00`-`$13` | `$DDDA`: 0 -> `$09`, 1 -> `$0F`, 2 -> `$12`, 3 -> `$0E`, 4 -> `$13`, 5 -> `$12` |
-| `$23` Garcia (bat/pipe) | `$E32E (garcia_type23_state_table)` | `$00`-`$0C` | none (state 1 is `$E3A0 (garcia_type23_state1_a)`) |
-| `$24` Signal | `$E4DA (signal_type24_state_table)` | `$00`-`$0D` | none (state 1 is `$E4F6 (signal_type24_state1)`) |
+| `$23` Garcia (bat/pipe) | `$E32E (garcia_type23_state_table)` | `$00`-`$0C` | none (state 1 is `$E3A0 (garcia_type23_spawn_weapon_walk_state)`) |
+| `$24` Signal | `$E4DA (signal_type24_state_table)` | `$00`-`$0D` | none (state 1 is `$E4F6 (signal_type24_walk_to_point_state)`) |
 | `$25` HakuRo | `$E8F8 (haku_ro_type25_state_table)` | `$00`-`$13` | `$E94A`: 0, 1 -> `$11`, 2 -> `$0E`, 3 -> `$13` |
 | `$26` Nora | `$10362 (nora_type26_state_table)` | `$00`-`$0C` | `$F0F6`: 0 -> `$09`, 1 -> `$0A`, 2 -> `$08` |
 
 States `$02`-`$07` are the shared `$9B36 (ordinary_enemy_hit_reaction_dispatch)` hitstun (Nora goes through `$F062 (nora_type26_hit_reaction_state)`
-first), `$991A (ordinary_enemy_begin_knockdown)` knockdown (`$D948 (garcia_type20_23_knockdown_state)` for `$20`/`$23`, `$EA5C (haku_ro_type25_state3)` for HakuRo),
+first), `$991A (ordinary_enemy_begin_knockdown)` knockdown (`$D948 (garcia_type20_23_knockdown_state)` for `$20`/`$23`, `$EA5C (haku_ro_type25_knockdown_state)` for HakuRo),
 `$A43E (ordinary_enemy_pepper_state)` pepper, `$A04A (ordinary_enemy_held_state)` held, `$9D16 (ordinary_enemy_death_state)` death (`$D62A (garcia_type20_23_death_state)` for `$20`/`$23`) and
 `$DBCC (ordinary_enemy_blocked_state)` evade.
 
@@ -747,13 +747,13 @@ walking box already on his body takes the hold even through his own attack.
 - `$E190 (garcia_type21_22_attack_state)` (state `$0A`): animation `$14` from frame 0, whose box is already
   `$12`: the jab lands on the update after its trigger. Frame 3 is the jab
   again, frames 7-9 the punch `$3E` (16-51 px) if it still reaches on frame 6.
-- `$E07C (garcia_type22_32_state8)` (8) and `$E2DC (garcia_type22_32_statec)` (`$0C`) stand; within 48 px on X it is `$DBCC (ordinary_enemy_blocked_state)`, box
-  `$12` on the target the punch. `$E20A (garcia_type22_32_stateb)` (`$0B`) wanders toward a random offset
+- `$E07C (garcia_type22_32_stand_state)` (8) and `$E2DC (garcia_type22_32_stand_close_state)` (`$0C`) stand; within 48 px on X it is `$DBCC (ordinary_enemy_blocked_state)`, box
+  `$12` on the target the punch. `$E20A (garcia_type22_32_wander_state)` (`$0B`) wanders toward a random offset
   of the `$9654 (enemy_aim_at_target_offset)` point (`$1031A`) for one walk cycle, jab trigger included,
   then the state `$10352` names for `$FB09 & 7`. State `$0E` stalks the `$9654 (enemy_aim_at_target_offset)` point at 2.5 for
-  80 updates. `$DEC6 (garcia_type22_32_state10)`/`$DF0A (garcia_type22_32_state11)` (`$10`/`$11`) rush to 32 px at 5 and jab three
+  80 updates. `$DEC6 (garcia_type22_32_rush_state)`/`$DF0A (garcia_type22_32_triple_jab_state)` (`$10`/`$11`) rush to 32 px at 5 and jab three
   times at reload 3.
-- `$DE78 (garcia_type22_32_state12)` (`$12`) lies in wait (animation 4, frame 3, no box and no body) for
+- `$DE78 (garcia_type22_32_lie_in_wait_state)` (`$12`) lies in wait (animation 4, frame 3, no box and no body) for
   128 updates **or until the target is within 80 px on X**, then resets --
   personality 0, so its first update of the approach is already the jab's
   test. Walking up to a lying Garcia along his lane is his jab.
@@ -763,13 +763,13 @@ walking box already on his body takes the hold even through his own attack.
 
 ### Garcia `$21`: the hold on the player
 
-`$D9BC (garcia_type21_state1)` walks to the `$9654 (enemy_aim_at_target_offset)` point at 2 for 80 updates; `$DA10 (garcia_type21_statec)` (`$0C`) waits
+`$D9BC (garcia_type21_walk_to_point_state)` walks to the `$9654 (enemy_aim_at_target_offset)` point at 2 for 80 updates; `$DA10 (garcia_type21_wait_at_point_state)` (`$0C`) waits
 there 40 updates -- off the point (the target moved) it is `$DBCC (ordinary_enemy_blocked_state)` (`$0B` with
 `+$40` = 1). `$DA6C (garcia_type21_target_faces_him)` returns 1 while **the target faces him**, and then
-`$DA98 (garcia_type21_state8)` (8) rushes the target's spot at 4.5 with `$02` forced to `$1E`
+`$DA98 (garcia_type21_rush_hold_state)` (8) rushes the target's spot at 4.5 with `$02` forced to `$1E`
 (-13..+13, lanes +-10); its touch sets the player's `+$7D` to 3 -- his hold,
-`$DB18 (garcia_type21_state9)` (9) -- unless the player holds a body or is in `$7A`/`$7C`/`$7E`, when
-it is an ordinary hit and `$0C`. The moment the target turns away, `$DA98 (garcia_type21_state8)` gives
+`$DB18 (garcia_type21_hold_player_state)` (9) -- unless the player holds a body or is in `$7A`/`$7C`/`$7E`, when
+it is an ordinary hit and `$0C`. The moment the target turns away, `$DA98 (garcia_type21_rush_hold_state)` gives
 up (state 1).
 
 ### Garcia `$20`: the knife hurts by touching
@@ -780,21 +780,21 @@ up (state 1).
 enemy-holder path only places it (`$60A0`, from animation `$1C` on, hidden
 below it) -- so everything that cuts is his own animation:
 
-- `$D6C0 (garcia_type20_statec)` (`$0C`, personality 1): the entry run, animation `$38`, whose four
+- `$D6C0 (garcia_type20_entry_run_state)` (`$0C`, personality 1): the entry run, animation `$38`, whose four
   frames all carry attack box `$01` -- his whole body, -9..+9 -- at 5 px an
   update toward the target's spot (`$97FE (enemy_velocity_toward_target)`, set once). Past the target's X
-  he brakes 0.1875 an update, and under 1 px an update it is `$D7BE (garcia_type20_state8)`. Any
+  he brakes 0.1875 an update, and under 1 px an update it is `$D7BE (garcia_type20_face_target_state)`. Any
   touch on that line is a hit, unless the player's walking box meets his body
   first (the hold).
-- `$D76A (garcia_type20_stated)` (`$0D`, personality 0): armed walk (animation `$1C`, no box) to the
+- `$D76A (garcia_type20_armed_walk_state)` (`$0D`, personality 0): armed walk (animation `$1C`, no box) to the
   `$9654 (enemy_aim_at_target_offset)` point at 2.25.
-- `$D7BE (garcia_type20_state8)` (8): 24 updates facing the target; then more than 16 lanes off it
-  `$DBCC (ordinary_enemy_blocked_state)`, within 96 px on X the stab `$D856 (garcia_type20_state9)` (9), beyond it the throw `$D8EC (garcia_type20_statea)`
+- `$D7BE (garcia_type20_face_target_state)` (8): 24 updates facing the target; then more than 16 lanes off it
+  `$DBCC (ordinary_enemy_blocked_state)`, within 96 px on X the stab `$D856 (garcia_type20_stab_state)` (9), beyond it the throw `$D8EC (garcia_type20_throw_knife_state)`
   (`$0A`).
-- `$D856 (garcia_type20_state9)`: toward 32 px short at 3 until box `$14` (32-56 px ahead) meets the
+- `$D856 (garcia_type20_stab_state)`: toward 32 px short at 3 until box `$14` (32-56 px ahead) meets the
   target's body; then animation `$2C`, frame 0 box `$01` (his body again),
   frames 1-2 the blade `$14`; on frame 2 again while `$14` still meets.
-- `$D8EC (garcia_type20_statea)`: animation `$28`; on frame 1 the knife's `+$51` = 3, and on its
+- `$D8EC (garcia_type20_throw_knife_state)`: animation `$28`; on frame 1 the knife's `+$51` = 3, and on its
   own next update `$5D84 (launch_released_weapon)` launches it 48 px on from where frame 0 held it
   (`$60A0`: -8, -54) and 16 higher, 16 px an update (`+$30` = 3). Its flying
   box is `$FA`/`$FB`: -5..+19 on X, **lanes -20..+20**, z -3..+9 -- 28 lanes
@@ -805,10 +805,10 @@ below it) -- so everything that cuts is his own animation:
 
 ### Garcia `$23`: the bat and the pipe
 
-`$E3A0 (garcia_type23_state1_a)` spawns a bat (`$0A`, `+$40` = 0) or pipe (`$0B`) and walks to the
-`$9654 (enemy_aim_at_target_offset)` point at 2.5 (animation `$20`/`$24`); `$E404 (garcia_type23_state8)` (8) stands 16 updates,
-then within 32 lanes `$E348 (garcia_type23_statec)` (`$0C`): to 64 px from the target on its lane at
-3.5, 48 updates, and on screen the swing `$E47E (garcia_type23_state9)` (9): animation `$30`/`$34`
+`$E3A0 (garcia_type23_spawn_weapon_walk_state)` spawns a bat (`$0A`, `+$40` = 0) or pipe (`$0B`) and walks to the
+`$9654 (enemy_aim_at_target_offset)` point at 2.5 (animation `$20`/`$24`); `$E404 (garcia_type23_stand_state)` (8) stands 16 updates,
+then within 32 lanes `$E348 (garcia_type23_approach_state)` (`$0C`): to 64 px from the target on its lane at
+3.5, 48 updates, and on screen the swing `$E47E (garcia_type23_swing_state)` (9): animation `$30`/`$34`
 at reload 3, frames 0-2 wind-up, **box `$18` 24-72 px ahead** on frames 3-5 --
 out of reach of the player's punch (Blaze 18-68).
 
@@ -817,46 +817,46 @@ out of reach of the player's punch (Blaze 18-68).
 `$E7B0 (signal_type24_contact_wrapper)` wraps every state's contact: the target in action `$5C` sends him to
 `$0D` (stand); his own box on the player -- `$3D` (-11..+11) on every frame he
 stands or walks -- is, with the player holding nobody and the heights within
-8, his hold on the player (`+$7D` = 2, state `$0C`, `$E6F2 (signal_type24_statec)`: the player is
-placed 48 px in front and thrown on `+$0D` = 1). `$E4F6 (signal_type24_state1)` walks to the `$9654 (enemy_aim_at_target_offset)`
-point at 2 for 96 updates, facing; there `$E54E (signal_type24_statea)` (`$0A`) dashes 2.5/2 at it,
-X until past it then the lane; `$E5EC (signal_type24_state8)` (8) stands 24 updates (`$DBCC (ordinary_enemy_blocked_state)` off
+8, his hold on the player (`+$7D` = 2, state `$0C`, `$E6F2 (signal_type24_hold_throw_state)`: the player is
+placed 48 px in front and thrown on `+$0D` = 1). `$E4F6 (signal_type24_walk_to_point_state)` walks to the `$9654 (enemy_aim_at_target_offset)`
+point at 2 for 96 updates, facing; there `$E54E (signal_type24_dash_state)` (`$0A`) dashes 2.5/2 at it,
+X until past it then the lane; `$E5EC (signal_type24_stand_decide_state)` (8) stands 24 updates (`$DBCC (ordinary_enemy_blocked_state)` off
 screen or with the target in `$4A` or `$54`-`$5C`), then within 128 of
-`$98E8 (ordinary_enemy_distance_metric)` walks in (`$E684 (signal_type24_state9)`, 9: at the target's own spot at 3.5, 48 updates) or,
-with `+$40` set and the target within 8 lanes, slides (`$E80A (signal_type24_stateb)`, `$0B`):
+`$98E8 (ordinary_enemy_distance_metric)` walks in (`$E684 (signal_type24_walk_in_state)`, 9: at the target's own spot at 3.5, 48 updates) or,
+with `+$40` set and the target within 8 lanes, slides (`$E80A (signal_type24_slide_state)`, `$0B`):
 animation `$18`, from frame 1 at 7 px an update falling off 0.15625 for 26
 updates, box `$0F` (-24..+24, z -14..0: the feet) and **no body** -- nothing
 lands on him -- then 8 updates getting up.
 
 ### HakuRo `$25`
 
-`$EB2A (haku_ro_type25_state11)` (`$11`) walks to the `$9654 (enemy_aim_at_target_offset)` point at 2, facing; there `$EC88 (haku_ro_type25_state8)` (8)
+`$EB2A (haku_ro_type25_walk_to_point_state)` (`$11`) walks to the `$9654 (enemy_aim_at_target_offset)` point at 2, facing; there `$EC88 (haku_ro_type25_stalk_state)` (8)
 stalks it (with `+$40` set and the target within 64 px, the backflip `$0C`),
 counting changes of the target's X velocity word: five of them, or 48 moves,
-and `$ED44 (haku_ro_type25_state9)` (9) steps 4 lanes an update onto the target's lane, then `$0F`
+and `$ED44 (haku_ro_type25_lane_step_state)` (9) steps 4 lanes an update onto the target's lane, then `$0F`
 (1/8), within 96 px `$0E`, else `$0B`. `$EF0A (haku_ro_dash_state)` (`$0E`): 128 updates at 4.5
 (5.5 with `+$31` bit 1, 3 with `+$40` bit 5) toward 56 px short of the target
 (`$9800 (enemy_velocity_toward_target_offset)` with `d3` = `$38`); box `$06` (0-44 px ahead, the whole height) on
 the target's body is the strike `$EB6E (haku_ro_strike_state)` (`$0A`, animation `$14`, frames 1-3,
 then the backflip `$EE8A (haku_ro_backflip_state)`), and level within 8 lanes and 72 px the jump kick
-`$EBAC (haku_ro_stated)` (`$0D`: the strike's animation in a hop, grounded within 48 px). The
-flying kick `$EDD8 (haku_ro_stateb)` (`$0B`) leaps 10 px an update with `$0C` (8-48 px ahead,
+`$EBAC (haku_ro_jump_kick_state)` (`$0D`: the strike's animation in a hop, grounded within 48 px). The
+flying kick `$EDD8 (haku_ro_flying_kick_state)` (`$0B`) leaps 10 px an update with `$0C` (8-48 px ahead,
 knee height) out; a grab of him in the air is cancelled (`+$7C` 3 cleared).
-`$EFB6 (haku_ro_type25_statef)` (`$0F`) rushes at 5 and turns back 64 px short. Because `$EB2A (haku_ro_type25_state11)`'s
+`$EFB6 (haku_ro_type25_rush_turn_back_state)` (`$0F`) rushes at 5 and turns back 64 px short. Because `$EB2A (haku_ro_type25_walk_to_point_state)`'s
 point is kept off the target's own spot, **an actor that chases him keeps
 him from arriving**: the round-1 stall of 43 s was the AI walking after a
 HakuRo in `$11` whose point lay beyond the camera clamp.
 
 ### HakuRo `$2A`: the trio
 
-Table `$103AE (haku_ro_type2a_state_table)` (`$00`-`$10`). `$F7D8 (haku_ro_type2a_state0)` spawns two more of the type from the
+Table `$103AE (haku_ro_type2a_state_table)` (`$00`-`$10`). `$F7D8 (haku_ro_type2a_spawn_trio_state)` spawns two more of the type from the
 first and links the three (`+$70` the leader, `+$72`/`+$74` the others,
-`+$76` a bit per member); `$F876 (haku_ro_type2a_state1)` (1), `$FA92 (haku_ro_type2a_statef)` (`$0F`) and `$F9F0 (haku_ro_type2a_state10)` (`$10`) keep
+`+$76` a bit per member); `$F876 (haku_ro_type2a_formation_state)` (1), `$FA92 (haku_ro_type2a_formation_handoff_a_state)` (`$0F`) and `$F9F0 (haku_ro_type2a_formation_handoff_b_state)` (`$10`) keep
 them in a formation about the screen centre (cam + `$A0`) and hand off as a
 group. They share `$25`'s strike, flying kick, backflip, jump kick and dash
-(`$0A`-`$0E`). Their own attack is the charge, state 8 (the handler after `$F9F0 (haku_ro_type2a_state10)`'s): 4 px an update at
+(`$0A`-`$0E`). Their own attack is the charge, state 8 (the handler after `$F9F0 (haku_ro_type2a_formation_handoff_b_state)`'s): 4 px an update at
 the target with the lane snapped to the target's every update, stopping by
-`+$40` (`$FBDE`) -- within 80 px the 16-update wait `$F9B6 (haku_ro_type2a_state9)` (9) and then the
+`+$40` (`$FBDE`) -- within 80 px the 16-update wait `$F9B6 (haku_ro_type2a_charge_wait_state)` (9) and then the
 dash, within 84 the flying kick (landing into the dash), within 80 the
 backflip.
 
@@ -1433,7 +1433,7 @@ then every object. `$16DA0 (antonio_state1_active_combat)` does, in order:
    The X threshold is read off the *target's own* `+$1C` high word, negated
    when `+$60` is set: negative (walking into him) `$78`, positive (walking
    away) `$50`, zero `$68` when `+$60` equals the target's `+$31` bit 1 and
-   `$50` otherwise. No player code sets `+$31` bit 1 (only bit 0, in `$7250 (object_type16_state1)`),
+   `$50` otherwise. No player code sets `+$31` bit 1 (only bit 0, in `$7250 (object_type16_idle_state)`),
    so a player standing still is kicked from `$68` on his right and `$50` on
    his left. The lane gate is **`+$52 < $08` when the target is above his
    lane** (`+$61`) and `< $10` otherwise. On success: tactical and `+$78`
@@ -2039,20 +2039,20 @@ players and the objects).
 | Primary | Handler | Behaviour |
 |---:|---:|---|
 | `$00` | `$144E0 (abadede_init)` | creates `$31`, stats, then primary 1 |
-| `$01` | `$145EC (abadede_state1)` | approach: substate 0 `$145F8` aims, 1 `$14616` walks |
-| `$02` | `$14656 (abadede_state2)` | the pause, then the decision |
-| `$03` | `$146F0 (abadede_state3)` | retreat: 0 `$146FC` aims, 1 `$1472E` walks away |
-| `$04`/`$05` | `$1477A (abadede_state4)`/`$147A6 (abadede_state5)` | a strike landed: the shake (no contact test), then primary 3 |
-| `$06` | `$14B0E (abadede_state6)` | knocked down (a heavy hit, the police, a lethal blow): flight, floor, then `$0A` or the death |
-| `$07` | `$14BDC (abadede_state7)` | the charge: 0 set-up, 1 the run, 2 the brake, 3 the punch |
-| `$08` | `$14D04 (abadede_state8)` | he holds and throws a player |
-| `$09` | `$1512E (abadede_state9)` | suplexed (5 points) |
-| `$0A` | `$14A8A (abadede_statea)` | getting up (8 updates), then primary 1 |
-| `$0B` | `$1485C (abadede_stateb)` | held (below) |
-| `$0C` | `$15266 (abadede_statec)` | the death |
-| `$0D` | `$14EA2 (abadede_stated)` | held from behind, handed so at the grab |
-| `$0E` | `$14F46 (abadede_statee)` | thrown (4 points on the landing) |
-| `$0F` | `$147C0` | hit by a type-`$0C` object; not decoded |
+| `$01` | `$145EC (abadede_approach_state)` | approach: substate 0 `$145F8` aims, 1 `$14616` walks |
+| `$02` | `$14656 (abadede_pause_decide_state)` | the pause, then the decision |
+| `$03` | `$146F0 (abadede_retreat_state)` | retreat: 0 `$146FC` aims, 1 `$1472E` walks away |
+| `$04`/`$05` | `$1477A (abadede_strike_shake_a_state)`/`$147A6 (abadede_strike_shake_b_state)` | a strike landed: the shake (no contact test), then primary 3 |
+| `$06` | `$14B0E (abadede_knocked_down_state)` | knocked down (a heavy hit, the police, a lethal blow): flight, floor, then `$0A` or the death |
+| `$07` | `$14BDC (abadede_charge_state)` | the charge: 0 set-up, 1 the run, 2 the brake, 3 the punch |
+| `$08` | `$14D04 (abadede_hold_throw_state)` | he holds and throws a player |
+| `$09` | `$1512E (abadede_suplexed_state)` | suplexed (5 points) |
+| `$0A` | `$14A8A (abadede_get_up_state)` | getting up (8 updates), then primary 1 |
+| `$0B` | `$1485C (abadede_held_state)` | held (below) |
+| `$0C` | `$15266 (abadede_death_state)` | the death |
+| `$0D` | `$14EA2 (abadede_held_from_behind_state)` | held from behind, handed so at the grab |
+| `$0E` | `$14F46 (abadede_thrown_state)` | thrown (4 points on the landing) |
+| `$0F` | `$147C0 (abadede_type0c_hit_state)` | hit by a type-`$0C` object; not decoded |
 
 #### Approach, pause, retreat, charge
 
@@ -2122,7 +2122,7 @@ His lethal tests (`$15632`, `$15094`, `$14A56`) subtract and branch `bgt` to
 the living path: a health of exactly 0 is dead, and the knockdown hands him
 to `$0C`.
 
-#### Being held (`$1485C (abadede_stateb)`)
+#### Being held (`$1485C (abadede_held_state)`)
 
 Substate 0 (`$1486E`) stands him 24 px in front of the holder (`+$3E`, the
 last collider), facing it, with `+$54` = 40. Substate 1 (`$148C8`) counts
@@ -3086,7 +3086,7 @@ registers combat objects; the engine advances the campaign.
    the power kick, identified by the attack and body boxes its animation
    selects (the "Body state machine" subsection under Antonio). The target
    flag `+$31` bit 1 that selects `$68` or `$50` for a standing target is
-   never set by player code (only bit 0 is, in `$7250 (object_type16_state1)`), so for a player the
+   never set by player code (only bit 0 is, in `$7250 (object_type16_idle_state)`), so for a player the
    choice reduces to which side of him it stands on.
 
 ### Boss analysis-data update ledger
@@ -3202,8 +3202,8 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$E124 (garcia_type21_22_approach_state)` | State 9 of $22 and $0B of $21: walks to 32 px short of the target |
 | `$E190 (garcia_type21_22_attack_state)` | Attack state shared by types $21 and $22 |
 | `$EB6E (haku_ro_strike_state)` | State $0A of HakuRo $25 and $2A: the strike, animation $14 |
-| `$EBAC (haku_ro_stated)` | State $0D of HakuRo $25 and $2A |
-| `$EDD8 (haku_ro_stateb)` | State $0B of HakuRo $25 and $2A |
+| `$EBAC (haku_ro_jump_kick_state)` | State $0D of HakuRo $25 and $2A |
+| `$EDD8 (haku_ro_flying_kick_state)` | State $0B of HakuRo $25 and $2A |
 | `$EE8A (haku_ro_backflip_state)` | State $0C of HakuRo $25 and $2A: the backflip |
 | `$EF0A (haku_ro_dash_state)` | State $0E of HakuRo $25 and $2A: 128 updates at 4.5 px |
 | `$7ED4 (find_free_object_slot_down_from_d980)` | First free slot of 18 going down from $FFD980 in a6; Z clear when none |
