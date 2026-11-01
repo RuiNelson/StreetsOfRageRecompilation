@@ -1,4 +1,5 @@
 #include "SoRCpuOps.hpp"
+#include "SoRQolConfig.hpp"
 
 using namespace sorops;
 
@@ -467,5 +468,124 @@ void StreetsOfRage::object_clear_velocity(m_long /*entry_*/) {
     mem.writeLong(c.a[0] + kObjVelLane, 0);
     mem.writeLong(c.a[0] + kObjVelZ, 0);
     tst(c, 0, 32);
+    c.ssp += 4;
+}
+
+// ---------------------------------------------------------------------------
+// $003504 (player_drop_carried_weapon), and what a player's action change runs: $003A14, $003614, $003936.
+//
+// The ROM's routines, except under `--qol grab`. A grab reaches the drop through +$7D 2 or 3 ($34E6, $34EA),
+// and the holder in +$7E tells a friend from an enemy: a friend's keeps the weapon, hidden by $5E2E while the
+// player is held. The ROM's way out of a hold is always action $02, as it never has a weapon there, so
+// $003936 turns that into the armed $30 the other exits use (`$2DE6`).
+// ---------------------------------------------------------------------------
+namespace {
+
+constexpr m_byte kPlayerType = 0x01u;
+
+bool grabbedByFriend(SystemMemory &mem, m_long player) {
+    if (mem.readByte(player + 0x7Cu) != 1u || static_cast<std::int16_t>(mem.readWord(player + 0x32u)) < 0)
+        return false;
+    const m_byte reaction = mem.readByte(player + 0x7Du);
+    if (reaction != 2u && reaction != 3u)
+        return false;
+    const m_word holder = mem.readWord(player + 0x7Eu);
+    return holder != 0u && mem.readByte(sext16(holder)) == kPlayerType;
+}
+
+} // namespace
+
+void StreetsOfRage::player_drop_carried_weapon(m_long /*entry_*/) {
+    traceEnter(0x00003504u);
+    auto &c   = cpu();
+    auto &mem = memory();
+
+    const m_byte weapon = mem.readByte(c.a[0] + 0x60u);
+    c.setDb(1, weapon);
+    tst(c, weapon, 8);
+    if (weapon != 0u && !(SoRQolConfig::current().friendGrabKeepsWeapon && grabbedByFriend(mem, c.a[0]))) {
+        mem.writeByte(c.a[0] + 0x60u, 0);
+        c.a[1] = sext16(mem.readWord(c.a[0] + 0x5Eu));
+        mem.writeByte(c.a[1] + 0x51u, 2);
+        mem.writeWord(c.a[0] + 0x5Eu, 0);
+        tst(c, 0, 16);
+    }
+    c.ssp += 4;
+}
+
+void StreetsOfRage::player_load_frame_timer(m_long /*entry_*/) {
+    traceEnter(0x00003A14u);
+    auto &c   = cpu();
+    auto &mem = memory();
+
+    constexpr m_long kPlayerFrameTimingTable = 0x00003A30u;
+    c.d[0] = static_cast<m_long>(mem.readByte(c.a[0] + 0x0Cu)) * 2u;
+    c.a[2] = kPlayerFrameTimingTable + sext16(mem.readWord(kPlayerFrameTimingTable + c.d[0]));
+    c.setDb(0, mem.readByte(c.a[0] + 0x0Au));
+    const m_byte timer = mem.readByte(c.a[2] + sext16(c.dw(0)));
+    mem.writeByte(c.a[0] + 0x0Du, timer);
+    tst(c, timer, 8);
+    c.ssp += 4;
+}
+
+void StreetsOfRage::player_load_action_velocity(m_long /*entry_*/) {
+    traceEnter(0x00003614u);
+    auto &c   = cpu();
+    auto &mem = memory();
+
+    constexpr m_long kPlayerActionVelocityTablePtrs = 0x00003664u;
+    c.d[1] = static_cast<m_long>(mem.readByte(c.a[0] + 0x50u)) << 2;
+    c.a[1] = mem.readLong(kPlayerActionVelocityTablePtrs + c.d[1]);
+    const m_byte action = mem.readByte(c.a[0] + 0x30u);
+    c.setDb(1, static_cast<m_byte>(action & 0xFEu));
+    const auto loadVelocity = [&](m_long offset) {
+        return static_cast<m_long>(static_cast<std::int32_t>(sext8(mem.readByte(c.a[1] + sext16(c.dw(1)) + offset)) << 16) >> 4);
+    };
+    if (!clearBitMem(c, mem, c.a[0] + 0x58u, 2)) {
+        c.d[2] = loadVelocity(0);
+        if ((action & 0x01u) != 0u)
+            c.d[2] = negValue(c, c.d[2], 32);
+        mem.writeLong(c.a[0] + 0x1Cu, c.d[2]);
+    }
+    if (!clearBitMem(c, mem, c.a[0] + 0x58u, 2)) {
+        c.d[2] = loadVelocity(1);
+        mem.writeLong(c.a[0] + 0x20u, c.d[2]);
+    }
+    c.ssp += 4;
+}
+
+void StreetsOfRage::player_action_change_mask_state_bits(m_long /*entry_*/) {
+    traceEnter(0x00003936u);
+    auto &c   = cpu();
+    auto &mem = memory();
+
+    constexpr m_long kActionStateMaskTable = 0x0000394Eu;
+    const auto maskStateBits = [&] {
+        c.d[7] = mem.readByte(c.a[0] + 0x30u) >> 1;
+        c.setDb(7, mem.readByte(kActionStateMaskTable + c.d[7]));
+        const m_byte masked = static_cast<m_byte>(mem.readByte(c.a[0] + 0x58u) & c.db(7));
+        mem.writeByte(c.a[0] + 0x58u, masked);
+        tst(c, masked, 8);
+    };
+
+    mem.writeByte(c.a[0] + 0x51u, 1);
+    maskStateBits();
+
+    const m_byte weapon = mem.readByte(c.a[0] + 0x60u);
+    const m_byte action = mem.readByte(c.a[0] + 0x30u);
+    if (SoRQolConfig::current().friendGrabKeepsWeapon && weapon != 0u && (action & 0xFEu) == 0x02u) {
+        constexpr m_long kPlayerActionAnimationTable = 0x00002F2Cu;
+        const auto armed = static_cast<m_byte>(0x30u | (action & 0x01u));
+        mem.writeByte(c.a[0] + 0x30u, armed);
+        c.setDw(0, mem.readByte(kPlayerActionAnimationTable + armed));
+        c.a[1] = mem.readLong(c.a[0] + 0x04u);
+        SOR_CALL(init_object_animation_frame, 0x00002E08u, 0x00B1A2u);
+        SOR_CALL(player_load_frame_timer, 0x00002E0Cu, 0x003A14u);
+        SOR_CALL(player_load_action_velocity, 0x00002E10u, 0x003614u);
+        maskStateBits();
+        // $2E32: the bat and the pipe (types $0A, $0B) hold the next animation of the family.
+        if (weapon == 0x0Au || weapon == 0x0Bu)
+            mem.writeWord(c.a[0] + 0x08u, static_cast<m_word>(mem.readWord(c.a[0] + 0x08u) + 4u));
+    }
     c.ssp += 4;
 }

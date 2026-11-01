@@ -29,6 +29,12 @@
 # --qol cam (SoRManualFunctions.cpp): the camera's follow zone moves under the option.
 018F5C # compute_camera_follow_x_velocity
 
+# --qol grab (SoRObjectRoutines.cpp): a friend's grab keeps the weapon, and the release is armed.
+003504 # player_drop_carried_weapon
+003936 # player_action_change_mask_state_bits
+003A14 # player_load_frame_timer
+003614 # player_load_action_velocity
+
 # OPTIONS' EXIT row, one row lower for QUALITY-OF-LIFE (SoRMainMenus.cpp, with its neighbours).
 0014BC # options_highlight_exit
 

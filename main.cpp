@@ -126,9 +126,9 @@ int main(int argc, char *argv[]) {
         ->check(CLI::IsMember({"60", "50"}))
         ->group("Game");
     // Each wins over qol.yaml for this run; OPTIONS > QUALITY-OF-LIFE can still change it, and saves what it shows.
-    app.add_option("--qol", qolOptions, "Quality-of-life changes to turn on, separated by commas. cam: the camera rolls from 30% of the screen")
+    app.add_option("--qol", qolOptions, "Quality-of-life changes to turn on, separated by commas. cam: the camera rolls from 30% of the screen. grab: a friend's grab does not drop your weapon")
         ->delimiter(',')
-        ->check(CLI::IsMember({"cam"}))
+        ->check(CLI::IsMember({"cam", "grab"}))
         ->group("Game");
     app.add_flag("--default-qol",
                  defaultQolFlag,
