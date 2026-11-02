@@ -107,7 +107,7 @@ main menu handler `$1104 (select_menu_input)` checks
 `$FFFC05 (p1_button_press) & $F0`; any face button or Start confirms the
 current row. Cursor movement uses the P1 edge byte's direction bits. When
 entering OPTIONS, `$114A (select_menu_resolve_choice)` checks
-`$FFFC08 (p2_button_held)` against the P2 A+B+C+Start cheat chord to enable the
+`$FFFC08 (p2_button_held)` against the P2 A+B+C+Right cheat chord to enable the
 extra lives and level rows.
 
 Inside OPTIONS, `$1390 (options_input_controls)` is the row that changes

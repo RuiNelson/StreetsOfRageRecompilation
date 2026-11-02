@@ -14,6 +14,7 @@ struct QolConfig {
     bool friendGrabKeepsWeapon = false; // --qol grab
     bool enemyDamageCircles    = false; // --qol damage
     bool persistHighScores     = false; // --qol scores
+    bool cheatEnabled          = false; // --qol cheat
 
     // Initials for the high-score table, up to three letters or spaces; empty: the player types them.
     // Menu and file only, no command-line option. Player 2 under AI Assist is always "AI ".

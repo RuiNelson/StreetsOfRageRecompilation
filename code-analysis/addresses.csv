@@ -275,7 +275,7 @@ FFFC38, collision_class_height_table_ptr, "80% - L - Per-level word table indexe
 FFFB40, police_special_blast_lane, "100% - W - P1 blast-front lane threshold written by propagation index $0B and consumed by the type-$29 ordinary-enemy sweep"
 FFFB42, police_special_sweep_cursor, "100% - W - P2-pattern cursor through the ordinary object table; advances after each forced enemy reaction"
 FFFB44, police_special_camera_x_snapshot, "100% - W - Camera X saved when ordinary enemies are prepared for the police special"
-FFFA7B, cheat_flag, "100% - B - Set when entering OPTIONS while P2 holds A+B+C+Start ($FC08 XOR $78==0); enables lives/level rows. Cleared by init_game_start_screen"
+FFFA7B, cheat_flag, "100% - B - Set when entering OPTIONS while P2 holds A+B+C+Right ($FC08 XOR $78==0); enables lives/level rows. Cleared by init_game_start_screen"
 FFFA09, select_menu_option_count, "100% - B - Visible main-menu entries: 3 if P2 pad present (1P/2P/OPTIONS), 1 if not (skips 2 PLAYERS)"
 FFFA32, difficulty_unused, "100% - B - Difficulty-related flag; overrides difficulty_copy with 1 (Normal) when non-zero"
 

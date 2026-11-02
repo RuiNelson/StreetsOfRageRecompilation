@@ -60,6 +60,10 @@ bool enable(QolConfig &config, std::string_view name) {
         config.enemyDamageCircles = true;
         return true;
     }
+    if (name == "cheat") {
+        config.cheatEnabled = true;
+        return true;
+    }
     if (name == "scores") {
         config.persistHighScores = true;
         return true;
@@ -100,6 +104,7 @@ QolConfig loadOrCreate(const std::filesystem::path &path) {
     readBool(root["grab"], config.friendGrabKeepsWeapon);
     readBool(root["damage"], config.enemyDamageCircles);
     readBool(root["scores"], config.persistHighScores);
+    readBool(root["cheat"], config.cheatEnabled);
     readInitials(root["initials1"], config.initialsP1);
     readInitials(root["initials2"], config.initialsP2);
     return config;
@@ -114,6 +119,7 @@ bool save(const QolConfig &config, const std::filesystem::path &path) {
     root["grab"]   = config.friendGrabKeepsWeapon;
     root["damage"] = config.enemyDamageCircles;
     root["scores"] = config.persistHighScores;
+    root["cheat"]  = config.cheatEnabled;
     root["initials1"] = config.initialsP1;
     root["initials2"] = config.initialsP2;
 

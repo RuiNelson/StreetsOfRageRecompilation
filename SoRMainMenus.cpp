@@ -3,6 +3,7 @@
 #include "SoRPause.hpp"
 #include "SoRPython.hpp"
 #include "SoRRemoteInput.hpp"
+#include "SoRQolConfig.hpp"
 #include "SoRQolMenu.hpp"
 #include "SoRVideoMenu.hpp"
 #include "SoR.hpp"
@@ -340,7 +341,7 @@ void StreetsOfRage::select_menu_resolve_choice(m_long /*entry_*/) {
     const m_byte cheatChord = static_cast<m_byte>(memory().readByte(kP2ButtonHeld) ^ 0x78u);
     cpu().setDb(1, cheatChord);
     cpu().setFlag(CPU68K::FlagZ, cheatChord == 0);
-    if (cheatChord == 0)
+    if (cheatChord == 0 || SoRQolConfig::current().cheatEnabled)
         memory().writeByte(kCheatFlag, 1);
 
     memory().writeWord(kSelectScreenSubstate, static_cast<m_word>(memory().readWord(kSelectScreenSubstate) + 2));

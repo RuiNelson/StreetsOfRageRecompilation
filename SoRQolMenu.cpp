@@ -23,12 +23,17 @@ constexpr int kValueColumn = 30;
 constexpr int kHelpRow     = 22;
 constexpr int kPages       = 2;
 
-enum class Row { RollCameraEarlier, FriendGrabKeepsWeapon, EnemyDamageCircles, SaveHighScores, InitialsP1, InitialsP2, Page, Save, Cancel };
+constexpr m_long kCheatFlag    = 0xFFFFFA7Bu;
+constexpr m_long kLevel        = 0xFFFFFF02u;
+constexpr m_long kLivesSetting = 0xFFFFFFCAu;
+constexpr m_word kDefaultLives = 1; // the ROM's power-on value: 3 lives
+
+enum class Row { RollCameraEarlier, FriendGrabKeepsWeapon, EnemyDamageCircles, SaveHighScores, InitialsP1, InitialsP2, CheatEnabled, Page, Save, Cancel };
 
 std::vector<Row> rows(int page) {
     if (page == 0)
         return {Row::RollCameraEarlier, Row::FriendGrabKeepsWeapon, Row::EnemyDamageCircles, Row::SaveHighScores, Row::Page, Row::Save, Row::Cancel};
-    return {Row::InitialsP1, Row::InitialsP2, Row::Page, Row::Save, Row::Cancel};
+    return {Row::InitialsP1, Row::InitialsP2, Row::CheatEnabled, Row::Page, Row::Save, Row::Cancel};
 }
 
 int screenRow(Row row) {
@@ -40,6 +45,7 @@ int screenRow(Row row) {
         case Row::InitialsP2:
             return 9;
         case Row::EnemyDamageCircles:
+        case Row::CheatEnabled:
             return 11;
         case Row::SaveHighScores:
             return 13;
@@ -67,6 +73,8 @@ std::string_view label(Row row) {
             return "PLAYER 1 INITIALS";
         case Row::InitialsP2:
             return "PLAYER 2 INITIALS";
+        case Row::CheatEnabled:
+            return "CHEAT ENABLED";
         case Row::Page:
             return "";
         case Row::Save:
@@ -150,6 +158,9 @@ bool changeValue(QolConfig &config, Row row) {
         case Row::SaveHighScores:
             config.persistHighScores = !config.persistHighScores;
             return true;
+        case Row::CheatEnabled:
+            config.cheatEnabled = !config.cheatEnabled;
+            return true;
         case Row::InitialsP1:
         case Row::InitialsP2:
         case Row::Page:
@@ -186,6 +197,10 @@ std::array<std::string, 2> help(const QolConfig &config, Row row) {
             if (!config.initialsP2.empty())
                 return {"PLAYER 2 DOES NOT TYPE A NAME ON A", "HIGH SCORE. THE AI IS ALWAYS \"AI\"."};
             return {"AS IN THE ORIGINAL GAME: PLAYER 2", "TYPES A NAME. THE AI IS ALWAYS \"AI\"."};
+        case Row::CheatEnabled:
+            if (config.cheatEnabled)
+                return {"OPTIONS ALWAYS LETS YOU CHOOSE THE", "LIVES AND THE STARTING ROUND."};
+            return {"AS IN THE ORIGINAL GAME: THOSE ROWS", "NEED A SECRET BUTTON COMBINATION."};
         case Row::Page:
             return {"LEFT AND RIGHT CHANGE THE PAGE.", ""};
         case Row::Save:
@@ -226,6 +241,9 @@ void drawPage(const Menu &m, Canvas &canvas) {
                 break;
             case Row::InitialsP2:
                 canvas.text(kValueColumn, y, m.pending.initialsP2.empty() ? "NOT SET" : m.pending.initialsP2, selected);
+                break;
+            case Row::CheatEnabled:
+                canvas.text(kValueColumn, y, onOff(m.pending.cheatEnabled), selected);
                 break;
             case Row::Page:
                 canvas.text(kLabelColumn, y, "PAGE " + std::to_string(m.page + 1) + " OF " + std::to_string(kPages), selected);
@@ -403,6 +421,14 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
                         SoRHighScores::load(memory);
                     else if (!m.pending.persistHighScores)
                         SoRHighScores::erase();
+                    // We are inside OPTIONS: the rows come and go when the screen is redrawn. Off, the choices go too.
+                    if (m.pending.cheatEnabled != SoRQolConfig::current().cheatEnabled) {
+                        memory.writeByte(kCheatFlag, m.pending.cheatEnabled ? 1 : 0);
+                        if (!m.pending.cheatEnabled) {
+                            memory.writeWord(kLevel, 0);
+                            memory.writeWord(kLivesSetting, kDefaultLives);
+                        }
+                    }
                     SoRQolConfig::current() = m.pending;
                     close                   = true;
                     break;

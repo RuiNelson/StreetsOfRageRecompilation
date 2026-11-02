@@ -171,7 +171,7 @@ move.w  #$20, game_state    ; character select init
 rts
 
 go_options:
-; Cheat: P2 held buttons XOR $78 == 0  (A+B+C+Start held)
+; Cheat: P2 held buttons XOR $78 == 0  (A+B+C+Right held)
 eori.b  #$78, p2_button_held
 bne.s   no_cheat
 move.b  #1, cheat_flag
