@@ -329,23 +329,19 @@ void stop() {
     s.pads.clear();
 }
 
-ActionMask physicalActions(int player) {
-    if (player < 0 || player > 1)
-        return 0;
-
-    State          &s = state();
-    std::lock_guard lock(s.mutex);
+// What @p player holds, tapped presses of reader @p latch included. Consumes nothing.
+ActionMask actionsLocked(State &s, int player, std::size_t latch) {
     const Scheme          scheme   = effectiveSchemeLocked(s, player);
     const PlayerConfig   &config   = s.config.players[static_cast<std::size_t>(player)];
     const SchemeBindings &bindings = config.schemeBindings(scheme);
+    const int             reader   = static_cast<int>(latch);
 
-    auto      &keyTapped = s.keyTapped[static_cast<std::size_t>(player)];
-    ActionMask mask      = 0;
+    const auto &keyTapped = s.keyTapped[latch];
+    ActionMask  mask      = 0;
     for (const Action action : SoRControlsConfig::keyboardActions(scheme)) {
         const SDL_Scancode scancode = bindings.keys[static_cast<std::size_t>(action)];
         setIf(mask, scancode != SDL_SCANCODE_UNKNOWN && (s.keys[scancode] || keyTapped[scancode]), action);
     }
-    keyTapped.fill(false);
 
     if (const Pad *pad = assignedPadsLocked(s)[static_cast<std::size_t>(player)]) {
         // The D-pad and the left stick are always the directions, with the
@@ -353,18 +349,29 @@ ActionMask physicalActions(int player) {
         const int threshold = std::max(1, config.deadzonePercent * 32767 / 100);
         const int x         = pad->axes[SDL_GAMEPAD_AXIS_LEFTX];
         const int y         = pad->axes[SDL_GAMEPAD_AXIS_LEFTY];
-        setIf(mask, padButtonHeld(*pad, SDL_GAMEPAD_BUTTON_DPAD_UP, player) || y <= -threshold, Action::Up);
-        setIf(mask, padButtonHeld(*pad, SDL_GAMEPAD_BUTTON_DPAD_DOWN, player) || y >= threshold, Action::Down);
-        setIf(mask, padButtonHeld(*pad, SDL_GAMEPAD_BUTTON_DPAD_LEFT, player) || x <= -threshold, Action::Left);
-        setIf(mask, padButtonHeld(*pad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT, player) || x >= threshold, Action::Right);
-        setIf(mask, padButtonHeld(*pad, SDL_GAMEPAD_BUTTON_START, player), Action::Start);
+        setIf(mask, padButtonHeld(*pad, SDL_GAMEPAD_BUTTON_DPAD_UP, reader) || y <= -threshold, Action::Up);
+        setIf(mask, padButtonHeld(*pad, SDL_GAMEPAD_BUTTON_DPAD_DOWN, reader) || y >= threshold, Action::Down);
+        setIf(mask, padButtonHeld(*pad, SDL_GAMEPAD_BUTTON_DPAD_LEFT, reader) || x <= -threshold, Action::Left);
+        setIf(mask, padButtonHeld(*pad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT, reader) || x >= threshold, Action::Right);
+        setIf(mask, padButtonHeld(*pad, SDL_GAMEPAD_BUTTON_START, reader), Action::Start);
         for (const Action action : SoRControlsConfig::gamepadActions(scheme))
-            setIf(mask, padInputHeld(*pad, bindings.pad[static_cast<std::size_t>(action)], player), action);
+            setIf(mask, padInputHeld(*pad, bindings.pad[static_cast<std::size_t>(action)], reader), action);
     }
+    return static_cast<ActionMask>(mask & SoRControlsConfig::schemeActions(scheme));
+}
+
+ActionMask physicalActions(int player) {
+    if (player < 0 || player > 1)
+        return 0;
+
+    State          &s = state();
+    std::lock_guard lock(s.mutex);
+    const Scheme     scheme = effectiveSchemeLocked(s, player);
+    const ActionMask mask   = actionsLocked(s, player, static_cast<std::size_t>(player));
+    s.keyTapped[static_cast<std::size_t>(player)].fill(false);
     for (Pad &pad : s.pads)
         pad.buttonTapped[static_cast<std::size_t>(player)].fill(false);
 
-    mask = static_cast<ActionMask>(mask & SoRControlsConfig::schemeActions(scheme));
     if (gTrace) {
         static std::array<ActionMask, 2> traced{};
         if (traced[static_cast<std::size_t>(player)] != mask) {
@@ -446,6 +453,14 @@ std::optional<StickReading> leftStick(int player) {
     if (pad == nullptr)
         return std::nullopt;
     return StickReading{pad->axes[SDL_GAMEPAD_AXIS_LEFTX], pad->axes[SDL_GAMEPAD_AXIS_LEFTY]};
+}
+
+ActionMask heldActions(int player) {
+    if (player < 0 || player > 1)
+        return 0;
+    State          &s = state();
+    std::lock_guard lock(s.mutex);
+    return actionsLocked(s, player, kMenuLatch);
 }
 
 MenuButtons menuButtons(ActionMask remote, bool sticks) {

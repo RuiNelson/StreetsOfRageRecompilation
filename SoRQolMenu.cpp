@@ -3,6 +3,7 @@
 #include "SoRHighScores.hpp"
 #include "SoRInput.hpp"
 #include "SoRMenuCanvas.hpp"
+#include "SoRPlatform.hpp"
 
 #include <algorithm>
 #include <array>
@@ -129,6 +130,7 @@ struct Menu {
     bool      swallow = false; // ignore what is held when the menu opens
     QolConfig pending;
     Keyboard  keyboard;
+    bool      askingSecret = false; // the message box of CHEAT ENABLED
 
     Repeat up, down, left, right, confirm, back;
     Shown  shown;
@@ -285,6 +287,26 @@ void drawKeyboard(const Keyboard &k, Canvas &canvas) {
     canvas.text(kLabelColumn, kHelpRow + 1, "BACK LEAVES WITHOUT CHANGES.", true);
 }
 
+// Turning CHEAT ENABLED on takes the original game's kind of secret: Special+Punch+Jump+Right, all from one player.
+constexpr SoRInput::ActionMask kSecret = SoRControlsConfig::actionBit(SoRControlsConfig::Action::Special) |
+                                         SoRControlsConfig::actionBit(SoRControlsConfig::Action::Punch) |
+                                         SoRControlsConfig::actionBit(SoRControlsConfig::Action::Jump) |
+                                         SoRControlsConfig::actionBit(SoRControlsConfig::Action::Right);
+
+bool secretHeld(SoRInput::ActionMask remote) {
+    const auto holds = [](SoRInput::ActionMask mask) { return (mask & kSecret) == kSecret; };
+    return holds(remote) || holds(SoRInput::heldActions(0)) || holds(SoRInput::heldActions(1));
+}
+
+void drawSecretBox(Canvas &canvas) {
+    constexpr int kTop = 9, kBottom = 15;
+    const std::string blank(34, ' '), rule(34, '-');
+    for (int y = kTop; y <= kBottom; ++y)
+        canvas.text(kLabelColumn, y, y == kTop || y == kBottom ? rule : blank, true);
+    canvas.text(kLabelColumn + 2, kTop + 2, "PRESS THE SECRET COMBINATION,", true);
+    canvas.text(kLabelColumn + 2, kTop + 4, SoRPlatform::consoleMenus() ? "OR PRESS OPTIONS." : "OR PRESS START.", true);
+}
+
 void openKeyboard(Menu &m, int player) {
     m.keyboard        = Keyboard{};
     m.keyboard.isOpen = true;
@@ -377,6 +399,15 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
     } else if (typing) {
         if (keyboardFrame(m, memory, up, down, left, right, confirm, back))
             m.keyboard.isOpen = false;
+    } else if (m.askingSecret) {
+        if (secretHeld(remote)) {
+            m.pending.cheatEnabled = true;
+            m.askingSecret         = false;
+            playSound(memory, kSoundPick);
+        } else if (back) {
+            m.askingSecret = false;
+            playSound(memory, kSoundPick);
+        }
     } else {
         const std::vector<Row> list  = rows(m.page);
         const auto             count = static_cast<int>(list.size());
@@ -402,6 +433,9 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
                 goTo(m.page + 1);
             else if (confirm)
                 goTo((m.page + 1) % kPages);
+        } else if (row == Row::CheatEnabled && !m.pending.cheatEnabled && (left || right || confirm)) {
+            m.askingSecret = true;
+            playSound(memory, kSoundPick);
         } else if (left || right) {
             if (changeValue(m.pending, row))
                 playSound(memory, kSoundMove);
@@ -452,6 +486,8 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
         drawKeyboard(m.keyboard, canvas);
     else
         drawPage(m, canvas);
+    if (m.askingSecret)
+        drawSecretBox(canvas);
     flush(memory, m.shown, canvas);
     return Result::Open;
 }

@@ -74,6 +74,10 @@ struct MenuButtons {
 /// players): directions, Punch/Jump/Special to confirm, Start to go back.
 MenuButtons menuButtons(ActionMask remote, bool sticks = true);
 
+/// For a menu that wants a chord: the actions @p player (0 or 1) holds, as physicalActions()
+/// sees them, without consuming anything.
+ActionMask heldActions(int player);
+
 enum class CaptureDevice { Keyboard, Gamepad };
 struct Captured {
     enum class Status { Pending, Cancelled, Key, Pad };
