@@ -29,7 +29,8 @@ constexpr m_long kState         = 0x30u;
 constexpr m_long kHealth        = 0x32u;
 constexpr m_long kInitialHealth = 0x38u; // set once, by $93CE, without the hardest difficulty's +4
 
-constexpr int kHardestDifficulty = 3;
+constexpr int    kHardestDifficulty = 3;
+constexpr m_byte kDeathState        = 0x06u;
 
 // Radii in eighths of a pixel: the ring is 8 pixels across and 1 wide. Alive, the disc stays inside the ring with
 // a gap that still shows at 0 health; dead, it is as wide as the ring.
@@ -41,13 +42,17 @@ constexpr int kDiscLast        = 18;
 constexpr int kSamples         = 4; // per pixel, per axis
 constexpr int kOpacity         = 11; // of 16: the picture shows through
 
-constexpr m_byte kOrangeG = 4;
-constexpr m_byte kOrangeR = 7;
+struct Colour {
+    m_byte b = 0;
+    m_byte g = 0;
+    m_byte r = 0;
+};
 
 struct Circle {
     std::int16_t x    = 0; // the object's X and the sprite's top, in biased hardware coordinates
     std::int16_t top  = 0;
     std::int16_t disc = 0;
+    Colour       colour;
 };
 
 struct Circles {
@@ -61,6 +66,23 @@ Circles    shownCircles;
 // $9350: $28 and $29 are helpers in the ordinary range, not fighters.
 bool isRegularEnemy(m_byte type) {
     return (type >= 0x20u && type <= 0x27u) || type == 0x2Au;
+}
+
+// By family, the types of ai-analysis/enemy-ai.md's table.
+Colour familyColour(m_byte type) {
+    switch (type) {
+        case 0x24u: // Signal: yellow
+            return {0, 7, 7};
+        case 0x25u: // Haku-Ro, the ninja: purple
+        case 0x2Au:
+            return {7, 1, 5};
+        case 0x26u: // Nora: red
+            return {1, 1, 7};
+        case 0x27u: // Jack: dark grey
+            return {3, 3, 3};
+        default: // $20-$23, Garcia: blue
+            return {7, 3, 1};
+    }
 }
 
 bool inGameplay(SystemMemory &memory) {
@@ -120,14 +142,17 @@ void capture(SystemMemory &memory) {
         const int bonus = memory.readWord(kDifficulty) == kHardestDifficulty ? 4 : 0;
         for (int i = 0; i < kObjectCount; ++i) {
             const m_long object = kObjectTable + static_cast<m_long>(i) * kObjectSize;
-            if (!isRegularEnemy(memory.readByte(object)))
+            const m_byte type = memory.readByte(object);
+            if (!isRegularEnemy(type))
                 continue;
             const m_byte flags   = memory.readByte(object + kFlags);
             const m_byte initial = memory.readByte(object + kInitialHealth);
             const auto   health  = static_cast<std::int16_t>(memory.readWord(object + kHealth));
             const int    full    = initial + bonus;
-            // State 0 or no initial health: not activated yet.
-            if ((flags & 0x01u) != 0u || memory.readByte(object + kState) == 0u || initial == 0u || health >= full)
+            const m_byte state   = memory.readByte(object + kState);
+            // State 0 or no initial health: not activated yet. Death ($9D16) blinks the sprite with the render
+            // flag, and the circle stays on through it.
+            if (((flags & 0x01u) != 0u && state != kDeathState) || state == 0u || initial == 0u || health >= full)
                 continue;
             int topOffset = 0;
             if (!spriteTopOffset(memory, object, topOffset))
@@ -146,7 +171,8 @@ void capture(SystemMemory &memory) {
             const int disc = health < 0 ? kRingOuter : kDiscFirst + (kDiscLast - kDiscFirst) * (full - health) / full;
             seen.circles[static_cast<std::size_t>(seen.count++)] = {static_cast<std::int16_t>(x),
                                                                     static_cast<std::int16_t>(y + topOffset),
-                                                                    static_cast<std::int16_t>(disc)};
+                                                                    static_cast<std::int16_t>(disc),
+                                                                    familyColour(type)};
         }
     }
     const std::lock_guard lock(circlesMutex);
@@ -179,7 +205,11 @@ void draw(Framebuffer &framebuffer, int width, int height) {
                 m_byte g = 0;
                 m_byte r = 0;
                 framebuffer.getPixel(px, py, b, g, r);
-                framebuffer.setPixel(px, py, blend(b, 0, weight), blend(g, kOrangeG, weight), blend(r, kOrangeR, weight));
+                framebuffer.setPixel(px,
+                                     py,
+                                     blend(b, circle.colour.b, weight),
+                                     blend(g, circle.colour.g, weight),
+                                     blend(r, circle.colour.r, weight));
             }
         }
     }
