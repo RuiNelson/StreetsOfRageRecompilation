@@ -1,4 +1,4 @@
-#include "SoRHealthBars.hpp"
+#include "SoRDamageCircles.hpp"
 
 #include "SoRQolConfig.hpp"
 
@@ -29,24 +29,34 @@ constexpr m_long kState         = 0x30u;
 constexpr m_long kHealth        = 0x32u;
 constexpr m_long kInitialHealth = 0x38u; // set once, by $93CE, without the hardest difficulty's +4
 
-constexpr int kBarWidth  = 16;
-constexpr int kBarHeight = 4;
-
 constexpr int kHardestDifficulty = 3;
 
-struct Bar {
-    std::int16_t x      = 0; // the object's X and the sprite's top, in biased hardware coordinates
-    std::int16_t top    = 0;
-    std::int16_t filled = 0;
+// Radii in eighths of a pixel: the ring is 8 pixels across and 1 wide. Alive, the disc stays inside the ring with
+// a gap that still shows at 0 health; dead, it is as wide as the ring.
+constexpr int kDiameter        = 8;
+constexpr int kRingOuter       = kDiameter * 4;
+constexpr int kRingInner       = kRingOuter - 8;
+constexpr int kDiscFirst       = 4;
+constexpr int kDiscLast        = 18;
+constexpr int kSamples         = 4; // per pixel, per axis
+constexpr int kOpacity         = 11; // of 16: the picture shows through
+
+constexpr m_byte kOrangeG = 4;
+constexpr m_byte kOrangeR = 7;
+
+struct Circle {
+    std::int16_t x    = 0; // the object's X and the sprite's top, in biased hardware coordinates
+    std::int16_t top  = 0;
+    std::int16_t disc = 0;
 };
 
-struct Bars {
-    std::array<Bar, kObjectCount> bars;
-    int                           count = 0;
+struct Circles {
+    std::array<Circle, kObjectCount> circles;
+    int                              count = 0;
 };
 
-std::mutex barsMutex;
-Bars       shownBars;
+std::mutex circlesMutex;
+Circles    shownCircles;
 
 // $9350: $28 and $29 are helpers in the ordinary range, not fighters.
 bool isRegularEnemy(m_byte type) {
@@ -80,24 +90,44 @@ bool spriteTopOffset(SystemMemory &memory, m_long object, int &topOffset) {
     return true;
 }
 
+// How much of the pixel at (x, y) of the circle's box the ring and the disc cover, of 16.
+int coverage(int x, int y, int disc) {
+    int covered = 0;
+    for (int sy = 0; sy < kSamples; ++sy) {
+        for (int sx = 0; sx < kSamples; ++sx) {
+            const int dx       = x * 8 + sx * 2 + 1 - kRingOuter;
+            const int dy       = y * 8 + sy * 2 + 1 - kRingOuter;
+            const int distance = dx * dx + dy * dy;
+            const bool inRing  = distance <= kRingOuter * kRingOuter && distance >= kRingInner * kRingInner;
+            if (inRing || distance <= disc * disc)
+                ++covered;
+        }
+    }
+    return covered;
+}
+
+m_byte blend(m_byte picture, m_byte colour, int weight) {
+    return static_cast<m_byte>((picture * (256 - weight) + colour * weight + 128) >> 8);
+}
+
 } // namespace
 
-namespace SoRHealthBars {
+namespace SoRDamageCircles {
 
 void capture(SystemMemory &memory) {
-    Bars seen;
-    if (SoRQolConfig::current().enemyHealthBars && inGameplay(memory)) {
+    Circles seen;
+    if (SoRQolConfig::current().enemyDamageCircles && inGameplay(memory)) {
         const int bonus = memory.readWord(kDifficulty) == kHardestDifficulty ? 4 : 0;
         for (int i = 0; i < kObjectCount; ++i) {
             const m_long object = kObjectTable + static_cast<m_long>(i) * kObjectSize;
             if (!isRegularEnemy(memory.readByte(object)))
                 continue;
-            const m_byte flags  = memory.readByte(object + kFlags);
+            const m_byte flags   = memory.readByte(object + kFlags);
             const m_byte initial = memory.readByte(object + kInitialHealth);
-            const auto   health = static_cast<std::int16_t>(memory.readWord(object + kHealth));
-            // State 0 or no initial health: not activated yet. Negative health or state $0600: dead, or being swept.
-            const m_byte state = memory.readByte(object + kState);
-            if ((flags & 0x01u) != 0u || state == 0u || state == 0x06u || initial == 0u || health < 0)
+            const auto   health  = static_cast<std::int16_t>(memory.readWord(object + kHealth));
+            const int    full    = initial + bonus;
+            // State 0 or no initial health: not activated yet.
+            if ((flags & 0x01u) != 0u || memory.readByte(object + kState) == 0u || initial == 0u || health >= full)
                 continue;
             int topOffset = 0;
             if (!spriteTopOffset(memory, object, topOffset))
@@ -112,44 +142,47 @@ void capture(SystemMemory &memory) {
                 y -= static_cast<std::int16_t>(memory.readWord(kCameraY));
             }
 
-            const int full   = initial + bonus;
-            const int filled = std::min<int>(kBarWidth, (std::min<int>(health, full) * kBarWidth + full - 1) / full);
-            seen.bars[static_cast<std::size_t>(seen.count++)] = {static_cast<std::int16_t>(x),
-                                                                 static_cast<std::int16_t>(y + topOffset),
-                                                                 static_cast<std::int16_t>(filled)};
+            // Only a negative health word kills: 0 is alive, the last step before the ring is full.
+            const int disc = health < 0 ? kRingOuter : kDiscFirst + (kDiscLast - kDiscFirst) * (full - health) / full;
+            seen.circles[static_cast<std::size_t>(seen.count++)] = {static_cast<std::int16_t>(x),
+                                                                    static_cast<std::int16_t>(y + topOffset),
+                                                                    static_cast<std::int16_t>(disc)};
         }
     }
-    const std::lock_guard lock(barsMutex);
-    shownBars = seen;
+    const std::lock_guard lock(circlesMutex);
+    shownCircles = seen;
 }
 
 void draw(Framebuffer &framebuffer, int width, int height) {
-    Bars seen;
+    Circles seen;
     {
-        const std::lock_guard lock(barsMutex);
-        seen = shownBars;
+        const std::lock_guard lock(circlesMutex);
+        seen = shownCircles;
     }
     // The hardware's left edge is $80, widescreen's $60; widescreen hides the picture's first 8 lines.
     const int originX = width > 320 ? 0x60 : 0x80;
     const int originY = 0x80 + (height < 224 ? 8 : 0);
     for (int i = 0; i < seen.count; ++i) {
-        const Bar &bar  = seen.bars[static_cast<std::size_t>(i)];
-        const int  left = bar.x - originX - kBarWidth / 2;
-        const int  top  = std::max(0, bar.top - originY - kBarHeight); // on screen when the head is not
-        for (int y = top; y < std::min(height, top + kBarHeight); ++y) {
-            for (int x = std::max(0, left); x < std::min(width, left + kBarWidth); ++x) {
+        const Circle &circle = seen.circles[static_cast<std::size_t>(i)];
+        const int     left   = circle.x - originX - kDiameter / 2;
+        const int     top    = std::max(0, circle.top - originY - kDiameter); // on screen when the head is not
+        for (int y = 0; y < kDiameter; ++y) {
+            for (int x = 0; x < kDiameter; ++x) {
+                const int px = left + x;
+                const int py = top + y;
+                if (px < 0 || px >= width || py >= height)
+                    continue;
+                const int weight = coverage(x, y, circle.disc) * kOpacity;
+                if (weight == 0)
+                    continue;
                 m_byte b = 0;
                 m_byte g = 0;
                 m_byte r = 0;
-                framebuffer.getPixel(x, y, b, g, r);
-                // The picture shows through: a quarter under the yellow, half where the health is gone.
-                if (x - left < bar.filled)
-                    framebuffer.setPixel(x, y, b >> 2, (g + 3 * 7 + 2) >> 2, (r + 3 * 7 + 2) >> 2);
-                else
-                    framebuffer.setPixel(x, y, b >> 1, g >> 1, r >> 1);
+                framebuffer.getPixel(px, py, b, g, r);
+                framebuffer.setPixel(px, py, blend(b, 0, weight), blend(g, kOrangeG, weight), blend(r, kOrangeR, weight));
             }
         }
     }
 }
 
-} // namespace SoRHealthBars
+} // namespace SoRDamageCircles

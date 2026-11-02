@@ -32,8 +32,8 @@ bool enable(QolConfig &config, std::string_view name) {
         config.friendGrabKeepsWeapon = true;
         return true;
     }
-    if (name == "bars") {
-        config.enemyHealthBars = true;
+    if (name == "damage") {
+        config.enemyDamageCircles = true;
         return true;
     }
     return false;
@@ -70,7 +70,7 @@ QolConfig loadOrCreate(const std::filesystem::path &path) {
 
     readBool(root["cam"], config.rollCameraEarlier);
     readBool(root["grab"], config.friendGrabKeepsWeapon);
-    readBool(root["bars"], config.enemyHealthBars);
+    readBool(root["damage"], config.enemyDamageCircles);
     return config;
 }
 
@@ -79,9 +79,9 @@ bool save(const QolConfig &config, const std::filesystem::path &path) {
     std::filesystem::create_directories(path.parent_path(), error);
 
     YAML::Node root;
-    root["cam"]  = config.rollCameraEarlier;
-    root["grab"] = config.friendGrabKeepsWeapon;
-    root["bars"] = config.enemyHealthBars;
+    root["cam"]    = config.rollCameraEarlier;
+    root["grab"]   = config.friendGrabKeepsWeapon;
+    root["damage"] = config.enemyDamageCircles;
 
     YAML::Emitter emitter;
     emitter << root;

@@ -11,7 +11,7 @@ namespace SoRQolConfig {
 struct QolConfig {
     bool rollCameraEarlier     = false; // --qol cam
     bool friendGrabKeepsWeapon = false; // --qol grab
-    bool enemyHealthBars       = false; // --qol bars
+    bool enemyDamageCircles    = false; // --qol damage
 
     bool operator==(const QolConfig &) const = default;
 };
