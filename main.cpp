@@ -6,6 +6,7 @@
 #include "SoRPlatform.hpp"
 #include "SoRPython.hpp"
 #include "SoRRemoteInput.hpp"
+#include "SoRHighScores.hpp"
 #include "SoRQolConfig.hpp"
 #include "SoRSoundtrack.hpp"
 #include "SoRVideoConfig.hpp"
@@ -127,9 +128,9 @@ int main(int argc, char *argv[]) {
         ->check(CLI::IsMember({"60", "50"}))
         ->group("Game");
     // Each wins over qol.yaml for this run; OPTIONS > QUALITY-OF-LIFE can still change it, and saves what it shows.
-    app.add_option("--qol", qolOptions, "Quality-of-life changes to turn on, separated by commas. cam: the camera rolls from 30% of the screen. grab: a friend's grab does not drop your weapon. damage: a circle over each hurt regular enemy fills up with damage")
+    app.add_option("--qol", qolOptions, "Quality-of-life changes to turn on, separated by commas. cam: the camera rolls from 30% of the screen. grab: a friend's grab does not drop your weapon. damage: a circle over each hurt regular enemy fills up with damage. scores: the high scores are kept in highscores.yaml")
         ->delimiter(',')
-        ->check(CLI::IsMember({"cam", "grab", "damage"}))
+        ->check(CLI::IsMember({"cam", "grab", "damage", "scores"}))
         ->group("Game");
     app.add_flag("--default-qol",
                  defaultQolFlag,
@@ -328,6 +329,7 @@ int main(int argc, char *argv[]) {
             SoRPause::drawOverlay(sor.memory(), framebuffer, width, height);
         });
         sor.boot();
+        SoRHighScores::saveIfChanged(sor.memory(), true);
         SoRPython::stop();
         SoRInput::stop();
         SoRSoundtrack::close();

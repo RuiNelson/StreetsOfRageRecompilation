@@ -1,4 +1,6 @@
 #include "SoR.hpp"
+#include "SoRHighScores.hpp"
+#include "SoRQolConfig.hpp"
 
 #include <array>
 #include <cstddef>
@@ -490,6 +492,8 @@ void StreetsOfRage::enigmadec(m_long entry_) {
     const m_long destination = cpu().a[1];
     auto         result      = decodeEnigma(readByte, cpu().a[0], cpu().dw(0));
     writeToWorkRam(memory(), destination, result.data);
+    if (entry_ == 0x00012832u && SoRQolConfig::current().persistHighScores)
+        SoRHighScores::load(memory()); // --qol scores: the saved table replaces the default one
 
     cpu().a[0] = result.sourceEnd;
     // A1 and D0-D7/A2-A5 are restored by the original MOVEM.

@@ -1,6 +1,7 @@
 #include "SoR.hpp"
 #include "SoRCheats.hpp"
 #include "SoRDamageCircles.hpp"
+#include "SoRHighScores.hpp"
 #include "SoRQolConfig.hpp"
 
 #include <algorithm>
@@ -359,6 +360,7 @@ void StreetsOfRage::wait_vblank_and_upload_graphics(m_long /*entry_*/) {
     });
 
     SoRDamageCircles::capture(memory()); // the handler has just uploaded this frame's SAT
+    SoRHighScores::saveIfChanged(memory()); // --qol scores: once a name is in
 
     cpu().ssp += 4;
 }
@@ -380,6 +382,8 @@ void StreetsOfRage::wait_vblank_without_graphics_upload(m_long /*entry_*/) {
             serviceIRQ();
         return !shouldQuit();
     });
+
+    SoRHighScores::saveIfChanged(memory());
 
     cpu().ssp += 4;
 }

@@ -1,5 +1,6 @@
 #include "SoRCheats.hpp"
 #include "SoRControlsMenu.hpp"
+#include "SoRHighScores.hpp"
 #include "SoRInput.hpp"
 #include "SoRPython.hpp"
 #include "SoRQolMenu.hpp"
@@ -543,6 +544,11 @@ void StreetsOfRage::remap_player_gameplay_input(m_long /*entry_*/) {
 // ---------------------------------------------------------------------------
 void StreetsOfRage::high_score_name_entry_dispatcher(m_long /*entry_*/) {
     traceEnter(0x56E6u);
+    // QUALITY-OF-LIFE initials: the name goes in without the screen.
+    if (SoRHighScores::enterInitials(memory(), cpu().a[0])) {
+        return68k(cpu());
+        return;
+    }
     cpu().a[1] = 0x56EEu;
     // jmp $B186 — state handler returns through the caller's soft stack frame.
     dispatch_object_primary_state_table(0xB186u);

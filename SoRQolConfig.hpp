@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
 #include <string_view>
 
 // The options of OPTIONS > QUALITY-OF-LIFE, in `qol.yaml` next to controls.yaml:
@@ -12,9 +13,18 @@ struct QolConfig {
     bool rollCameraEarlier     = false; // --qol cam
     bool friendGrabKeepsWeapon = false; // --qol grab
     bool enemyDamageCircles    = false; // --qol damage
+    bool persistHighScores     = false; // --qol scores
+
+    // Initials for the high-score table, up to three letters or spaces; empty: the player types them.
+    // Menu and file only, no command-line option. Player 2 under AI Assist is always "AI ".
+    std::string initialsP1;
+    std::string initialsP2;
 
     bool operator==(const QolConfig &) const = default;
 };
+
+/// @p text as initials: upper case, letters and spaces only, at most three; empty when there is no letter.
+std::string normalizeInitials(std::string_view text);
 
 /// Turns on the option `--qol` calls @p name. False if there is none.
 bool enable(QolConfig &config, std::string_view name);

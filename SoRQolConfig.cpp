@@ -21,7 +21,31 @@ void readBool(const YAML::Node &node, bool &value) {
     }
 }
 
+void readInitials(const YAML::Node &node, std::string &value) {
+    if (!node)
+        return;
+    try {
+        value = normalizeInitials(node.as<std::string>());
+    } catch (const YAML::Exception &) {
+    }
+}
+
 } // namespace
+
+std::string normalizeInitials(std::string_view text) {
+    std::string result;
+    for (const char c : text) {
+        if (result.size() == 3)
+            break;
+        if (c >= 'a' && c <= 'z')
+            result += static_cast<char>(c - 'a' + 'A');
+        else if ((c >= 'A' && c <= 'Z') || c == ' ')
+            result += c;
+    }
+    if (result.find_first_not_of(' ') == std::string::npos)
+        result.clear();
+    return result;
+}
 
 bool enable(QolConfig &config, std::string_view name) {
     if (name == "cam") {
@@ -34,6 +58,10 @@ bool enable(QolConfig &config, std::string_view name) {
     }
     if (name == "damage") {
         config.enemyDamageCircles = true;
+        return true;
+    }
+    if (name == "scores") {
+        config.persistHighScores = true;
         return true;
     }
     return false;
@@ -71,6 +99,9 @@ QolConfig loadOrCreate(const std::filesystem::path &path) {
     readBool(root["cam"], config.rollCameraEarlier);
     readBool(root["grab"], config.friendGrabKeepsWeapon);
     readBool(root["damage"], config.enemyDamageCircles);
+    readBool(root["scores"], config.persistHighScores);
+    readInitials(root["initials1"], config.initialsP1);
+    readInitials(root["initials2"], config.initialsP2);
     return config;
 }
 
@@ -82,6 +113,9 @@ bool save(const QolConfig &config, const std::filesystem::path &path) {
     root["cam"]    = config.rollCameraEarlier;
     root["grab"]   = config.friendGrabKeepsWeapon;
     root["damage"] = config.enemyDamageCircles;
+    root["scores"] = config.persistHighScores;
+    root["initials1"] = config.initialsP1;
+    root["initials2"] = config.initialsP2;
 
     YAML::Emitter emitter;
     emitter << root;
