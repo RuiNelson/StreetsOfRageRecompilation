@@ -1,5 +1,6 @@
 #include "SoRCheats.hpp"
 #include "SoRControlsConfig.hpp"
+#include "SoRHealthBars.hpp"
 #include "SoRInput.hpp"
 #include "SoRPause.hpp"
 #include "SoRPlatform.hpp"
@@ -126,9 +127,9 @@ int main(int argc, char *argv[]) {
         ->check(CLI::IsMember({"60", "50"}))
         ->group("Game");
     // Each wins over qol.yaml for this run; OPTIONS > QUALITY-OF-LIFE can still change it, and saves what it shows.
-    app.add_option("--qol", qolOptions, "Quality-of-life changes to turn on, separated by commas. cam: the camera rolls from 30% of the screen. grab: a friend's grab does not drop your weapon")
+    app.add_option("--qol", qolOptions, "Quality-of-life changes to turn on, separated by commas. cam: the camera rolls from 30% of the screen. grab: a friend's grab does not drop your weapon. bars: a health bar over each regular enemy")
         ->delimiter(',')
-        ->check(CLI::IsMember({"cam", "grab"}))
+        ->check(CLI::IsMember({"cam", "grab", "bars"}))
         ->group("Game");
     app.add_flag("--default-qol",
                  defaultQolFlag,
@@ -323,6 +324,7 @@ int main(int argc, char *argv[]) {
             SoRPython::start(sor.memory());
         }
         sor.vdp().setFrameOverlay([&sor](Framebuffer &framebuffer, int width, int height) {
+            SoRHealthBars::draw(framebuffer, width, height);
             SoRPause::drawOverlay(sor.memory(), framebuffer, width, height);
         });
         sor.boot();

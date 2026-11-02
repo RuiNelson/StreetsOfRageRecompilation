@@ -19,8 +19,8 @@ constexpr int kLabelColumn = 4;
 constexpr int kValueColumn = 30;
 constexpr int kHelpRow     = 22;
 
-enum class Row { RollCameraEarlier, FriendGrabKeepsWeapon, Reset, Save, Cancel };
-constexpr std::array kRows = {Row::RollCameraEarlier, Row::FriendGrabKeepsWeapon, Row::Reset, Row::Save, Row::Cancel};
+enum class Row { RollCameraEarlier, FriendGrabKeepsWeapon, EnemyHealthBars, Reset, Save, Cancel };
+constexpr std::array kRows = {Row::RollCameraEarlier, Row::FriendGrabKeepsWeapon, Row::EnemyHealthBars, Row::Reset, Row::Save, Row::Cancel};
 
 int screenRow(Row row) {
     switch (row) {
@@ -28,6 +28,8 @@ int screenRow(Row row) {
             return 7;
         case Row::FriendGrabKeepsWeapon:
             return 9;
+        case Row::EnemyHealthBars:
+            return 11;
         case Row::Reset:
             return 16;
         case Row::Save:
@@ -44,6 +46,8 @@ std::string_view label(Row row) {
             return "ROLL CAMERA EARLIER";
         case Row::FriendGrabKeepsWeapon:
             return "FRIEND GRAB KEEPS WEAPON";
+        case Row::EnemyHealthBars:
+            return "ENEMY HEALTH BARS";
         case Row::Reset:
             return "RESET TO DEFAULTS";
         case Row::Save:
@@ -78,6 +82,9 @@ bool changeValue(QolConfig &config, Row row) {
         case Row::FriendGrabKeepsWeapon:
             config.friendGrabKeepsWeapon = !config.friendGrabKeepsWeapon;
             return true;
+        case Row::EnemyHealthBars:
+            config.enemyHealthBars = !config.enemyHealthBars;
+            return true;
         case Row::Reset:
         case Row::Save:
         case Row::Cancel:
@@ -96,6 +103,10 @@ std::array<std::string, 2> help(const QolConfig &config, Row row) {
             if (config.friendGrabKeepsWeapon)
                 return {"A FRIEND WHO GRABS YOU DOES NOT MAKE", "YOU DROP YOUR WEAPON. ENEMIES DO."};
             return {"AS IN THE ORIGINAL GAME: ANY GRAB", "MAKES YOU DROP YOUR WEAPON."};
+        case Row::EnemyHealthBars:
+            if (config.enemyHealthBars)
+                return {"A SMALL BAR OVER EACH REGULAR ENEMY", "SHOWS THE HEALTH IT HAS LEFT."};
+            return {"AS IN THE ORIGINAL GAME: ONLY THE", "BOSSES SHOW THEIR HEALTH."};
         case Row::Reset:
             return {"PUTS BACK THE DEFAULTS ABOVE. THEY", "COUNT ONLY AFTER SAVE AND APPLY."};
         case Row::Save:
@@ -116,6 +127,8 @@ void draw(const Menu &m, Canvas &canvas) {
             canvas.text(kValueColumn, screenRow(row), m.pending.rollCameraEarlier ? "ON" : "OFF", selected);
         if (row == Row::FriendGrabKeepsWeapon)
             canvas.text(kValueColumn, screenRow(row), m.pending.friendGrabKeepsWeapon ? "ON" : "OFF", selected);
+        if (row == Row::EnemyHealthBars)
+            canvas.text(kValueColumn, screenRow(row), m.pending.enemyHealthBars ? "ON" : "OFF", selected);
     }
     const auto lines = help(m.pending, kRows[static_cast<std::size_t>(m.cursor)]);
     // White, as in the VIDEO menu: this screen's grey is too dark to read a sentence in.

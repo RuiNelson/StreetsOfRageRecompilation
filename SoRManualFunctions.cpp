@@ -1,5 +1,6 @@
 #include "SoR.hpp"
 #include "SoRCheats.hpp"
+#include "SoRHealthBars.hpp"
 #include "SoRQolConfig.hpp"
 
 #include <algorithm>
@@ -356,6 +357,8 @@ void StreetsOfRage::wait_vblank_and_upload_graphics(m_long /*entry_*/) {
             serviceIRQ();
         return !shouldQuit();
     });
+
+    SoRHealthBars::capture(memory()); // the handler has just uploaded this frame's SAT
 
     cpu().ssp += 4;
 }
