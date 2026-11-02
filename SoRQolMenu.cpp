@@ -24,6 +24,10 @@ constexpr int kValueColumn = 30;
 constexpr int kHelpRow     = 22;
 constexpr int kPages       = 2;
 
+constexpr int kPlayersRow       = 19;
+constexpr int kRoundRow         = 21;
+constexpr int kCheatValueColumn = 18;
+
 constexpr m_long kCheatFlag    = 0xFFFFFA7Bu;
 constexpr m_long kLevel        = 0xFFFFFF02u;
 constexpr m_long kLivesSetting = 0xFFFFFFCAu;
@@ -363,8 +367,27 @@ void drawOptionsRow(SystemMemory &memory, bool highlighted) {
 }
 
 void drawExitRow(SystemMemory &memory, bool highlighted) {
-    const int row = 19; // the ROM's bundles $0A and $10 put it at 18, against the row above
+    // The ROM's bundles $0A and $10 put it at 18, against the row above.
+    const int row = memory.readByte(kCheatFlag) != 0 ? 23 : 19;
     drawText(memory, kLabelColumn, row, "EXIT", highlighted);
+}
+
+void drawPlayersLabel(SystemMemory &memory, bool highlighted) {
+    drawText(memory, kLabelColumn, kPlayersRow, "PLAYERS", highlighted);
+}
+
+void drawRoundLabel(SystemMemory &memory, bool highlighted) {
+    drawText(memory, kLabelColumn, kRoundRow, "ROUND NO.", highlighted);
+}
+
+void drawPlayersDigit(SystemMemory &memory, m_word tile) {
+    memory.writeLong(kVdpControl, vramWriteCommand(cellAddress(kCheatValueColumn, kPlayersRow)));
+    memory.writeWord(kVdpData, tile);
+}
+
+void drawRoundDigit(SystemMemory &memory, m_word tile) {
+    memory.writeLong(kVdpControl, vramWriteCommand(cellAddress(kCheatValueColumn, kRoundRow)));
+    memory.writeWord(kVdpData, tile);
 }
 
 void open() {

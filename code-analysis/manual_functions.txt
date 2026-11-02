@@ -37,6 +37,11 @@
 
 # OPTIONS' EXIT row, one row lower for QUALITY-OF-LIFE (SoRMainMenus.cpp, with its neighbours).
 0014BC # options_highlight_exit
+# The cheat rows, above EXIT: drawn by the host, not bundles $08/$09/$0E/$0F (SoRMainMenus.cpp).
+0013D6 # options_highlight_lives
+0013E6 # options_draw_lives_digit
+00144A # options_highlight_level
+00145A # options_draw_level_digit
 
 # Widescreen arena (SoRWidescreenArena.cpp): ports whose screen-edge constants widen with --widescreen.
 0043AA # clamp_players_to_gameplay_bounds

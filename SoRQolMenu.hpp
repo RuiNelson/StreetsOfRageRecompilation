@@ -3,6 +3,8 @@
 #include "SoRControlsConfig.hpp"
 #include "SoRQolConfig.hpp"
 
+#include "data_types.hpp"
+
 class SystemMemory;
 
 // OPTIONS > QUALITY-OF-LIFE: the changes to the original game, kept in qol.yaml.
@@ -17,8 +19,14 @@ namespace SoRQolMenu {
 /// The OPTIONS screen's QUALITY-OF-LIFE row.
 void drawOptionsRow(SystemMemory &memory, bool highlighted);
 
-/// The OPTIONS screen's EXIT row, one row below the ROM's to make room for this one.
+/// The OPTIONS screen's EXIT row: always the last, below the cheat rows when they are on.
 void drawExitRow(SystemMemory &memory, bool highlighted);
+
+/// The cheat rows' labels (the ROM's words, higher up to keep EXIT last) and where their digits go.
+void drawPlayersLabel(SystemMemory &memory, bool highlighted);
+void drawRoundLabel(SystemMemory &memory, bool highlighted);
+void drawPlayersDigit(SystemMemory &memory, m_word tile);
+void drawRoundDigit(SystemMemory &memory, m_word tile);
 
 void open();
 bool isOpen();

@@ -327,8 +327,8 @@ void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
             if (memory().readByte(kCheatFlag) != 0u) {
                 SOR_CONTROLS_CALL_68K(options_draw_lives_digit(), 0x11B2u, 0x0013E6u);
                 SOR_CONTROLS_CALL_68K(options_draw_level_digit(), 0x11B6u, 0x00145Au);
-                cpu().d[0] = 0x00000F0Eu;
-                SOR_CONTROLS_CALL_68K(load_encoded_vdp_tilemap_bundle(), 0x11C2u, 0x00A8B8u);
+                SoRQolMenu::drawPlayersLabel(memory(), false);
+                SoRQolMenu::drawRoundLabel(memory(), false);
             }
             SoRControlsMenu::drawOptionsRow(memory(), !videoRow && !qolRow);
             SoRVideoMenu::drawOptionsRow(memory(), liveVideoConfig(vdp()), videoRow);
