@@ -33,22 +33,22 @@ enum class Row { RollCameraEarlier, FriendGrabKeepsWeapon, EnemyDamageCircles, S
 
 std::vector<Row> rows(int page) {
     if (page == 0)
-        return {Row::RollCameraEarlier, Row::FriendGrabKeepsWeapon, Row::EnemyDamageCircles, Row::SaveHighScores, Row::Page, Row::Save, Row::Cancel};
-    return {Row::InitialsP1, Row::InitialsP2, Row::CheatEnabled, Row::Page, Row::Save, Row::Cancel};
+        return {Row::RollCameraEarlier, Row::FriendGrabKeepsWeapon, Row::EnemyDamageCircles, Row::CheatEnabled, Row::Page, Row::Save, Row::Cancel};
+    return {Row::SaveHighScores, Row::InitialsP1, Row::InitialsP2, Row::Page, Row::Save, Row::Cancel};
 }
 
 int screenRow(Row row) {
     switch (row) {
         case Row::RollCameraEarlier:
-        case Row::InitialsP1:
+        case Row::SaveHighScores:
             return 7;
         case Row::FriendGrabKeepsWeapon:
-        case Row::InitialsP2:
+        case Row::InitialsP1:
             return 9;
         case Row::EnemyDamageCircles:
-        case Row::CheatEnabled:
+        case Row::InitialsP2:
             return 11;
-        case Row::SaveHighScores:
+        case Row::CheatEnabled:
             return 13;
         case Row::Page:
             return 16;
