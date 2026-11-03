@@ -677,7 +677,9 @@ city). Round 8 starts at the map's end, so its margin is drawn only by the initi
 `$196A4` upload inlined), which reads each 32-block row in one run. At round 8's end (camera `$80`) the throne room starts at
 block 8 and its left wall has one tile more than the right: in widescreen every Plane A block left of the left statue's
 base (X < `$B0`) is the H-flipped mirror of the block at `$230 - X` (user: the visible room must be symmetric), in
-streamed columns (`$1953A`, ported) and the initial draw. `autoplay` follows it (`GET_FLAGS` flag 0, `autoplay/CLAUDE.md` **Widescreen**). Never patch the ROM (the boot checksum hangs the game) and
+streamed columns (`$1953A`, ported) and the initial draw. Round 3's boss arena shows a third palm trunk `$60` right of the right type-`$4E` palm (X `$EB8`, camera `$DC0`; the palms repeat every `$600` and the boss section creates only two) with no top: after
+the SAT is built (`$AD8E`'s tail into `$AE96`), `SoRWidescreenArena::appendRound3PalmTop` appends that palm's two
+SAT records again `$60` to the right (user), touching only the SAT buffer and its counters. `autoplay` follows it (`GET_FLAGS` flag 0, `autoplay/CLAUDE.md` **Widescreen**). Never patch the ROM (the boot checksum hangs the game) and
 never edit `MegaDriveEnvironment` for game rules. A port must also leave the CCR flags the caller branches on
 exactly as the ROM does at every exit: `update_player_object` skips the player's update on `bne` after
 `$40A6 (police_special_player_update_gate)`, and that Z flag is the whole of the police special's freeze. The full table, the checks and what is left are in

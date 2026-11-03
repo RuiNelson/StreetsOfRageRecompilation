@@ -1,3 +1,5 @@
+#include "SoRWidescreenArena.hpp"
+
 #include "SoRCpuOps.hpp"
 
 #include <cstdint>
@@ -1416,4 +1418,60 @@ void StreetsOfRage::initialize_visible_tilemap_plane(m_long /*entry_*/) {
     mem.writeLong(camera + 0x0Eu, cpu.d[6]);
     cpu.setNZClearVC(cpu.d[6], 0x80000000u);
     cpu.ssp += 4;
+}
+
+// ---------------------------------------------------------------------------
+// Round 3's third palm top
+//
+// Round 3's palm trunks near the street are Plane A and their tops are sprites: type-$4E objects that $E98
+// creates with each section's waves, each two 2x4 pieces of tile $122 eight pixels left of X. The layout
+// repeats every $600 (palms at $288, $2B8, $318, ...). The boss section creates only $E88 and $EB8, and at the
+// boss (camera $DC0) widescreen shows the next trunk, $F18, in the right margin with no top (user). The SAT gets that palm's records again, $60 further right, at the
+// end of the list where the palms are (the farthest bucket). Nothing but the SAT buffer and its counters
+// changes, so the game is unaffected.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+constexpr m_long kSatBuffer          = 0xFFFFDA00u;
+constexpr m_long kSatSlotsRemaining  = 0xFFFFFA03u;
+constexpr m_long kSatWritePtr        = 0xFFFFFB04u;
+constexpr m_word kPalmX              = 0x0EB8u; // the boss arena's right palm (camera $DC0)
+constexpr m_word kThirdPalmShift     = 0x0060u;
+constexpr m_word kPalmTile           = 0x0122u;
+constexpr m_word kPalmPieceLeft      = 0x0008u;
+constexpr m_word kSpriteWindowRight  = 0x01E0u; // biased X past the widescreen's right edge
+
+} // namespace
+
+void SoRWidescreenArena::appendRound3PalmTop(SystemMemory &memory) {
+    if (memory.readWord(kLevel) != 2u)
+        return;
+    const m_long end    = 0xFFFF0000u | memory.readWord(kSatWritePtr);
+    const m_word pieceX = static_cast<m_word>(kPalmX + 0x80u - memory.readWord(kCamX) - kPalmPieceLeft);
+    const m_word thirdX = static_cast<m_word>(pieceX + kThirdPalmShift);
+    if (static_cast<std::int16_t>(thirdX) >= static_cast<std::int16_t>(kSpriteWindowRight))
+        return;
+
+    m_long write = end;
+    for (m_long record = kSatBuffer; record < end; record += 8u) {
+        if ((memory.readWord(record + 4u) & 0x07FFu) != kPalmTile || memory.readWord(record + 6u) != pieceX)
+            continue;
+        const m_byte slots = memory.readByte(kSatSlotsRemaining);
+        if (slots == 0)
+            break;
+        const auto link = static_cast<m_byte>(memory.readByte(kSpriteLinkIndex) + 1u);
+        memory.writeByte(kSpriteLinkIndex, link);
+        memory.writeByte(kSatSlotsRemaining, static_cast<m_byte>(slots - 1u));
+        memory.writeWord(write, memory.readWord(record));
+        memory.writeByte(write + 2u, memory.readByte(record + 2u));
+        memory.writeByte(write + 3u, link);
+        memory.writeWord(write + 4u, memory.readWord(record + 4u));
+        memory.writeWord(write + 6u, thirdX);
+        write += 8u;
+    }
+    if (write == end)
+        return;
+    memory.writeLong(write, 0);
+    memory.writeWord(kSatWritePtr, static_cast<m_word>(write));
 }

@@ -6,6 +6,7 @@
 #include "SoRQolConfig.hpp"
 #include "SoRQolMenu.hpp"
 #include "SoRVideoMenu.hpp"
+#include "SoRWidescreenArena.hpp"
 #include "SoR.hpp"
 
 #include <SDL3/SDL.h>
@@ -1018,6 +1019,8 @@ void StreetsOfRage::update_objects_and_build_sprites(m_long entry_) {
     cpu().setFlag(CPU68K::FlagZ, (flags & 1u) == 0);
     memory().writeByte(0xFFFFFA1Bu, static_cast<m_byte>(flags & ~1u));
     enqueue_object_render_bucket(0xAE96u);
+    if (vdp().widescreen())
+        SoRWidescreenArena::appendRound3PalmTop(memory());
 }
 
 #undef SOR_CALL_68K
