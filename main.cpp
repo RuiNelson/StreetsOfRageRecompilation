@@ -315,6 +315,10 @@ int main(int argc, char *argv[]) {
         if (!sorAuxAddrFile.empty()) {
             sor.setAuxAddrFile(sorAuxAddrFile);
         }
+#ifdef __PROSPERO__
+        // The port is built with the speculative entries; the ones the game reaches are listed here.
+        sor.setConfirmedFile(std::string(SoRPlatform::kDataDir) + "/confirmed.txt");
+#endif
         if (!sorCallLogFile.empty()) {
             sor.setCallLog(sorCallLogFile);
         }

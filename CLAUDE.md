@@ -132,6 +132,7 @@ console drivers, RADV and `tools/link-title.sh`, which refuses any import that w
 - The console's files are in `/data/sor` (`SoRPlatform::kDataDir`; user decision, as ProsperoEden's `/data/prosperoeden`),
   which a title sees only with ShadowMountPlus 1.7beta4 or newer. `args.txt` there holds options, one a line: a title has
   no command line.
+- **Speculative entries** (user): the PS5 build is generated with `generate_cpp.py --speculative` (the wizards and `build_ps5.py` do; the scan rewrites the ignored `speculative_addresses.txt`). The title has no discovery loop: `main.cpp` calls `setConfirmedFile(/data/sor/confirmed.txt)` and `confirmSpeculative` appends each entry reached, once, with no exit. An unknown dispatch still aborts. Compiled only on the desktop; the `__PROSPERO__` branch is untried.
 - **The ROM, the pre-rendered soundtrack, the AI's files and the stdlib are obligatory** (user): without any of them `main.cpp`
   sends a notification saying what to copy where and the title closes, even with `--silent` or `--sound emulated` in
   `args.txt`. There is no fallback to emulated sound or a game without AI on the console.
