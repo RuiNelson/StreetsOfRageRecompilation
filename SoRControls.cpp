@@ -33,6 +33,7 @@ constexpr m_long kP1ButtonPress = 0xFFFFFC05u;
 constexpr m_long kP2ButtonHeld  = 0xFFFFFC08u;
 constexpr m_long kP2ButtonPress = 0xFFFFFC09u;
 
+constexpr m_long kGameState     = 0xFFFFFF00u;
 constexpr m_long kPlayerMode    = 0xFFFFFF18u;
 constexpr m_long kP1CharacterId = 0xFFFFFF1Eu;
 constexpr m_long kP2CharacterId = 0xFFFFFF1Fu;
@@ -554,11 +555,36 @@ void StreetsOfRage::high_score_name_entry_dispatcher(m_long /*entry_*/) {
     dispatch_object_primary_state_table(0xB186u);
 }
 
+// Each player's light bar: their character's colour while they play (Axel
+// blue, Adam yellow, Blaze red), white elsewhere: menus, character select, the
+// attract demo, the endings, and a player not in player_mode. Host output,
+// no game state.
+static std::array<SoRInput::LightColour, 2> playerLightBars(SystemMemory &memory) {
+    std::array<SoRInput::LightColour, 2> lights{};
+    const m_word state   = memory.readWord(kGameState);
+    const bool   playing = (state >= 0x14u && state <= 0x1Au) || state == 0x28u || state == 0x2Au;
+    if (!playing || memory.readByte(kDemoMode) != 0u)
+        return lights;
+    const m_word mode = memory.readWord(kPlayerMode);
+    for (int player = 0; player < 2; ++player) {
+        if ((mode & (1u << player)) == 0u)
+            continue;
+        switch (memory.readByte(player == 0 ? kP1CharacterId : kP2CharacterId)) {
+        case 0: lights[player] = {0, 64, 255}; break;  // Axel
+        case 1: lights[player] = {255, 200, 0}; break; // Adam
+        case 2: lights[player] = {255, 0, 0}; break;   // Blaze
+        default: break;
+        }
+    }
+    return lights;
+}
+
 void StreetsOfRage::sample_all_joypads(m_long entry_) {
     traceEnter(entry_);
 
     // Once a frame: the remote client's input document (execution data).
     SoRRemoteInput::update(remoteAccess(), gameUptimeFrames());
+    SoRInput::setLightBars(playerLightBars(memory()));
     const SampledPlayer player1 = samplePlayer(0);
     const SampledPlayer player2 = samplePlayer(1);
     if (SoRRemoteInput::aiAssist() && memory().readByte(kDemoMode) == 0)

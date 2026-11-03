@@ -8,7 +8,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <mutex>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace SoRInput {
@@ -42,6 +44,8 @@ struct Pad {
     std::array<Sint16, SDL_GAMEPAD_AXIS_COUNT> axes{};
     /// Per reader: pressed since its last read (see State::keyTapped).
     std::array<std::array<bool, SDL_GAMEPAD_BUTTON_COUNT>, kLatchCount> buttonTapped{};
+    /// The light bar colour last sent (setLightBars), none on a new pad.
+    std::optional<LightColour> light;
 };
 
 // Written by the event watch (main thread) and setConfig; read by the sampler
@@ -394,6 +398,41 @@ Scheme scheme(int player) {
     State          &s = state();
     std::lock_guard lock(s.mutex);
     return effectiveSchemeLocked(s, std::clamp(player, 0, 1));
+}
+
+void setLightBars(const std::array<LightColour, 2> &players) {
+    std::vector<std::pair<SDL_JoystickID, LightColour>> changes;
+    {
+        State          &s = state();
+        std::lock_guard lock(s.mutex);
+        if (!s.started)
+            return;
+        const std::array<const Pad *, 2> assigned = assignedPadsLocked(s);
+        for (Pad &pad : s.pads) {
+            LightColour colour;
+            for (std::size_t player = 0; player < 2; ++player)
+                if (assigned[player] == &pad)
+                    colour = players[player];
+            if (pad.light != colour) {
+                pad.light = colour;
+                changes.emplace_back(pad.id, colour);
+            }
+        }
+    }
+    // Outside the mutex: SDL calls the event watch, which takes it, with the
+    // joystick lock held, so taking them the other way round could deadlock.
+    // The joystick lock keeps the pad open between the lookup and the write.
+    if (changes.empty())
+        return;
+    SDL_LockJoysticks();
+    for (const auto &[id, colour] : changes) {
+        SDL_Gamepad *gamepad = SDL_GetGamepadFromID(id);
+        const bool   sent    = gamepad != nullptr && SDL_SetGamepadLED(gamepad, colour.r, colour.g, colour.b);
+        if (gTrace)
+            std::fprintf(stderr, "[input] pad %u light %u %u %u%s\n", (unsigned)id, colour.r, colour.g, colour.b,
+                         sent ? "" : " (not supported)");
+    }
+    SDL_UnlockJoysticks();
 }
 
 ControlsConfig config() {

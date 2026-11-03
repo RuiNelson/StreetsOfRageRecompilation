@@ -391,6 +391,11 @@ and every byte in `$FFFC04`-`$FFFC0A` keep their format and frame.
   the scheme, the pad and its trigger values -- what a controller really
   sends. Run from a terminal while playing: macOS only gives controller input
   to the app in front, so a separate command-line probe sees nothing.
+- Light bar (workspace `CLAUDE.md`, **Light bar**): `sample_all_joypads` reads `game_state` (`$14`-`$1A`, `$28`/`$2A`),
+  the demo flag, `player_mode` and the character IDs and calls `SoRInput::setLightBars`, which sends
+  `SDL_SetGamepadLED` only when a pad's colour changes, with the joystick lock and never `SoRInput`'s mutex held (the
+  event watch runs under the joystick lock and takes the mutex). On the PS5 SDL's driver calls `scePadSetLightBar`.
+  `SOR_INPUT_TRACE=1` logs each change.
 - `controls.yaml` is created with the defaults when missing; a missing or bad
   entry keeps its default; a file that does not parse is left untouched. No
   migration from MegaDriveEnvironment's `./controls.yaml` (user).

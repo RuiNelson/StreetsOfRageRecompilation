@@ -2,6 +2,8 @@
 
 #include "SoRControlsConfig.hpp"
 
+#include <array>
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -32,6 +34,16 @@ void stop();
 /// A key or button pressed since the player's previous sample counts even if
 /// it was already released, and that latch is consumed here.
 ActionMask physicalActions(int player);
+
+struct LightColour {
+    std::uint8_t r = 255, g = 255, b = 255;
+    bool         operator==(const LightColour &) const = default;
+};
+/// CPU thread, once a frame: the light bar colour of each player's gamepad
+/// (pads no player reads are white). SDL is told only when a pad's colour
+/// changes; SDL_SetGamepadLED, so the PS5's pads and a DualSense or DualShock
+/// 4 on the desktop, and nothing on pads without a light bar.
+void setLightBars(const std::array<LightColour, 2> &players);
 
 /// The scheme @p player uses (controls.yaml).
 Scheme scheme(int player);
