@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
 #endif
     openConsoleIfWanted(argc, argv);
     CLI::App app{"Streets of Rage"};
-    app.set_version_flag("-V,--version", "0.6.0");
+    app.set_version_flag("-V,--version", "0.6.1");
 
     bool          sorDebugFlag       = false;
     bool          debugUtilsFlag     = false;
