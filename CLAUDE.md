@@ -670,7 +670,8 @@ or they leave their place in the background) and the sprite-piece cull (`$B0FE`,
 while still partly visible at the far left of the widescreen), and the "ROUND n START" banner (`$11A68`, `$11A76`,
 `$11AC4`: its halves wait and end just outside the 320-pixel sprite window, so they showed in the side margins; under
 widescreen they start and end `$20` further out and slide the extra distance in the same frames, the step read from the
-number sprite's Y, so the intro's timing and substates stay the ROM's). `autoplay` follows it (`GET_FLAGS` flag 0, `autoplay/CLAUDE.md` **Widescreen**). Never patch the ROM (the boot checksum hangs the game) and
+number sprite's Y, so the intro's timing and substates stay the ROM's). Round 5's Plane A past the map's right end (`$19656`, the name-table column resolver: the map wraps, so the
+right margin showed the map's start, a wooden wall) repeats the map's last block, 2 tiles twice (user). `autoplay` follows it (`GET_FLAGS` flag 0, `autoplay/CLAUDE.md` **Widescreen**). Never patch the ROM (the boot checksum hangs the game) and
 never edit `MegaDriveEnvironment` for game rules. A port must also leave the CCR flags the caller branches on
 exactly as the ROM does at every exit: `update_player_object` skips the player's update on `bne` after
 `$40A6 (police_special_player_update_gate)`, and that Z flag is the whole of the police special's freeze. The full table, the checks and what is left are in

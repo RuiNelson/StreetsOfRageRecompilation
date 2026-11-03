@@ -1036,3 +1036,56 @@ void StreetsOfRage::level_intro_banner_slide_out(m_long /*entry_*/) {
     }
     cpu().ssp += 4;
 }
+
+// ---------------------------------------------------------------------------
+// $019656 — resolve_blockmap_and_vdp_address
+//
+// World (d0 x, d1 y) of a strip a6 of the plane a1, with the strip's moduli (d4 width, d5 height) and first block
+// row d6: a5 = the block map cell (a2 + ((y mod H) / 16 + row) * stride + (x mod W) / 16), d2 = the wrapped
+// name-table write command (Plane A at a1 = $E000, Plane B otherwise). The map wraps, so the column past its
+// right edge is the map's first. Round 5 ends with the map's edge at the 320-pixel screen's edge, so widescreen's
+// right margin showed the start of the map (a wooden wall with a porthole); there Plane A columns past the map's
+// end repeat its last block (2 tiles) instead (user).
+// ---------------------------------------------------------------------------
+void StreetsOfRage::resolve_blockmap_and_vdp_address(m_long /*entry_*/) {
+    traceEnter(0x00019656u);
+    constexpr m_long kPrimaryCamera = 0xFFFFE000u;
+    constexpr m_word kRound5        = 4u;
+
+    auto        &cpu = this->cpu();
+    auto        &mem = memory();
+    const m_word x   = cpu.dw(0);
+    const m_word y   = cpu.dw(1);
+    const auto   divs = [&cpu](int reg, m_word value, m_word divisor) {
+        const std::int32_t dividend  = static_cast<std::int16_t>(value);
+        const std::int32_t by        = static_cast<std::int16_t>(divisor);
+        const m_word       quotient  = static_cast<m_word>(dividend / by);
+        const m_word       remainder = static_cast<m_word>(dividend % by);
+        cpu.d[reg]                   = (static_cast<m_long>(remainder) << 16) | quotient;
+        cpu.d[reg]                   = (cpu.d[reg] << 16) | (cpu.d[reg] >> 16); // swap
+    };
+    cpu.setDw(2, x);
+    cpu.setDw(3, y);
+    divs(0, x, cpu.dw(4));
+    divs(1, y, cpu.dw(5));
+
+    const bool pastMapEnd = vdp().widescreen() && mem.readWord(kLevel) == kRound5 && cpu.a[1] == kPrimaryCamera
+                         && static_cast<std::int16_t>(x) >= static_cast<std::int16_t>(cpu.dw(4));
+    if (pastMapEnd)
+        cpu.setDw(0, static_cast<m_word>(cpu.dw(4) - 0x10u));
+
+    cpu.a[5] = cpu.a[2];
+    cpu.setDw(1, static_cast<m_word>((cpu.dw(1) >> 4) + cpu.dw(6)));
+    cpu.d[1] = static_cast<m_long>(cpu.dw(1)) * mem.readWord(cpu.a[1] + 0x2Eu);
+    cpu.setDw(0, static_cast<m_word>((cpu.dw(0) >> 4) + cpu.dw(1)));
+    cpu.a[5] += signExtendWord(cpu.dw(0));
+
+    cpu.setDw(6, static_cast<m_word>(cpu.dw(6) << 4));
+    m_word command = static_cast<m_word>((((cpu.dw(3) + cpu.dw(6)) & 0x00FFu) << 4) & 0xFF00u);
+    cpu.setDw(3, command);
+    command = static_cast<m_word>((((x & 0x01FFu) >> 2) + command) & 0x0FFCu);
+    command |= cpu.a[1] == kPrimaryCamera ? 0x4000u : 0x6000u;
+    cpu.setDw(2, command);
+    cpu.setNZClearVC(command, 0x8000u);
+    cpu.ssp += 4;
+}
