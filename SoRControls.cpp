@@ -565,7 +565,7 @@ static std::array<SoRInput::LightColour, 2> playerLightBars(SystemMemory &memory
     const bool   playing = (state >= 0x14u && state <= 0x1Au) || state == 0x28u || state == 0x2Au;
     if (!playing || memory.readByte(kDemoMode) != 0u)
         return lights;
-    const m_word mode = memory.readWord(kPlayerMode);
+    const m_byte mode = memory.readByte(kPlayerMode);
     for (int player = 0; player < 2; ++player) {
         if ((mode & (1u << player)) == 0u)
             continue;

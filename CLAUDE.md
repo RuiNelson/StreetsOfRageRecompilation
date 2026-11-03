@@ -397,7 +397,8 @@ and every byte in `$FFFC04`-`$FFFC0A` keep their format and frame.
   the demo flag, `player_mode` and the character IDs and calls `SoRInput::setLightBars`, which sends
   `SDL_SetGamepadLED` only when a pad's colour changes, with the joystick lock and never `SoRInput`'s mutex held (the
   event watch runs under the joystick lock and takes the mutex). On the PS5 SDL's driver calls `scePadSetLightBar`.
-  `SOR_INPUT_TRACE=1` logs each change. Works on the user's console (2026-11-03).
+  `SOR_INPUT_TRACE=1` logs the players' colours and each pad's change. `player_mode` is a byte: read as a word it
+  left every pad white (user, on the console).
 - `controls.yaml` is created with the defaults when missing; a missing or bad
   entry keeps its default; a file that does not parse is left untouched. No
   migration from MegaDriveEnvironment's `./controls.yaml` (user).

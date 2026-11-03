@@ -62,6 +62,7 @@ struct State {
     // arrive as down/up pairs while held).
     std::array<std::array<bool, SDL_SCANCODE_COUNT>, kLatchCount> keyTapped{};
     std::vector<Pad>                                              pads; // in connection order
+    std::array<LightColour, 2>                                    lights; // setLightBars' last players
 
     // The CONTROLS menu's binding capture: the next key or pad input.
     bool           captureActive = false;
@@ -407,6 +408,10 @@ void setLightBars(const std::array<LightColour, 2> &players) {
         std::lock_guard lock(s.mutex);
         if (!s.started)
             return;
+        if (gTrace && players != s.lights)
+            std::fprintf(stderr, "[input] lights P1 %u %u %u, P2 %u %u %u\n", players[0].r, players[0].g,
+                         players[0].b, players[1].r, players[1].g, players[1].b);
+        s.lights = players;
         const std::array<const Pad *, 2> assigned = assignedPadsLocked(s);
         for (Pad &pad : s.pads) {
             LightColour colour;
