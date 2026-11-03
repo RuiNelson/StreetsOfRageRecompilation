@@ -674,7 +674,10 @@ number sprite's Y, so the intro's timing and substates stay the ROM's). Plane A 
 showed the map's start) is chosen per round (user): round 5 repeats the last block, 2 tiles twice (it showed a wooden
 wall); round 8 continues the corridor wall, whose pillars repeat every 18 blocks (it showed a hole onto Plane B's
 city). Round 8 starts at the map's end, so its margin is drawn only by the initial draw (`$19AF4`, ported with the
-`$196A4` upload inlined), which reads each 32-block row in one run. `autoplay` follows it (`GET_FLAGS` flag 0, `autoplay/CLAUDE.md` **Widescreen**). Never patch the ROM (the boot checksum hangs the game) and
+`$196A4` upload inlined), which reads each 32-block row in one run. At round 8's end (camera `$80`) the throne room starts at
+block 8 and its left wall has one tile more than the right: in widescreen every Plane A block left of the left statue's
+base (X < `$B0`) is the H-flipped mirror of the block at `$230 - X` (user: the visible room must be symmetric), in
+streamed columns (`$1953A`, ported) and the initial draw. `autoplay` follows it (`GET_FLAGS` flag 0, `autoplay/CLAUDE.md` **Widescreen**). Never patch the ROM (the boot checksum hangs the game) and
 never edit `MegaDriveEnvironment` for game rules. A port must also leave the CCR flags the caller branches on
 exactly as the ROM does at every exit: `update_player_object` skips the player's update on `bne` after
 `$40A6 (police_special_player_update_gate)`, and that Z flag is the whole of the police special's freeze. The full table, the checks and what is left are in

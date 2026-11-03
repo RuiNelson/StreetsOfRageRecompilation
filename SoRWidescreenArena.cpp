@@ -1058,7 +1058,71 @@ int wideMarginColumn(m_word level, int x, int width) {
     return -1;
 }
 
+// Widescreen's Plane A left of the map's drawn part: round 8 (level 7) ends with the camera at $80, and the throne
+// room is drawn from X $80 (block 8) on, the blocks before it empty: the left margin was a hole onto Plane B's city.
+// The room is symmetric about the screen's centre, X $120, from the statues' bases (blocks $B-$C and $17-$18) inwards,
+// but the ROM's left wall has one tile more between the base and the wall lamp than the right one. So every block
+// left of the left base (X < $B0) is drawn as the mirror (H-flipped) of the block at $230 - X: the margin is filled
+// and the walls match (user). Returns that block's pixel column, or -1.
+int wideMirrorColumn(m_word level, int x) {
+    if (level == 7u && x >= 0 && x < 0xB0)
+        return 0x230 - (x & ~0x0F);
+    return -1;
+}
+
+// A metatile's top (or bottom) long, its two name-table words swapped and H-flipped.
+m_long mirrorMetatileLong(m_long pair) {
+    return ((pair << 16) | (pair >> 16)) ^ 0x08000800u;
+}
+
 } // namespace
+
+// ---------------------------------------------------------------------------
+// $01953A — build_tilemap_column_update
+//
+// Queues at a4 one column of the strip a6 from block map cell a5 (d2 the VDP command): [command, 2h+1, then per block
+// its top and bottom longs], stepping a5 by the stride. In widescreen, Plane A's column comes from wideMirrorColumn
+// when it has one (its X is a5's column in the block map at a1+$2A).
+// ---------------------------------------------------------------------------
+void StreetsOfRage::build_tilemap_column_update(m_long /*entry_*/) {
+    traceEnter(0x0001953Au);
+    auto &cpu = this->cpu();
+    auto &mem = memory();
+    mem.writeWord(cpu.a[4], cpu.dw(2));
+    cpu.a[4] += 2;
+    cpu.setDw(2, mem.readWord(cpu.a[6]));
+    if (mem.readWord(cpu.a[1] + 0x42u) == 2u)
+        cpu.d[2] = 0x0Fu;
+    cpu.setDw(0, static_cast<m_word>(cpu.dw(2) * 2u + 1u));
+    mem.writeWord(cpu.a[4], cpu.dw(0));
+    cpu.a[4] += 2;
+    cpu.a[6] = mem.readLong(cpu.a[1] + 0x32u);
+    cpu.setDw(1, mem.readWord(cpu.a[1] + 0x2Eu));
+
+    m_long mirrorOffset = 0;
+    if (vdp().widescreen() && cpu.a[1] == kPrimaryCamera && cpu.dw(1) != 0) {
+        const m_long cell   = (cpu.a[5] - mem.readLong(cpu.a[1] + 0x2Au)) & 0x00FFFFFFu;
+        const int    x      = static_cast<int>(cell % cpu.dw(1)) * 0x10;
+        const int    column = wideMirrorColumn(mem.readWord(kLevel), x);
+        if (column >= 0)
+            mirrorOffset = static_cast<m_long>((column - x) >> 4);
+    }
+    do {
+        cpu.d[0] = static_cast<m_long>(mem.readByte(cpu.a[5] + mirrorOffset)) << 3;
+        m_long top    = mem.readLong(cpu.a[6] + cpu.d[0]);
+        m_long bottom = mem.readLong(cpu.a[6] + cpu.d[0] + 4u);
+        if (mirrorOffset != 0) {
+            top    = mirrorMetatileLong(top);
+            bottom = mirrorMetatileLong(bottom);
+        }
+        mem.writeLong(cpu.a[4], top);
+        mem.writeLong(cpu.a[4] + 4u, bottom);
+        cpu.a[4] += 8;
+        cpu.a[5] += signExtendWord(cpu.dw(1));
+        cpu.setDw(2, static_cast<m_word>(cpu.dw(2) - 1u));
+    } while (cpu.dw(2) != 0xFFFFu);
+    cpu.ssp += 4;
+}
 
 // ---------------------------------------------------------------------------
 // $019656 — resolve_blockmap_and_vdp_address
@@ -1121,7 +1185,8 @@ void StreetsOfRage::resolve_blockmap_and_vdp_address(m_long /*entry_*/) {
 // $196A4 (dispatch_background_vblank_upload), inlined here (a reimplemented routine calls only reimplemented
 // routines). The ROM reads the 32 blocks in one run, so a row past the map's right end reads the next row's first
 // blocks: in widescreen those of Plane A come from wideMarginColumn, like the streamed columns ($19656). Round 8
-// starts with the map's end at the 320-pixel screen's edge, and that row is the only draw of its margin.
+// starts with the map's end at the 320-pixel screen's edge, and that row is the only draw of its margin. Blocks with
+// a wideMirrorColumn are drawn mirrored, like the streamed columns ($1953A).
 // ---------------------------------------------------------------------------
 void StreetsOfRage::initialize_visible_tilemap_plane(m_long /*entry_*/) {
     traceEnter(0x00019AF4u);
@@ -1252,15 +1317,22 @@ void StreetsOfRage::initialize_visible_tilemap_plane(m_long /*entry_*/) {
         mem.writeWord(cpu.a[3], cpu.dw(1));
         cpu.a[3] += 2;
         for (int i = 0; i < 32; ++i, x += 0x10) {
-            m_long block = cpu.a[5];
-            const int column = margin ? wideMarginColumn(level, x, width) : -1;
+            m_long    block  = cpu.a[5];
+            const int mirror = margin ? wideMirrorColumn(level, x) : -1;
+            const int column = mirror >= 0 ? mirror : margin ? wideMarginColumn(level, x, width) : -1;
             if (column >= 0)
-                block = cpu.a[5] - static_cast<m_long>((x - column) >> 4);
+                block = cpu.a[5] + static_cast<m_long>((column - x) >> 4);
             ++cpu.a[5];
             cpu.d[0] = static_cast<m_long>(mem.readByte(block)) << 3;
-            mem.writeLong(cpu.a[3], mem.readLong(cpu.a[6] + cpu.d[0]));
+            m_long top    = mem.readLong(cpu.a[6] + cpu.d[0]);
+            m_long bottom = mem.readLong(cpu.a[6] + cpu.d[0] + 4u);
+            if (mirror >= 0) {
+                top    = mirrorMetatileLong(top);
+                bottom = mirrorMetatileLong(bottom);
+            }
+            mem.writeLong(cpu.a[3], top);
             cpu.a[3] += 4;
-            mem.writeLong(cpu.a[3] + 0x7Cu, mem.readLong(cpu.a[6] + cpu.d[0] + 4u));
+            mem.writeLong(cpu.a[3] + 0x7Cu, bottom);
         }
         cpu.setDw(1, 0xFFFFu);
     };
