@@ -24,6 +24,7 @@ constexpr m_word kArenaGrow = 0x0020u;
 constexpr m_long kCamX                = 0xFFFFE002u;
 constexpr m_long kCameraXMax          = 0xFFFFE01Au;
 constexpr m_long kCameraXMin          = 0xFFFFE01Eu;
+constexpr m_long kBlockmapStride      = 0xFFFFE02Eu;
 constexpr m_long kGameState           = 0xFFFFFF00u;
 constexpr m_long kLevel               = 0xFFFFFF02u;
 constexpr m_long kPoliceSpecialActive = 0xFFFFFA1Au;
@@ -94,6 +95,11 @@ bool waitsBehindShutter(SystemMemory &mem, m_byte type, m_byte personality) {
 // Keeps each active player inside the camera window (X) and the lane range (Y) during gameplay. The X
 // window is [cam+$20, cam+$120]; widescreen opens it to [cam, cam+$140], so the players can reach the
 // 32-pixel margin of the wider screen on both sides. Also owns the inner entry $43D2.
+//
+// The right edge never passes the collision map's last pixel (stride * 16 - 1). At a round's end the camera
+// stops with the map's edge at the 320-pixel screen's edge (round 5: cam $13C0, map $1500 wide), so cam+$140
+// is the first X off the map; the floor probe ($AD30) has no width check and reads the next row's first
+// column there, which on round 5's bottom lane is class 0: an invisible hole.
 // ---------------------------------------------------------------------------
 void StreetsOfRage::clamp_players_to_gameplay_bounds(m_long /*entry_*/) {
     traceEnter(0x000043AAu);
@@ -122,6 +128,12 @@ void StreetsOfRage::clamp_players_to_gameplay_bounds(m_long /*entry_*/) {
                 mem.writeWord(player + 0x10, static_cast<m_word>(edge));
             } else {
                 edge = static_cast<std::int16_t>(edge + 0x100 + 2 * grow);
+                const m_word stride = mem.readWord(kBlockmapStride);
+                if (grow != 0 && stride != 0) {
+                    const std::int16_t mapEnd = static_cast<std::int16_t>(stride * 16u - 1u);
+                    if (mapEnd < edge)
+                        edge = mapEnd;
+                }
                 if (x > edge)
                     mem.writeWord(player + 0x10, static_cast<m_word>(edge));
             }

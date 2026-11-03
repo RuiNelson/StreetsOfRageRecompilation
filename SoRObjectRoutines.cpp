@@ -114,7 +114,10 @@ void shapeAxisBetweenPair(CPU68K &cpu, SystemMemory &mem) {
 }
 
 // The body of $AD30; $AD2A zeroes d1-d3 first.
-void probeFloor(CPU68K &cpu, SystemMemory &mem) {
+// widescreen: a column past the map's right edge reads the last column. The ROM has no width check, so
+// such a column reads the start of the next lane row; on round 5's bottom lane that is class 0, a hole
+// the players reached in the wider screen's margin (the map ends at the 320-pixel screen's edge there).
+void probeFloor(CPU68K &cpu, SystemMemory &mem, bool widescreen) {
     const m_long object = cpu.a[0];
 
     const auto addClamped = [&](int reg, m_long field) {
@@ -131,15 +134,21 @@ void probeFloor(CPU68K &cpu, SystemMemory &mem) {
     cpu.setDw(4, cpu.dw(1));
     cpu.setDw(1, static_cast<m_word>(cpu.dw(1) >> 4));
     cpu.setDw(2, static_cast<m_word>(cpu.dw(2) >> 3));
+    const m_word stride   = mem.readWord(kBlockmapStride);
+    bool         lastCell = false;
+    if (widescreen && stride != 0 && cpu.dw(1) >= stride) {
+        cpu.setDw(1, static_cast<m_word>(stride - 1u));
+        lastCell = true;
+    }
     const std::int32_t row = static_cast<std::int32_t>(static_cast<std::int16_t>(cpu.dw(2)))
-                           * static_cast<std::int32_t>(static_cast<std::int16_t>(mem.readWord(kBlockmapStride)));
+                           * static_cast<std::int32_t>(static_cast<std::int16_t>(stride));
     cpu.d[2] = static_cast<m_long>(row);
     cpu.setDw(2, static_cast<m_word>(cpu.dw(2) + cpu.dw(1)));
 
     cpu.a[6] = kCollisionClassMap;
     cpu.setDb(7, mem.readByte(cpu.a[6] + signExtendWord(cpu.dw(2))));
     cpu.setDb(4, static_cast<m_byte>(cpu.db(4) & 0x0Fu));
-    if (cpu.db(4) < 8u)
+    if (cpu.db(4) < 8u && !lastCell)
         cpu.setDb(7, static_cast<m_byte>(cpu.db(7) >> 4));
     cpu.setDw(7, static_cast<m_word>(cpu.dw(7) & 0x000Fu));
     cpu.setDw(6, cpu.dw(7));
@@ -187,13 +196,13 @@ void StreetsOfRage::probe_floor_at_object(m_long /*entry_*/) {
     cpu().d[1] = 0;
     cpu().d[2] = 0;
     cpu().d[3] = 0;
-    probeFloor(cpu(), memory());
+    probeFloor(cpu(), memory(), vdp().widescreen());
     cpu().ssp += 4;
 }
 
 void StreetsOfRage::probe_floor_at_object_offset(m_long /*entry_*/) {
     traceEnter(0x0000AD30u);
-    probeFloor(cpu(), memory());
+    probeFloor(cpu(), memory(), vdp().widescreen());
     cpu().ssp += 4;
 }
 
