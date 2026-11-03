@@ -125,15 +125,28 @@ std::string consolePadName(const PadInput &input) {
     }
 }
 
-// In the font's colours: 1 the letter, C its shadow, 2 the background, the bottom row empty.
+// From artwork/gamepad-tiles/prospero.png (cross, square, circle, triangle there): each symbol in its
+// own colour of palette lines 2 and 3, 0 see-through, the bottom row empty.
 constexpr std::array<std::array<std::uint32_t, 8>, 4> kSymbolTiles = {{
-    {0x11C2211Cu, 0x211C11C2u, 0x22111C22u, 0x22111C22u, 0x211C11C2u, 0x11C2211Cu, 0x1C22221Cu, 0x22222222u}, // cross
-    {0x221111C2u, 0x211C211Cu, 0x11C2211Cu, 0x11C2211Cu, 0x11C2211Cu, 0x211C211Cu, 0x221111C2u, 0x22222222u}, // circle
-    {0x1111111Cu, 0x11C2211Cu, 0x11C2211Cu, 0x11C2211Cu, 0x11C2211Cu, 0x11C2211Cu, 0x1111111Cu, 0x22222222u}, // square
-    {0x22211C22u, 0x22111C22u, 0x211C11C2u, 0x211C11C2u, 0x11C2211Cu, 0x11C2211Cu, 0x1111111Cu, 0x22222222u}, // triangle
+    {0x01000001u, 0x00100010u, 0x00010100u, 0x00001000u, 0x00010100u, 0x00100010u, 0x01000001u, 0x00000000u}, // cross
+    {0x00033300u, 0x00300030u, 0x03000003u, 0x03000003u, 0x03000003u, 0x00300030u, 0x00033300u, 0x00000000u}, // circle
+    {0x02222222u, 0x02000002u, 0x02000002u, 0x02000002u, 0x02000002u, 0x02000002u, 0x02222222u, 0x00000000u}, // square
+    {0x00004000u, 0x00040400u, 0x00040400u, 0x00400040u, 0x00400040u, 0x04000004u, 0x04444444u, 0x00000000u}, // triangle
 }};
 
-// While the menu is open; blank again after, as the OPTIONS screen had them.
+// The artwork's colours (#217FD1, #D77DCA, #FF0000, #008B02) in CRAM's BGR, colours 1-4; line 3 at
+// about half, for the entries that are not selected.
+constexpr std::array<m_word, 5> kSymbolColours     = {0x000u, 0xC62u, 0xC6Cu, 0x00Eu, 0x080u};
+constexpr std::array<m_word, 5> kGreySymbolColours = {0x000u, 0x642u, 0x646u, 0x008u, 0x040u};
+constexpr m_long                kCramLine2         = 0x40u; // byte address of line 2 in CRAM
+constexpr m_long                kPaletteShadow     = 0xFFF400u; // $FFF400 (palette), what VBlank copies to CRAM
+
+m_long cramWriteCommand(m_long address) {
+    return 0xC0000000u | ((address & 0x3FFFu) << 16) | ((address >> 14) & 0x3u);
+}
+
+// While the menu is open; blank again after, as the OPTIONS screen had them. The colours go straight
+// to CRAM, as the tiles to VRAM, and closing puts back the game's own from its palette shadow.
 void writeSymbolTiles(SystemMemory &memory, bool loaded) {
     memory.writeLong(kVdpControl, vramWriteCommand(static_cast<m_long>(kFirstSymbolTile) * 32u));
     for (const auto &tile : kSymbolTiles) {
@@ -141,6 +154,13 @@ void writeSymbolTiles(SystemMemory &memory, bool loaded) {
             memory.writeWord(kVdpData, loaded ? static_cast<m_word>(row >> 16) : 0u);
             memory.writeWord(kVdpData, loaded ? static_cast<m_word>(row) : 0u);
         }
+    }
+    memory.writeLong(kVdpControl, cramWriteCommand(kCramLine2));
+    for (m_long index = 0; index < 32; ++index) {
+        const std::size_t colour = index % 16;
+        const auto &colours = index < 16 ? kSymbolColours : kGreySymbolColours;
+        memory.writeWord(kVdpData, loaded ? (colour < colours.size() ? colours[colour] : 0u)
+                                          : memory.readWord(kPaletteShadow + kCramLine2 + index * 2u));
     }
 }
 

@@ -18,6 +18,8 @@ inline constexpr m_long kVdpData    = 0x00C00000u;
 inline constexpr m_long kVdpControl = 0x00C00004u;
 inline constexpr m_long kPlaneA     = 0xC000u; // the OPTIONS screen's plane A (its $45A40003-style commands)
 inline constexpr m_word kGreyText   = 0x2000u; // palette line 1; line 0 is the white of the selected entry
+inline constexpr m_word kSymbolLine     = 0x4000u; // palette line 2: the symbols' colours, on the selected entry
+inline constexpr m_word kGreySymbolLine = 0x6000u; // palette line 3: the same, dimmed, on the others
 inline constexpr m_long kPlaySe     = 0xFFFFF00Au;
 inline constexpr m_byte kSoundMove  = 0xB9u; // options_row_nav's cursor sound
 inline constexpr m_byte kSoundPick  = 0xBAu; // the menus' confirm sound
@@ -29,7 +31,8 @@ inline constexpr int kRepeatDelay = 20;
 inline constexpr int kRepeatRate  = 6;
 
 // PlayStation's button symbols, as characters in a menu's text. The font has none: SoRControlsMenu
-// loads them into tiles that are blank on the OPTIONS screen, past the font's last, while it is open.
+// loads them into tiles that are blank on the OPTIONS screen, past the font's last, and their colours
+// into palette lines 2 and 3, black there, while it is open.
 inline constexpr char   kCross           = '\x01';
 inline constexpr char   kCircle          = '\x02';
 inline constexpr char   kSquare          = '\x03';
@@ -74,6 +77,14 @@ inline std::optional<m_byte> glyph(char c) {
     }
 }
 
+// A text byte as a plane cell: the tile and its palette line.
+inline m_word cell(char c, bool highlighted) {
+    const m_word tile = glyph(c).value_or(0x00);
+    if (c >= kCross && c <= kTriangle)
+        return static_cast<m_word>(tile | (highlighted ? kSymbolLine : kGreySymbolLine));
+    return static_cast<m_word>(tile | (highlighted ? 0u : kGreyText));
+}
+
 inline m_long vramWriteCommand(m_long address) {
     return 0x40000000u | ((address & 0x3FFFu) << 16) | ((address >> 14) & 0x3u);
 }
@@ -90,8 +101,7 @@ struct Canvas {
             return;
         for (const char c : value) {
             if (column >= 0 && column < kColumns)
-                cells[static_cast<std::size_t>(row * kColumns + column)] =
-                    static_cast<m_word>(glyph(c).value_or(0x00) | (highlighted ? 0u : kGreyText));
+                cells[static_cast<std::size_t>(row * kColumns + column)] = cell(c, highlighted);
             ++column;
         }
     }
@@ -129,7 +139,7 @@ inline void flush(SystemMemory &memory, Shown &shown, const Canvas &canvas) {
 inline void drawText(SystemMemory &memory, int column, int row, std::string_view text, bool highlighted) {
     memory.writeLong(kVdpControl, vramWriteCommand(cellAddress(column, row)));
     for (const char c : text)
-        memory.writeWord(kVdpData, static_cast<m_word>(glyph(c).value_or(0x00) | (highlighted ? 0u : kGreyText)));
+        memory.writeWord(kVdpData, cell(c, highlighted));
 }
 
 inline void playSound(SystemMemory &memory, m_byte id) {
