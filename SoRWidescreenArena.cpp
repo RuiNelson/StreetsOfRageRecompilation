@@ -1037,20 +1037,41 @@ void StreetsOfRage::level_intro_banner_slide_out(m_long /*entry_*/) {
     cpu().ssp += 4;
 }
 
+namespace {
+
+constexpr m_long kPrimaryCamera = 0xFFFFE000u;
+
+// Widescreen's Plane A past the map's right end (world X x >= the map's pixel width): the pixel column (within the
+// map) to draw there instead, or -1 to keep the ROM's wrap. Round 5 (level 4) repeats the last block, 2 tiles
+// twice. Round 8 (level 7) continues the corridor's wall, whose pillars repeat every 18 blocks: the map ends on a
+// pillar, so the margin gets the blocks that follow the previous one.
+int wideMarginColumn(m_word level, int x, int width) {
+    if (x < width)
+        return -1;
+    if (level == 4u)
+        return width - 0x10;
+    if (level == 7u) {
+        while (x >= width)
+            x -= 0x120;
+        return x;
+    }
+    return -1;
+}
+
+} // namespace
+
 // ---------------------------------------------------------------------------
 // $019656 — resolve_blockmap_and_vdp_address
 //
 // World (d0 x, d1 y) of a strip a6 of the plane a1, with the strip's moduli (d4 width, d5 height) and first block
 // row d6: a5 = the block map cell (a2 + ((y mod H) / 16 + row) * stride + (x mod W) / 16), d2 = the wrapped
 // name-table write command (Plane A at a1 = $E000, Plane B otherwise). The map wraps, so the column past its
-// right edge is the map's first. Round 5 ends with the map's edge at the 320-pixel screen's edge, so widescreen's
-// right margin showed the start of the map (a wooden wall with a porthole); there Plane A columns past the map's
-// end repeat its last block (2 tiles) instead (user).
+// right edge is the map's first. Round 5 ends, and round 8 starts, with the map's edge at the 320-pixel screen's
+// edge, so widescreen's right margin showed the start of the map (round 5: a wooden wall with a porthole; round 8:
+// nothing, a hole onto Plane B's city). There Plane A columns past the map's end are wideMarginColumn's (user).
 // ---------------------------------------------------------------------------
 void StreetsOfRage::resolve_blockmap_and_vdp_address(m_long /*entry_*/) {
     traceEnter(0x00019656u);
-    constexpr m_long kPrimaryCamera = 0xFFFFE000u;
-    constexpr m_word kRound5        = 4u;
 
     auto        &cpu = this->cpu();
     auto        &mem = memory();
@@ -1069,10 +1090,12 @@ void StreetsOfRage::resolve_blockmap_and_vdp_address(m_long /*entry_*/) {
     divs(0, x, cpu.dw(4));
     divs(1, y, cpu.dw(5));
 
-    const bool pastMapEnd = vdp().widescreen() && mem.readWord(kLevel) == kRound5 && cpu.a[1] == kPrimaryCamera
-                         && static_cast<std::int16_t>(x) >= static_cast<std::int16_t>(cpu.dw(4));
-    if (pastMapEnd)
-        cpu.setDw(0, static_cast<m_word>(cpu.dw(4) - 0x10u));
+    if (vdp().widescreen() && cpu.a[1] == kPrimaryCamera) {
+        const int column = wideMarginColumn(mem.readWord(kLevel), static_cast<std::int16_t>(x),
+                                            static_cast<std::int16_t>(cpu.dw(4)));
+        if (column >= 0)
+            cpu.setDw(0, static_cast<m_word>(column));
+    }
 
     cpu.a[5] = cpu.a[2];
     cpu.setDw(1, static_cast<m_word>((cpu.dw(1) >> 4) + cpu.dw(6)));
@@ -1087,5 +1110,238 @@ void StreetsOfRage::resolve_blockmap_and_vdp_address(m_long /*entry_*/) {
     command |= cpu.a[1] == kPrimaryCamera ? 0x4000u : 0x6000u;
     cpu.setDw(2, command);
     cpu.setNZClearVC(command, 0x8000u);
+    cpu.ssp += 4;
+}
+
+// ---------------------------------------------------------------------------
+// $019AF4 — initialize_visible_tilemap_plane
+//
+// The initial draw of one plane (a1 its camera, a2 its block map, a3 its row queue), inside the display-off load:
+// for each block row on screen, a 32-block row from the camera's X - $60 is queued and flushed at once through
+// $196A4 (dispatch_background_vblank_upload), inlined here (a reimplemented routine calls only reimplemented
+// routines). The ROM reads the 32 blocks in one run, so a row past the map's right end reads the next row's first
+// blocks: in widescreen those of Plane A come from wideMarginColumn, like the streamed columns ($19656). Round 8
+// starts with the map's end at the 320-pixel screen's edge, and that row is the only draw of its margin.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::initialize_visible_tilemap_plane(m_long /*entry_*/) {
+    traceEnter(0x00019AF4u);
+    constexpr m_long kVdpControl          = 0x00C00004u;
+    constexpr m_long kVdpData             = 0x00C00000u;
+    constexpr m_long kZ80BusRequest       = 0x00A11100u;
+    constexpr m_long kDmaCommandScratch   = 0xFFFFFC00u;
+    constexpr m_long kSecondaryCamera     = 0xFFFFE100u;
+    constexpr m_long kPrimaryRowQueue     = 0xFFFFEA00u;
+    constexpr m_long kSecondaryRowQueue   = 0xFFFFEB20u;
+    constexpr m_long kPrimaryColumnQueue  = 0xFFFFEC40u;
+    constexpr m_long kSecondaryColumnQueue = 0xFFFFECE0u;
+    constexpr m_long kUploadJumpTable     = 0x000196B2u;
+
+    auto      &cpu  = this->cpu();
+    auto      &mem  = memory();
+    const bool wide = vdp().widescreen();
+
+    // $196CA / $19758: one horizontal-scroll DMA (registers $8F, $93-$97, then the command through the scratch).
+    const auto dmaHscroll = [&](m_word step, m_long length, m_word sourceMid, m_long command) {
+        mem.writeWord(kZ80BusRequest, 0x0100u);
+        cpu.a[6] = kVdpControl;
+        mem.writeWord(kVdpControl, step);
+        mem.writeLong(kVdpControl, length);
+        mem.writeWord(kVdpControl, 0x9500u);
+        mem.writeWord(kVdpControl, sourceMid);
+        mem.writeWord(kVdpControl, 0x977Fu);
+        mem.writeLong(kDmaCommandScratch, command);
+        mem.writeWord(kVdpControl, mem.readWord(kDmaCommandScratch));
+        mem.writeWord(kVdpControl, mem.readWord(kDmaCommandScratch + 2u));
+        mem.writeWord(kVdpControl, 0x8F02u);
+        mem.writeWord(kZ80BusRequest, 0x0000u);
+    };
+    // $19800 flush_one_tilemap_update_queue: a2 the camera, a3 its row queue, a4 its column queue.
+    const auto flushOne = [&] {
+        traceEnter(0x00019800u);
+        const m_long control = cpu.a[0];
+        const m_long data    = cpu.a[1];
+        for (;;) {
+            cpu.setDw(0, mem.readWord(cpu.a[4]));
+            if (cpu.dw(0) == 0)
+                break;
+            mem.writeWord(cpu.a[4], 0);
+            cpu.a[4] += 2;
+            cpu.setDw(7, mem.readWord(cpu.a[4]));
+            cpu.a[4] += 2;
+            do {
+                mem.writeWord(control, cpu.dw(0));
+                mem.writeWord(control, cpu.dw(4));
+                mem.writeLong(data, mem.readLong(cpu.a[4]));
+                cpu.a[4] += 4;
+                cpu.setDw(0, static_cast<m_word>((cpu.dw(0) + cpu.dw(2)) & cpu.dw(3)));
+                cpu.setDw(7, static_cast<m_word>(cpu.dw(7) - 1u));
+            } while (cpu.dw(7) != 0xFFFFu);
+        }
+        for (;;) {
+            cpu.setDw(0, mem.readWord(cpu.a[3]));
+            if (cpu.dw(0) == 0)
+                break;
+            mem.writeWord(cpu.a[3], 0);
+            cpu.a[3] += 2;
+            cpu.setDw(7, mem.readWord(cpu.a[3]));
+            cpu.a[3] += 2;
+            if (cpu.dw(7) == 0)
+                break;
+            cpu.a[4] = cpu.a[3] + 0x80u;
+            cpu.setDw(1, cpu.dw(0));
+            do {
+                mem.writeWord(control, cpu.dw(1));
+                mem.writeWord(control, cpu.dw(4));
+                mem.writeLong(data, mem.readLong(cpu.a[3]));
+                cpu.a[3] += 4;
+                cpu.setDw(6, static_cast<m_word>(cpu.dw(1) + cpu.dw(2)));
+                mem.writeWord(control, cpu.dw(6));
+                mem.writeWord(control, cpu.dw(4));
+                mem.writeLong(data, mem.readLong(cpu.a[4]));
+                cpu.a[4] += 4;
+                cpu.setDw(1, static_cast<m_word>((cpu.dw(1) + 4u) & cpu.dw(5)));
+                cpu.setDw(7, static_cast<m_word>(cpu.dw(7) - 1u));
+            } while (cpu.dw(7) != 0xFFFFu);
+            cpu.a[3] = cpu.a[4];
+        }
+    };
+    // $196A4 dispatch_background_vblank_upload, by the primary camera's state, with a0/a1 the VDP ports.
+    const auto upload = [&](m_long retPc) {
+        logCallFromReturn(retPc, 0x000196A4u);
+        traceEnter(0x000196A4u);
+        cpu.setDw(0, static_cast<m_word>(mem.readWord(kPrimaryCamera) * 2u));
+        cpu.setDw(0, mem.readWord(kUploadJumpTable + signExtendWord(cpu.dw(0))));
+        m_long target = kUploadJumpTable + signExtendWord(cpu.dw(0));
+        traceEnter(target);
+        if (target == 0x000196CAu) {
+            if (mem.readWord(kLevel) == 2u) {
+                target = 0x00019758u;
+            } else {
+                dmaHscroll(0x8F20u, 0x93209400u, 0x96A8u, 0x74000083u);
+                dmaHscroll(0x8F20u, 0x93209400u, 0x96AAu, 0x74020083u);
+                target = 0x000197D8u;
+            }
+        }
+        if (target == 0x00019758u) {
+            dmaHscroll(0x8F04u, 0x93009401u, 0x96ADu, 0x74000083u);
+            dmaHscroll(0x8F04u, 0x93009401u, 0x96ACu, 0x74020083u);
+            target = 0x000197D8u;
+        }
+        cpu.setDw(2, 0x0080u);
+        cpu.setDw(3, 0xEFFFu);
+        cpu.d[4] = 3;
+        cpu.setDw(5, 0xFF7Fu);
+        cpu.a[2] = kPrimaryCamera;
+        cpu.a[3] = kPrimaryRowQueue;
+        cpu.a[4] = kPrimaryColumnQueue;
+        logCallFromReturn(0x000197F4u, 0x00019800u);
+        flushOne();
+        cpu.a[2] = kSecondaryCamera;
+        cpu.a[3] = kSecondaryRowQueue;
+        cpu.a[4] = kSecondaryColumnQueue;
+        flushOne();
+    };
+    // Queue one 32-block row (top longs, the bottom longs $80 further on) from a5, the block at world X x.
+    const auto queueRow = [&](int x, int width) {
+        const bool margin = wide && cpu.a[1] == kPrimaryCamera;
+        const m_word level = mem.readWord(kLevel);
+        mem.writeWord(cpu.a[3], cpu.dw(2));
+        cpu.a[3] += 2;
+        cpu.a[6] = mem.readLong(cpu.a[1] + 0x32u);
+        cpu.d[1] = 0x1Fu;
+        mem.writeWord(cpu.a[3], cpu.dw(1));
+        cpu.a[3] += 2;
+        for (int i = 0; i < 32; ++i, x += 0x10) {
+            m_long block = cpu.a[5];
+            const int column = margin ? wideMarginColumn(level, x, width) : -1;
+            if (column >= 0)
+                block = cpu.a[5] - static_cast<m_long>((x - column) >> 4);
+            ++cpu.a[5];
+            cpu.d[0] = static_cast<m_long>(mem.readByte(block)) << 3;
+            mem.writeLong(cpu.a[3], mem.readLong(cpu.a[6] + cpu.d[0]));
+            cpu.a[3] += 4;
+            mem.writeLong(cpu.a[3] + 0x7Cu, mem.readLong(cpu.a[6] + cpu.d[0] + 4u));
+        }
+        cpu.setDw(1, 0xFFFFu);
+    };
+    const auto resolve = [&](m_long retPc) {
+        logCallFromReturn(retPc, 0x00019656u);
+        cpu.ssp -= 4;
+        mem.writeLong(cpu.ssp, retPc);
+        resolve_blockmap_and_vdp_address();
+    };
+
+    const m_long camera = cpu.a[1];
+    const m_long y      = mem.readLong(camera + 0x0Eu);
+    cpu.d[6]            = y;
+    if (mem.readWord(camera + 0x42u) != 2u) {
+        cpu.setDw(2, mem.readWord(camera + 0x44u));
+        cpu.a[0]         = camera;
+        m_word stripsLeft = cpu.dw(2);
+        m_long strip      = camera;
+        for (;;) {
+            cpu.setDw(3, mem.readWord(strip + 0x46u));
+            m_word rowsLeft = cpu.dw(3);
+            for (;;) {
+                const m_long saved[7] = {cpu.d[2], cpu.d[3], cpu.d[6], cpu.a[0], cpu.a[1], cpu.a[2], cpu.a[3]};
+                const int x = static_cast<std::int16_t>(static_cast<m_word>(mem.readWord(strip + 0x50u) - 0x60u));
+                cpu.setDw(0, static_cast<m_word>(x));
+                cpu.setDw(1, mem.readWord(camera + 0x0Eu));
+                cpu.setDw(4, static_cast<m_word>(mem.readWord(camera + 0x2Eu) << 4));
+                cpu.setDw(5, 0x0100u);
+                cpu.d[6] = 0;
+                resolve(0x00019B2Au);
+                queueRow(x, static_cast<std::int16_t>(cpu.dw(4)));
+                cpu.a[0] = kVdpControl;
+                cpu.a[1] = kVdpData;
+                upload(0x00019B58u);
+                cpu.d[2] = saved[0];
+                cpu.d[3] = saved[1];
+                cpu.d[6] = saved[2];
+                cpu.a[0] = saved[3];
+                cpu.a[1] = saved[4];
+                cpu.a[2] = saved[5];
+                cpu.a[3] = saved[6];
+                mem.writeWord(camera + 0x0Eu, static_cast<m_word>(mem.readWord(camera + 0x0Eu) + 0x10u));
+                if (rowsLeft-- == 0)
+                    break;
+            }
+            cpu.setDw(3, 0xFFFFu);
+            strip += 0x12u;
+            cpu.a[0] = strip;
+            if (stripsLeft-- == 0)
+                break;
+        }
+        cpu.setDw(2, 0xFFFFu);
+    } else {
+        // Layout mode 2 (round 7): 16 rows over the 1280 x 1536 grid, from the camera's own X.
+        for (m_word rowsLeft = 0x0Fu;; --rowsLeft) {
+            cpu.setDw(2, rowsLeft);
+            const m_long saved[5] = {cpu.d[2], cpu.d[6], cpu.a[1], cpu.a[2], cpu.a[3]};
+            cpu.a[4] = cpu.a[3];
+            const int x = static_cast<std::int16_t>(static_cast<m_word>(mem.readWord(camera + 0x02u) - 0x60u));
+            cpu.setDw(0, static_cast<m_word>(x));
+            cpu.setDw(1, mem.readWord(camera + 0x0Eu));
+            cpu.d[6] = 0;
+            cpu.setDw(4, 0x0500u);
+            cpu.setDw(5, 0x0600u);
+            resolve(0x00019B96u);
+            queueRow(x, 0x0500);
+            cpu.a[0] = kVdpControl;
+            cpu.a[1] = kVdpData;
+            upload(0x00019BC4u);
+            cpu.d[2] = saved[0];
+            cpu.d[6] = saved[1];
+            cpu.a[1] = saved[2];
+            cpu.a[2] = saved[3];
+            cpu.a[3] = saved[4];
+            mem.writeWord(camera + 0x0Eu, static_cast<m_word>(mem.readWord(camera + 0x0Eu) + 0x10u));
+            if (rowsLeft == 0)
+                break;
+        }
+        cpu.setDw(2, 0xFFFFu);
+    }
+    mem.writeLong(camera + 0x0Eu, cpu.d[6]);
+    cpu.setNZClearVC(cpu.d[6], 0x80000000u);
     cpu.ssp += 4;
 }

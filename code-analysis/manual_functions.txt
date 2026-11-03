@@ -61,7 +61,8 @@
 011A68 # level_intro_wait_fade_in (ROUND banner kept out of the side margins)
 011A76 # level_intro_banner_slide_in
 011AC4 # level_intro_banner_slide_out
-019656 # resolve_blockmap_and_vdp_address (round 5's Plane A past the map's end)
+019656 # resolve_blockmap_and_vdp_address (Plane A past the map's end: rounds 5 and 8)
+019AF4 # initialize_visible_tilemap_plane (round 8's initial draw of the margin past the map's end)
 
 # Mode-select, OPTIONS, and character-select flow.
 000FE8 # init_game_start_screen
