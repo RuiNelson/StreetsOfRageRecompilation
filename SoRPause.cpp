@@ -1,5 +1,6 @@
 #include "SoRPause.hpp"
 
+#include "SoRCheckpoint.hpp"
 #include "SoRMenuCanvas.hpp"
 #include "SoRRemoteInput.hpp"
 #include "SoR.hpp"
@@ -46,12 +47,17 @@ constexpr m_byte kSoundPause = 0xBDu; // the jingle, whose sequence freezes or r
 constexpr m_byte kObjectPlayer   = 0x01u;
 constexpr m_byte kObjectContinue = 0x0Fu;
 
-enum class Screen { Main, Confirm };
+enum class Screen { Main, Confirm, ConfirmSave };
+
+constexpr int kEntryResume  = 0;
+constexpr int kEntrySave    = 1;
+constexpr int kEntryForfeit = 2;
+constexpr int kMainEntries  = 3;
 
 struct Menu {
     bool   open   = false;
     Screen screen = Screen::Main;
-    int    cursor = 0; // Main: RESUME, FORFEIT. Confirm: NO, YES.
+    int    cursor = 0; // Main: RESUME, SAVE AND QUIT, FORFEIT. Confirm and ConfirmSave: NO, YES.
     int    asking = 0; // Confirm: the player answering
     int    yes    = 0; // Confirm: the players who said YES so far, as player_mode's bits
 };
@@ -86,7 +92,7 @@ int nextToAsk(m_byte playerMode, int after) {
     return -1;
 }
 
-enum class Outcome { Stay, Resume };
+enum class Outcome { Stay, Resume, SaveAndQuit };
 
 // One paused frame. @p presses are the players' new presses (those not in the game: 0).
 Outcome menuFrame(SystemMemory &memory, const std::array<m_byte, 2> &presses, m_byte playerMode) {
@@ -97,11 +103,18 @@ Outcome menuFrame(SystemMemory &memory, const std::array<m_byte, 2> &presses, m_
         if ((bothPresses & kButtonStart) != 0)
             return Outcome::Resume;
         if ((bothPresses & (kButtonUp | kButtonDown)) != 0) {
-            menu.cursor = 1 - menu.cursor;
+            const int step = (bothPresses & kButtonUp) != 0 ? kMainEntries - 1 : 1;
+            menu.cursor    = (menu.cursor + step) % kMainEntries;
             play(kSoundMove);
         } else if ((bothPresses & kButtonFace) != 0) {
-            if (menu.cursor == 0)
+            if (menu.cursor == kEntryResume)
                 return Outcome::Resume;
+            if (menu.cursor == kEntrySave) {
+                play(kSoundPick);
+                menu.screen = Screen::ConfirmSave;
+                menu.cursor = 0;
+                return Outcome::Stay;
+            }
             const int first = nextToAsk(playerMode, -1);
             if (first >= 0) {
                 play(kSoundPick);
@@ -111,6 +124,25 @@ Outcome menuFrame(SystemMemory &memory, const std::array<m_byte, 2> &presses, m_
                 menu.yes    = 0;
             }
         }
+        return Outcome::Stay;
+    }
+
+    // Saving ends the game for everyone, so any player in it answers.
+    if (menu.screen == Screen::ConfirmSave) {
+        if ((bothPresses & kButtonStart) == 0) {
+            if ((bothPresses & (kButtonUp | kButtonDown)) != 0) {
+                menu.cursor = 1 - menu.cursor;
+                play(kSoundMove);
+                return Outcome::Stay;
+            }
+            if ((bothPresses & kButtonFace) == 0)
+                return Outcome::Stay;
+        }
+        play(kSoundPick);
+        if ((bothPresses & kButtonStart) == 0 && menu.cursor == 1)
+            return Outcome::SaveAndQuit;
+        menu.screen = Screen::Main;
+        menu.cursor = kEntrySave;
         return Outcome::Stay;
     }
 
@@ -142,7 +174,7 @@ Outcome menuFrame(SystemMemory &memory, const std::array<m_byte, 2> &presses, m_
     if (menu.yes != 0)
         return Outcome::Resume;
     menu.screen = Screen::Main;
-    menu.cursor = 1;
+    menu.cursor = kEntryForfeit;
     return Outcome::Stay;
 }
 
@@ -218,10 +250,12 @@ void drawOverlay(SystemMemory &memory, Framebuffer &framebuffer, int width, int 
     const int     top        = kFirstLine - (height < 224 ? 8 : 0);
     const int     centre     = width / 2;
 
-    const std::string question = "ARE YOU SURE PLAYER " + std::to_string(shown.asking + 1) + "?";
-    const bool        confirm  = shown.screen == Screen::Confirm;
-    const int         lines    = confirm ? 3 : 2;
-    const int         halfWide = confirm ? static_cast<int>(question.size()) * 4 + 8 : 48;
+    const bool        confirm  = shown.screen != Screen::Main;
+    const std::string question = shown.screen == Screen::ConfirmSave
+                                     ? std::string("SAVE AND QUIT?")
+                                     : "ARE YOU SURE PLAYER " + std::to_string(shown.asking + 1) + "?";
+    const int         lines    = confirm ? 3 : kMainEntries;
+    const int         halfWide = confirm ? std::max(static_cast<int>(question.size()) * 4 + 8, 64) : 68;
 
     darken(framebuffer,
            std::max(0, centre - halfWide),
@@ -234,10 +268,11 @@ void drawOverlay(SystemMemory &memory, Framebuffer &framebuffer, int width, int 
         drawText(framebuffer, centre - static_cast<int>(question.size()) * 4, line, question, kSelected);
         line += kLineStep;
     }
-    const std::array<std::string_view, 2> entries =
-        confirm ? std::array<std::string_view, 2>{"NO", "YES"} : std::array<std::string_view, 2>{"RESUME", "FORFEIT"};
-    const int entryColumn = centre - 28;
-    for (int i = 0; i < 2; ++i) {
+    const std::array<std::string_view, kMainEntries> entries =
+        confirm ? std::array<std::string_view, kMainEntries>{"NO", "YES", ""}
+                : std::array<std::string_view, kMainEntries>{"RESUME", "SAVE AND QUIT", "FORFEIT"};
+    const int entryColumn = centre - (confirm ? 28 : 52);
+    for (int i = 0; i < (confirm ? 2 : kMainEntries); ++i) {
         const bool selected = i == shown.cursor;
         if (selected)
             drawText(framebuffer, entryColumn - 12, line, ">", kSelected);
@@ -317,7 +352,20 @@ void StreetsOfRage::handle_pause_start_input(m_long entry_) {
             menu      = Menu{};
             menu.open = true;
         }
-        const Outcome outcome = menuFrame(memory(), presses, playerMode);
+        Outcome outcome = menuFrame(memory(), presses, playerMode);
+        // SAVE AND QUIT writes the checkpoint, then leaves the way Start leaves the attract demo: a fade, then the
+        // ROM's route back to the Sega logo. A save that fails goes back to the menu.
+        bool quitting = false;
+        if (outcome == Outcome::SaveAndQuit) {
+            if (SoRCheckpoint::save()) {
+                quitting = true;
+                outcome  = Outcome::Resume;
+            } else {
+                menu.screen = Screen::Main;
+                menu.cursor = kEntrySave;
+                outcome     = Outcome::Stay;
+            }
+        }
         if (outcome == Outcome::Resume) {
             const int yes = menu.yes;
             menu          = Menu{};
@@ -328,6 +376,11 @@ void StreetsOfRage::handle_pause_start_input(m_long entry_) {
             // frame the players would read it as Special, Punch or Jump.
             memory().writeByte(kP1ButtonPress, 0u);
             memory().writeByte(kP2ButtonPress, 0u);
+            if (quitting) {
+                memory().writeByte(kDemoMode, static_cast<m_byte>(memory().readByte(kDemoMode) | 0x80u));
+                memory().writeByte(kFadeOutFlag, 1u);
+                memory().writeWord(kPaletteFadeCounter, 0x0040u);
+            }
             for (int player = 0; player < 2; ++player) {
                 if ((yes & (1 << player)) != 0) {
                     forfeiting[static_cast<std::size_t>(player)] = true;

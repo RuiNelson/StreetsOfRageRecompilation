@@ -1,6 +1,7 @@
 #include "SoR.hpp"
 #include "SoRCheats.hpp"
 #include "SoRDamageCircles.hpp"
+#include "SoRCheckpoint.hpp"
 #include "SoRHighScores.hpp"
 #include "SoRQolConfig.hpp"
 
@@ -348,6 +349,7 @@ void StreetsOfRage::wait_vblank_and_upload_graphics(m_long /*entry_*/) {
     // thread, under a running CPU -- reset the console once every four
     // scored runs. See SoRCheats.hpp.
     applyPendingSoRCheats(memory());
+    SoRCheckpoint::onFrame(memory()); // the last wave start, and a restore under way
 
     memory().writeByte(kVBlankMailbox, 1);
     cpu().setStatus(kStatusIrqEnabled);
@@ -372,6 +374,7 @@ void StreetsOfRage::wait_vblank_without_graphics_upload(m_long /*entry_*/) {
     // points, and a hotkey pressed during a frame that takes the other one
     // would otherwise sit pending until the next.
     applyPendingSoRCheats(memory());
+    SoRCheckpoint::onFrame(memory()); // the last wave start, and a restore under way
 
     memory().writeByte(kVBlankMailbox, 2);
     cpu().setStatus(kStatusIrqEnabled);

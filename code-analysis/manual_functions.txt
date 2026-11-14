@@ -1,7 +1,7 @@
 # Functions whose declarations/call sites remain generated, but whose bodies
 # are provided by hand-written C++ in SoRManualFunctions.cpp,
 # SoRControls.cpp, SoRInteractions.cpp, SoRMainMenus.cpp, SoRObjectRoutines.cpp,
-# SoRBossRoutines.cpp, SoRRNG.cpp, or SoRSound.cpp.
+# SoRBossRoutines.cpp, SoRCheckpoint.cpp, SoRRNG.cpp, or SoRSound.cpp.
 0003A2 # game_infinite_loop
 003028 # player_normal_attack_input (alt-controls pickup input hook)
 003084 # player_held_object_attack_input (alt-controls pickup input hook)
@@ -21,6 +21,7 @@
 010526 # clear_player_input
 01061C # load_z80_dac_driver (direct public Z80 API upload)
 010D2E # handle_pause_start_input
+0107F2 # spawn_round_players (a checkpoint inside the round puts the camera back first)
 
 # Window-plane HUD upload; --widescreen reshapes the gameplay HUD block and clears its plate.
 008064 # vdp_copy_stride

@@ -1,4 +1,5 @@
 #include "SoRCheats.hpp"
+#include "SoRCheckpoint.hpp"
 #include "SoRControlsMenu.hpp"
 #include "SoRPause.hpp"
 #include "SoRPython.hpp"
@@ -83,7 +84,8 @@ constexpr m_long kBlazePreviewSelected = 0xFFFFBA5Cu;
 // OPTIONS: the third row keeps its place (VRAM $C7A0, column 16 of row 15) and
 // OPTIONS moves two cells down from it, as far as the ROM's rows are apart.
 // Without the AI, the rows are the ROM's: OPTIONS stays on the third.
-// QUIT, which the ROM does not have either, is always the row after OPTIONS.
+// QUIT, which the ROM does not have either, is always the last row. CONTINUE, between OPTIONS and QUIT, is
+// there only while a checkpoint is saved (SoRCheckpoint).
 // The whole menu then sits 5 tiles left and 2 up of the ROM's place (user), where
 // the wider list is centred better: VDP commands and cursor sprite alike.
 constexpr m_long kMenuShiftVdp      = (2u * 128u + 5u * 2u) << 16;
@@ -91,7 +93,8 @@ constexpr m_word kMenuShiftY        = 16;
 constexpr m_word kMenuCursorX       = 0x00F0 - 40;
 constexpr m_word kCursorAiAssist    = 2;
 constexpr m_word kCursorOptions     = 3;
-constexpr m_word kCursorQuit        = 4;
+constexpr m_word kCursorContinue    = 4;
+constexpr m_word kCursorQuit        = 5;
 constexpr m_long kAiAssistRowVdp    = 0x47A00003u - kMenuShiftVdp;
 constexpr m_long kOptionsRowVdp     = 0x48A00003u - kMenuShiftVdp;
 constexpr m_word kOptionsCursorY    = 0x0108 - kMenuShiftY;
@@ -99,6 +102,10 @@ constexpr m_long kMenuRowVdpStep    = 0x01000000u;
 constexpr m_word kMenuRowCursorStep = 16;
 constexpr std::string_view kAiAssistText = "1 PLAYER AI ASSIST";
 constexpr std::string_view kQuitText     = "QUIT";
+constexpr std::string_view kContinueText = "CONTINUE";
+
+// Whether this visit to the mode menu shows CONTINUE (decided when it is drawn).
+bool continueShown = false;
 
 // OPTIONS' VIDEO row, after CONTROLS, and QUALITY-OF-LIFE row, after VIDEO:
 // sub-states past the ROM's table $10C4 (which ends at $2C), with the CONTROLS
@@ -239,7 +246,15 @@ void StreetsOfRage::init_game_start_screen(m_long entry_) {
         for (const char c : kAiAssistText)
             memory().writeWord(kVdpData, menuGlyph(c));
     }
-    memory().writeLong(kVdpControl, SoRPython::available() ? kOptionsRowVdp + kMenuRowVdpStep : kOptionsRowVdp);
+    m_long rowAfterOptions = SoRPython::available() ? kOptionsRowVdp + kMenuRowVdpStep : kOptionsRowVdp;
+    continueShown          = SoRCheckpoint::available();
+    if (continueShown) {
+        memory().writeLong(kVdpControl, rowAfterOptions);
+        for (const char c : kContinueText)
+            memory().writeWord(kVdpData, menuGlyph(c));
+        rowAfterOptions += kMenuRowVdpStep;
+    }
+    memory().writeLong(kVdpControl, rowAfterOptions);
     for (const char c : kQuitText)
         memory().writeWord(kVdpData, menuGlyph(c));
 
@@ -318,6 +333,19 @@ void StreetsOfRage::select_menu_resolve_choice(m_long /*entry_*/) {
     const m_word cursor = memory().readWord(kSelectMenuCursor);
     // The way closing the window quits. The next frames land here again, until
     // the host has seen it.
+    if (cursor == kCursorContinue) {
+        if (SoRCheckpoint::beginContinue(memory())) {
+            cpu().d[7] = 0xFFFFFFE1u; // what character select's exit posts before the round
+            SOR_CALL_68K(queue_sound_id(), 0x1152u, 0x01069Eu);
+        } else {
+            // Unusable (and now deleted): back to the menu's input, without the row.
+            continueShown = false;
+            memory().writeWord(kSelectScreenSubstate, static_cast<m_word>(memory().readWord(kSelectScreenSubstate) - 2));
+            memory().writeWord(kSelectMenuCursor, kCursorQuit);
+        }
+        cpu().ssp += 4;
+        return;
+    }
     if (cursor == kCursorQuit) {
         SDL_Event event{};
         event.type = SDL_EVENT_QUIT;
@@ -690,12 +718,16 @@ void StreetsOfRage::select_menu_cursor_update(m_long /*entry_*/) {
         cursor = memory().readByte(kSkip2pRemap + signExtendWord(previous));
     if (cursor == kCursorAiAssist && !ai)
         cursor = kCursorOptions;
+    if (cursor == kCursorContinue && !continueShown)
+        cursor = previous == kCursorQuit ? kCursorOptions : kCursorQuit;
     memory().writeWord(object + 0x40, cursor);
 
     // Without the AI, OPTIONS is on the ROM's third row, and QUIT follows it.
     const m_word optionsY = ai ? kOptionsCursorY : static_cast<m_word>(memory().readWord(kCursorYTable + 4u) - kMenuShiftY);
-    const m_word y        = cursor == kCursorQuit      ? static_cast<m_word>(optionsY + kMenuRowCursorStep)
-                            : cursor == kCursorOptions ? optionsY
+    const m_word quitY    = static_cast<m_word>(optionsY + (continueShown ? 2 : 1) * kMenuRowCursorStep);
+    const m_word y        = cursor == kCursorQuit       ? quitY
+                            : cursor == kCursorContinue ? static_cast<m_word>(optionsY + kMenuRowCursorStep)
+                            : cursor == kCursorOptions  ? optionsY
                                                        : static_cast<m_word>(memory().readWord(kCursorYTable + cursor * 2u) - kMenuShiftY);
     memory().writeWord(kSpriteTableBuffer, y);
     memory().writeLong(kSpriteTableBuffer + 2u, memory().readLong(kCursorTiles + memory().readByte(object + 0x0A) * 4u));

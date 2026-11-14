@@ -45,6 +45,7 @@ Before changing files:
 | `SoRQolConfig.*`, `SoRQolMenu.*` | `qol.yaml` and OPTIONS > QUALITY-OF-LIFE (sub-states `$32`/`$34`). `cam` moves the follow zone of `$18F5C` (`SoRManualFunctions.cpp`): 30% of the visible screen, 70% on round 8, the ROM's on round 7's elevator; 32 px between a lead and a second player, as in the ROM. The row is at 17, and EXIT moved from 18 to 19 (user): the host draws it, not bundles `$0A`/`$10`. **EXIT is always last** (user): with the cheat rows on, PLAYERS is at 19, ROUND NO. at 21 and EXIT at 23, and the host draws them too (`$13D6`-`$145A` are manual), not bundles `$08`/`$09`/`$0E`/`$0F`. `grab` (`SoRObjectRoutines.cpp`): `$3504` keeps the weapon when +$7D is 2 or 3 with a player in +$7E, and `$3936` turns the ROM's unarmed way out of a hold (action `$02`) into armed `$30` |
 | `SoRHighScores.*` | `--qol scores` (OPTIONS row SAVE HIGH SCORES, user): the ROM's ten 12-byte entries at `$FFFF4A (top10_score_table)` in `highscores.yaml`, as ten hex strings; the table stays in work RAM. Loaded inside `enigmadec`'s `$12832` wrapper, right after the default table is decoded (and when SAVE AND APPLY turns the option on). Saved by diff against the last load or save, once a frame in both vblank waits, without the "new entry" flag bits (+0 bits 7/6), and not while a player object (`+$4B` bit 7) is typing a name; forced once on exit. SAVE AND APPLY with the option off deletes the file (user). **Initials** (user; menu and `qol.yaml` only, no command line): `enterInitials`, called from `$56E6`, skips the ROM's name entry when the player has initials, or for P2 under AI Assist (always `AI `): it writes `$FF0D`/`$FF15` (a letter's number from 1, blank 0), does `$5846`'s ending and then `$12784` and `$127BA` in C++, so the continue prompt runs next frame as usual. Unset initials: the ROM's screen. The ROM keeps no name to reuse: `$56F6` clears it at each entry. The QoL menu has pages (a PAGE row where RESET was, Left/Right turn it) and an on-screen keyboard. `cheat` (user): turning it on in the menu takes a message box and Special+Punch+Jump+Right from one player (`heldActions`, no latch), or Start to give up; turning it off, `--qol cheat` and the file need nothing. Entering OPTIONS sets `$FFFA7B (cheat_flag)` without the ROM's chord (P2 A+B+C+Right, `$78`), which still works with it off. SAVE AND APPLY applies it at once, since the menu is inside OPTIONS; turning it off also puts back level 0 and `$FFFFCA (lives_setting)` 1 |
 | `SoRDamageCircles.*` | `--qol damage`: the circles over regular enemies, on `VDP::setFrameOverlay` under the pause menu. `capture` runs after `$10502`'s wait, when the frame's SAT has just gone up, so they show what the sprites show (RAM is ahead of the picture on the render thread, and `$10514`'s frames upload no SAT). Types `$20`-`$27`, `$2A`, with state and `+$38` nonzero. Full is `+$38`, plus 4 on the hardest difficulty ($93CE adds it only to `+$33`). **Only a negative health word kills, so 0 is alive** (a 0-to-full scale showed a finished gauge on a living enemy, user report): negative health alone fills the ring, which also covers the fall and the police sweep (`$FFFF`). Alive, the disc stops at a radius of 2.25 px at 0 health, so a gap inside the ring still shows (at 2.5 px it looked full); the edges are antialiased by coverage. `$9D16`'s death blink toggles the render flag, which the circle ignores in that state alone (user: no blinking); elsewhere that flag means hidden, as in `$A59C`. The top is the current mapping frame's highest piece, so it includes the piece's transparent rows: over a body on the floor the circle floats about 15 px up |
+| `SoRCheckpoint.*` | Checkpoint saves (see **Checkpoints**) and the manual `$107F2 (spawn_round_players)` |
 | `SoRMenuCanvas.hpp` | What those two menus share: the OPTIONS font, drawing to plane A, held directions |
 | `SoRPlatform.hpp` | `consoleMenus()`: the PS5's menus, on with `__PROSPERO__` or `--console-menus` (workspace `CLAUDE.md`, **PS5 menus**) |
 | `SoRRNG.cpp` | The game's RNG draw, `$0104D8 (rng_draw)` (see **Manual subroutines**) |
@@ -236,8 +237,9 @@ works, llvm-mingw with the NuGet package). Linux is written and not yet tried.
   index 2 skipped. Choosing the row sets `player_mode` to 3 and the flag and starts Python, so
   the mode screen's init clears the flag and each choice sets it; `--ai-assist` forces it through.
   The whole menu sits 5 tiles left and 2 up of the ROM's place (user), rows and cursor sprite.
-  **QUIT** (user, 2026-10-31) is the row after OPTIONS, with or without the AI: cursor 4, the
-  wrap's maximum. Choosing it pushes `SDL_EVENT_QUIT` in `select_menu_resolve_choice`, so it ends
+  **QUIT** (user, 2026-10-31) is the last row, with or without the AI: cursor 5, the wrap's
+  maximum. **CONTINUE** (cursor 4) sits between OPTIONS and QUIT only while `checkpoint.yaml` exists, and is
+  skipped like AI ASSIST otherwise (see **Checkpoints**). Choosing it pushes `SDL_EVENT_QUIT` in `select_menu_resolve_choice`, so it ends
   the game the way closing the window does.
   On character select the P2 cursor and Blaze's preview do not exist until P1 locks; then P1's
   buttons move a cursor spawned on a free character. They come from P1's `+$54`, not the sampled
@@ -287,6 +289,7 @@ The user's rules are in the workspace `CLAUDE.md`, **The pause menu**.
   ever, and an AI lets go of the pad. While the flag is set it runs one menu frame on the players' presses (those not in
   `player_mode`: none; P2 under AI Assist: none). Start resumes, as on the ROM. In a question only the player asked
   answers, and anyone's Start is a NO, so a seat that cannot answer never holds the game.
+- **SAVE AND QUIT** (the middle entry) asks "SAVE AND QUIT?" on NO, answered by any player in the game (see **Checkpoints**).
 - **Its state is host UI**, in C++ (`menu`, `forfeiting`); the only RAM it writes is what the ROM would: the flag,
   `play_se`, and the fields below. On resuming it clears `$FFFC05`/`$FFFC09`: the press that chose the entry would
   otherwise reach the players on that same frame. Seen live: RESUME on the Special button called the police, which
@@ -303,6 +306,29 @@ The user's rules are in the workspace `CLAUDE.md`, **The pause menu**.
   2 players with P1 only, P2 only, both and neither saying YES, and P2's input ignored on P1's question; AI Assist; a
   forfeit during a KO under way; widescreen; a cold restart while paused. Not checked: a forfeit while falling into a
   pit (so `forfeiting`'s second kill has not run live), rounds other than 1, a real gamepad or keyboard, the sounds by ear.
+
+## Checkpoints
+
+The user's rules are in the workspace `CLAUDE.md`, **Checkpoint saves**.
+
+- **Taking one.** `onFrame` (both vblank waits) keeps the round start (first `$2A` frame) and each wave gate. State
+  `$00` never lasts to a frame boundary (`$C28` clears the state and `$5F4` runs on the same frame), so the gate is read
+  on every frame of pipeline states `$08`/`$0A`/`$0C` and kept when the next frame shows `$5F4` ran (`$12` without
+  `status_bitfield_1` bit 10, or `$0E`): the cursor `$FFFC14`, `spawn_x_base`/`stride` and `wave` are still what `$5F4`
+  read, and the camera is locked at the gate. It saves both camera blocks (`$FFE000`-`$FFE1FF`), the cursor as an offset
+  into `$FF6800` (the ELC stream decodes the same every time and is only edited in place behind the cursor) and
+  `level_flow_flags`. A player not on their feet counts as full health.
+- **Restoring.** CONTINUE writes the persistent fields (`$FFFF02`-`$FFFF38`, difficulty), sets the AI flag and goes
+  to state `$28`: the round loads as ever. Inside `spawn_round_players` (called after `$E5C`, before the players'
+  initializer) it writes the cameras back, redraws both planes with `$19AF4`, clears `$E5C`'s first-wave objects
+  (not `$4E` or `$50`-`$53`), and parks the pipeline at `$0C`, idle while `boss_forced_reaction_flags` bit 0 is clear.
+  The players then spawn at the camera. On the first `$2A` frame it puts back specials and health and redraws the HUD
+  (`$4E14` and `$4E88` in C++). When the fade-in ends it sets the pipeline to `$00`: `$5F4` then runs as after a cleared
+  wave. Not earlier: the fade copies the target palette, which would undo `$5F4`'s palettes.
+- **SAVE AND QUIT** leaves the way Start leaves the demo (`demo_mode` bit 7, fade, `game_state` 0).
+- Checked live on macOS (`--turbo 4`, autoplay on P1, then remote buttons, `HOME` in a scratch folder): round 1 saved
+  at the wave-2 gate, CONTINUE back at camera `$AC0` with the gate's health and score, the background right, the next
+  gate opening, the file gone. Not checked: other rounds, 2P, AI Assist, widescreen, a boss gate, round 8.
 
 ## ROM and regeneration
 
