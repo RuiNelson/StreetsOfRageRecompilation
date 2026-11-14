@@ -24,8 +24,12 @@ bool available();
 /// way, and finishes a restore in progress.
 void onFrame(SystemMemory &memory);
 
-/// The pause menu's SAVE AND QUIT: writes the last wave start of this game. False when there is none
-/// or the file could not be written.
+/// Whether SAVE AND QUIT may save now: not from the moment round 8's camera pans into Mr. X's room (user)
+/// until another round loads.
+bool saveAllowed();
+
+/// The pause menu's SAVE AND QUIT: writes the last wave start of this game. False when there is none,
+/// saving is not allowed, or the file could not be written.
 bool save();
 
 /// The mode menu's CONTINUE: loads the file, deletes it, sets up the mode, characters and players, and

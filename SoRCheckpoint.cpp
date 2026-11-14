@@ -49,6 +49,10 @@ constexpr u32 kWaveAdvancePending    = 0xFFFFFA0Du;
 constexpr u32 kLevelIntroActive      = 0xFFFFFA1Fu;
 constexpr u32 kDeferredSpawnCredits  = 0xFFFFFA70u;
 constexpr u32 kLevelFlowFlags        = 0xFFFFFA72u;
+constexpr u32 kCameraScriptedLeftPan = 0xFFFFFA56u;
+constexpr u32 kFinalSectionGateFlags = 0xFFFFFA57u;
+constexpr u32 kMrXOfferFlag          = 0xFFFFDE00u;
+constexpr u16 kRound8                = 7; // level index
 constexpr u32 kSpawnXBase            = 0xFFFFFB12u;
 constexpr u32 kStatusBitfield1       = 0xFFFFFB14u; // low byte: the pipeline state
 constexpr u32 kActiveProgression     = 0xFFFFFB1Eu;
@@ -119,7 +123,8 @@ Phase                     phase = Phase::None;
 std::optional<bool>       fileThere;
 u16                       previousGameState = 0;
 u16                       previousPipelineState = 0;
-std::optional<Checkpoint> candidate; // the gate being read, until init_level_state is seen to run
+std::optional<Checkpoint> candidate;
+bool                      inMrXRoom = false; // latched until a round loads // the gate being read, until init_level_state is seen to run
 
 u32 objectOf(int player) { return player == 0 ? kP1Object : kP2Object; }
 
@@ -377,6 +382,15 @@ void onFrame(SystemMemory &memory) {
     const u16 before    = previousGameState;
     previousGameState   = gameState;
 
+    // Mr. X's room: from the pan that follows the boss rush ($4CA), through the walk to the marks ($50A6) and
+    // his offer, to the end of the round. Any of the three marks it, and it holds until the next round loads.
+    if (gameState == kStateRoundIntroUpdate)
+        inMrXRoom = false;
+    else if (gameState == kStateIngame && memory.readWord(kLevel) == kRound8 &&
+             (memory.readByte(kCameraScriptedLeftPan) != 0 || (memory.readByte(kFinalSectionGateFlags) & 1u) != 0 ||
+              memory.readByte(kMrXOfferFlag) != 0))
+        inMrXRoom = true;
+
     if (restoring) {
         if (phase == Phase::AwaitSpawn && gameState == kStateRoundIntroUpdate)
             phase = Phase::AwaitPlayers; // the round loaded without spawn_round_players seeing it: nothing to move
@@ -448,8 +462,12 @@ void onFrame(SystemMemory &memory) {
     candidate.reset();
 }
 
+bool saveAllowed() {
+    return last.has_value() && !inMrXRoom;
+}
+
 bool save() {
-    if (!last)
+    if (!saveAllowed())
         return false;
     if (!write(*last)) {
         std::fprintf(stderr, "Could not write %s\n", defaultPath().string().c_str());
@@ -498,6 +516,7 @@ bool beginContinue(SystemMemory &memory) {
 
     restoring = cp;
     phase     = Phase::AwaitSpawn;
+    inMrXRoom = false;
     memory.writeWord(kGameState, kStateRoundIntro);
     return true;
 }

@@ -60,6 +60,7 @@ struct Menu {
     int    cursor = 0; // Main: RESUME, SAVE AND QUIT, FORFEIT. Confirm and ConfirmSave: NO, YES.
     int    asking = 0; // Confirm: the player answering
     int    yes    = 0; // Confirm: the players who said YES so far, as player_mode's bits
+    bool   saveAllowed = true; // false in Mr. X's room: SAVE AND QUIT is dimmed and skipped
 };
 
 // What is on screen, for the render thread. Everything else is the CPU thread's.
@@ -105,11 +106,13 @@ Outcome menuFrame(SystemMemory &memory, const std::array<m_byte, 2> &presses, m_
         if ((bothPresses & (kButtonUp | kButtonDown)) != 0) {
             const int step = (bothPresses & kButtonUp) != 0 ? kMainEntries - 1 : 1;
             menu.cursor    = (menu.cursor + step) % kMainEntries;
+            if (menu.cursor == kEntrySave && !menu.saveAllowed)
+                menu.cursor = (menu.cursor + step) % kMainEntries;
             play(kSoundMove);
         } else if ((bothPresses & kButtonFace) != 0) {
             if (menu.cursor == kEntryResume)
                 return Outcome::Resume;
-            if (menu.cursor == kEntrySave) {
+            if (menu.cursor == kEntrySave && menu.saveAllowed) {
                 play(kSoundPick);
                 menu.screen = Screen::ConfirmSave;
                 menu.cursor = 0;
@@ -181,6 +184,7 @@ Outcome menuFrame(SystemMemory &memory, const std::array<m_byte, 2> &presses, m_
 // Native colours: the framebuffer's are 0-7.
 constexpr m_byte kSelected   = 7;
 constexpr m_byte kUnselected = 4;
+constexpr m_byte kDisabled   = 2;
 
 void drawText(Framebuffer &framebuffer, int x, int y, std::string_view text, m_byte level) {
     for (const char c : text) {
@@ -276,7 +280,9 @@ void drawOverlay(SystemMemory &memory, Framebuffer &framebuffer, int width, int 
         const bool selected = i == shown.cursor;
         if (selected)
             drawText(framebuffer, entryColumn - 12, line, ">", kSelected);
-        drawText(framebuffer, entryColumn, line, entries[static_cast<std::size_t>(i)], selected ? kSelected : kUnselected);
+        const bool disabled = !confirm && i == kEntrySave && !shown.saveAllowed;
+        drawText(framebuffer, entryColumn, line, entries[static_cast<std::size_t>(i)],
+                 selected ? kSelected : disabled ? kDisabled : kUnselected);
         line += kLineStep;
     }
 }
@@ -352,6 +358,7 @@ void StreetsOfRage::handle_pause_start_input(m_long entry_) {
             menu      = Menu{};
             menu.open = true;
         }
+        menu.saveAllowed = SoRCheckpoint::saveAllowed();
         Outcome outcome = menuFrame(memory(), presses, playerMode);
         // SAVE AND QUIT writes the checkpoint, then leaves the way Start leaves the attract demo: a fade, then the
         // ROM's route back to the Sega logo. A save that fails goes back to the menu.
@@ -426,8 +433,9 @@ void StreetsOfRage::handle_pause_start_input(m_long entry_) {
 
         memory().writeByte(kPauseTextFlag, 3u);
         memory().writeByte(kPlaySe, kSoundPause);
-        menu      = Menu{};
-        menu.open = true;
+        menu             = Menu{};
+        menu.open        = true;
+        menu.saveAllowed = SoRCheckpoint::saveAllowed();
         publish();
     }
 
