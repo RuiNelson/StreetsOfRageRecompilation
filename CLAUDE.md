@@ -321,14 +321,16 @@ The user's rules are in the workspace `CLAUDE.md`, **Checkpoint saves**.
 - **Restoring.** CONTINUE writes the persistent fields (`$FFFF02`-`$FFFF38`, difficulty), sets the AI flag and goes
   to state `$28`: the round loads as ever. Inside `spawn_round_players` (called after `$E5C`, before the players'
   initializer) it writes the cameras back, redraws both planes with `$19AF4`, clears `$E5C`'s first-wave objects
-  (not `$4E` or `$50`-`$53`), and parks the pipeline at `$0C`, idle while `boss_forced_reaction_flags` bit 0 is clear.
+  (not `$4E` or round 7's props `$50`-`$52`; its `$53` goes, since it starts the first climb), and parks the pipeline at `$0C`, idle while `boss_forced_reaction_flags` bit 0 is clear.
   The players then spawn at the camera. On the first `$2A` frame it puts back specials and health and redraws the HUD
   (`$4E14` and `$4E88` in C++). When the fade-in ends it sets the pipeline to `$00`: `$5F4` then runs as after a cleared
   wave. Not earlier: the fade copies the target palette, which would undo `$5F4`'s palettes.
 - **SAVE AND QUIT** leaves the way Start leaves the demo (`demo_mode` bit 7, fade, `game_state` 0).
 - Checked live on macOS (`--turbo 4`, autoplay on P1, then remote buttons, `HOME` in a scratch folder): round 1 saved
   at the wave-2 gate, CONTINUE back at camera `$AC0` with the gate's health and score, the background right, the next
-  gate opening, the file gone. Not checked: other rounds, 2P, AI Assist, widescreen, a boss gate, round 8.
+  gate opening, the file gone; round 7 saved at wave 4, back on that floor, the elevator climbing on to wave 5; round 8
+  saved at its first gate (camera `$1100`), the next gate opening. Not checked: rounds 2-6, 2P, AI Assist, widescreen, a
+  boss gate.
 
 ## ROM and regeneration
 

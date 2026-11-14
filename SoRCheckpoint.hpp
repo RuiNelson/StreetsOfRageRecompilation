@@ -11,7 +11,7 @@ class SystemMemory;
 // characters, and each player's score, lives, continues, specials and health when that gate was reached,
 // plus where the camera and the enemy-load-cue stream were then. The ROM rebuilds the rest: the round
 // loads as usual, and the level pipeline resumes at its own state $00 (init_level_state) for the next
-// wave, as it does when a wave is cleared. Round 7 (the elevator) keeps only its round start.
+// wave, as it does when a wave is cleared.
 namespace SoRCheckpoint {
 
 /// `checkpoint.yaml`, in controls.yaml's folder.

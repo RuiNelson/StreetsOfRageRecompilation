@@ -71,7 +71,6 @@ constexpr u16 kFullHealth    = 0x50u;
 constexpr u16 kStateIngame     = 0x16u;
 constexpr u16 kStateRoundIntro = 0x28u;
 constexpr u16 kStateRoundIntroUpdate = 0x2Au;
-constexpr u16 kRound7          = 6; // level index: the elevator keeps only its round start
 // Pipeline state $0C (clear_object_table) does nothing while boss_forced_reaction_flags bit 0 is clear: the
 // pipeline waits there until the intro fade is over.
 constexpr u16 kPipelineIdle = 0x000Cu;
@@ -332,8 +331,6 @@ std::optional<Checkpoint> read() {
             p.health    = static_cast<u16>(health);
         }
         if (cp.insideRound) {
-            if (cp.level == kRound7)
-                return std::nullopt;
             cp.streamOffset   = root["stream_offset"].as<u32>();
             cp.spawnXBase     = root["spawn_x_base"].as<u16>();
             cp.spawnXStride   = root["spawn_x_stride"].as<u16>();
@@ -435,7 +432,7 @@ void onFrame(SystemMemory &memory) {
     const u16  previousLow = previousPipelineState;
     previousPipelineState = low;
     const bool playing  = gameState == kStateIngame && last && last->level == memory.readWord(kLevel) &&
-                         memory.readWord(kLevel) != kRound7 && memory.readByte(kLevelIntroActive) == 0;
+                         memory.readByte(kLevelIntroActive) == 0;
     if (!playing) {
         candidate.reset();
         return;
@@ -517,11 +514,12 @@ bool restoreInsideRound(SystemMemory &memory) {
         memory.writeByte(kCameras + static_cast<u32>(i), cp.cameras[i]);
 
     // start_round_setup has just created the first wave's objects, none of which has run yet. The round's
-    // scenery stays: round 3's two palms ($4E) and round 7's elevator ($50-$53).
+    // scenery stays: round 3's two palms ($4E) and round 7's elevator props ($50-$52). Round 7's $53 goes: it
+    // starts the first climb (wave_advance_pending), which init_level_state's art step asks for here.
     for (int slot = 0; slot < kObjectSlots; ++slot) {
         const u32 object = kObjectTable + static_cast<u32>(slot) * kObjectSize;
         const u8  type   = memory.readByte(object);
-        if (type == 0 || type == 0x4E || (type >= 0x50 && type <= 0x53))
+        if (type == 0 || type == 0x4E || (type >= 0x50 && type <= 0x52))
             continue;
         for (u32 i = 0; i < kObjectSize; i += 4)
             memory.writeLong(object + i, 0);
