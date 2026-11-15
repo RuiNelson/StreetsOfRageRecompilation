@@ -1,6 +1,7 @@
 #include "SoRCheats.hpp"
 #include "SoRCheckpoint.hpp"
 #include "SoRControlsMenu.hpp"
+#include "SoRInput.hpp"
 #include "SoRPause.hpp"
 #include "SoRPython.hpp"
 #include "SoRRemoteInput.hpp"
@@ -864,12 +865,27 @@ void StreetsOfRage::char_select_play_music(m_long /*entry_*/) {
     traceEnter(0x1726u);
     cpu().d[7] = 0xFFFFFF8Au;
     SOR_CALL_68K(queue_sound_id(), 0x172Eu, 0x01069Eu);
+    SoRInput::takeExitPress(); // a press from before this screen does not count
     memory().writeWord(kCharSelectSubstate, static_cast<m_word>(memory().readWord(kCharSelectSubstate) + 2));
     update_objects_and_build_sprites();
 }
 
 void StreetsOfRage::char_select_interactive(m_long /*entry_*/) {
     traceEnter(0x175Au);
+
+    // Back or the touch pad goes to the SEGA screen (user): the way out for a seat with no
+    // keyboard, as 2 PLAYERS chosen with one pad leaves P2 nothing to pick with. As the mode
+    // menu's init does, the AI's seat is given up; then the music stops and state $00 starts over.
+    if (SoRInput::takeExitPress()) {
+        SoRRemoteInput::setAiAssist(false);
+        if (!SoRRemoteInput::aiAssist())
+            SoRPython::stop();
+        cpu().d[7] = 0xFFFFFFE1u;
+        SOR_CALL_68K(queue_sound_id(), 0x175Eu, 0x01069Eu);
+        memory().writeWord(kGameState, 0);
+        cpu().ssp += 4;
+        return;
+    }
     SOR_CALL_68K(char_select_idle_tick(), 0x175Eu, 0x0017DAu);
     SOR_CALL_68K(update_objects_and_build_sprites(), 0x1764u, 0x00AD8Eu);
 

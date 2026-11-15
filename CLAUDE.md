@@ -242,6 +242,12 @@ works, llvm-mingw with the NuGet package). Linux is written and not yet tried.
   maximum. **CONTINUE** (cursor 4) sits between OPTIONS and QUIT only while `checkpoint.yaml` exists, and is
   skipped like AI ASSIST otherwise (see **Checkpoints**). Choosing it pushes `SDL_EVENT_QUIT` in `select_menu_resolve_choice`, so it ends
   the game the way closing the window does.
+  **Back or the touch pad** (`SDL_GAMEPAD_BUTTON_BACK`, `_TOUCHPAD`, any pad) on character select goes to the SEGA screen (user):
+  `char_select_interactive` (sub-state `$04`, so not during the fades) does what the mode menu's init does to the AI,
+  posts `$E1` and writes `game_state` 0, whose init resets the VDP. `SoRInput::takeExitPress` reads a latch of its own,
+  emptied when the screen starts, so a press from the game before does not count. Checked live with the remote
+  Back Attack standing in for the button (a scratch build): 2 PLAYERS and AI ASSIST, `$22` to `$02` and on into the
+  story, the AI's thread ended. Not checked: a real pad, the PS5.
   On character select the P2 cursor and Blaze's preview do not exist until P1 locks; then P1's
   buttons move a cursor spawned on a free character. They come from P1's `+$54`, not the sampled
   word: the select-screen pass runs every other frame, so a press can be gone from `$FFFC04`

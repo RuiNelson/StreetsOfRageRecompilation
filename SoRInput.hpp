@@ -90,6 +90,10 @@ MenuButtons menuButtons(ActionMask remote, bool sticks = true);
 /// sees them, without consuming anything.
 ActionMask heldActions(int player);
 
+/// Whether any gamepad pressed Back or the touch pad since the last call (a press, not a hold);
+/// consumes it. Character select's way back to the SEGA screen, for a seat with no keyboard (user).
+bool takeExitPress();
+
 enum class CaptureDevice { Keyboard, Gamepad };
 struct Captured {
     enum class Status { Pending, Cancelled, Key, Pad };

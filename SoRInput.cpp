@@ -30,10 +30,11 @@ constexpr Sint16 kTriggerThreshold = 16384;
 bool gTrace = false;
 constexpr int    kMenuStickThreshold = 16384;
 
-// Tap latches (State::keyTapped): one per reader, P1's and P2's samples and
-// the CONTROLS menu, each consumed by its own reader.
-constexpr std::size_t kLatchCount = 3;
+// Tap latches (State::keyTapped): one per reader, P1's and P2's samples, the
+// CONTROLS menu and character select's way out, each consumed by its own reader.
+constexpr std::size_t kLatchCount = 4;
 constexpr std::size_t kMenuLatch  = 2;
+constexpr std::size_t kExitLatch  = 3;
 
 struct Pad {
     SDL_JoystickID                             id      = 0;
@@ -567,6 +568,19 @@ MenuButtons menuButtons(ActionMask remote, bool sticks) {
     buttons.confirm = buttons.confirm || has(Action::Punch) || has(Action::Jump) || has(Action::Special);
     buttons.back    = buttons.back || has(Action::Start);
     return buttons;
+}
+
+bool takeExitPress() {
+    State          &s = state();
+    std::lock_guard lock(s.mutex);
+    bool            pressed = false;
+    for (Pad &pad : s.pads) {
+        auto &tapped = pad.buttonTapped[kExitLatch];
+        pressed      = pressed || tapped[SDL_GAMEPAD_BUTTON_BACK] || tapped[SDL_GAMEPAD_BUTTON_TOUCHPAD];
+        tapped.fill(false);
+    }
+    s.keyTapped[kExitLatch].fill(false);
+    return pressed;
 }
 
 bool beginCapture(CaptureDevice device, int player) {
