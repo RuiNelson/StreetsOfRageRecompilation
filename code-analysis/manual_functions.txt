@@ -163,3 +163,7 @@
 01177A # hud_draw_p2_score_digits
 0117BC # hud_draw_player_name_tiles
 011876 # hud_draw_object_health_bar
+
+# The round-clear tally's rows (SoRGameHUD.cpp): P2's "2UP" reads "COM" under AI ASSIST.
+01852C # round_clear_build_row_highlighted
+018532 # round_clear_build_row

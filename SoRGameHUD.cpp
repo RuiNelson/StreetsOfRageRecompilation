@@ -23,6 +23,7 @@ using namespace sorops;
 //   $11774 / $1177A hud_draw_p1/p2_score_digits  the player's six score digits as tiles from $7DB
 //   $117BC hud_draw_player_name_tiles           the player's name tiles on their side of the row
 //   $11876 hud_draw_object_health_bar           one boss bar row from +$32 of an object
+//   $1852C / $18532 round_clear_build_row(_highlighted)  a row of the round-clear tally into the scratch buffer
 //
 // Each is the ROM routine as it is: the same RAM at the same addresses, written on the same frame (the
 // block at $FF6000 and the counters are read by the game and by autoplay), and the same registers.
@@ -93,6 +94,14 @@ constexpr m_byte kComputerLabel[4]   = {0x03, 0x0F, 0x0D, 0x26}; // C O M -
 bool computerLabel(m_long list) {
     return (list == kP2NameList || list == kP2ContinueNameList) && SoRRemoteInput::aiAssist();
 }
+
+// The round-clear tally's P2 row (`$185F0`): a VDP command long, then tile bytes; at byte 8 the label "2UP".
+constexpr m_long kP2TallyRow           = 0x000185F0u;
+constexpr m_byte kComputerTallyLabel[3] = {0x03, 0x0F, 0x0D}; // C O M
+
+constexpr m_long kScratchBuffer          = 0x00FF8000u; // decompression_scratch_buffer
+constexpr m_long kRoundClearVblankRequest = 0xFFFFFA4Fu;
+constexpr m_long kRoundClearSubstate     = 0xFFFFFB4Cu;
 
 constexpr m_word kBlankTile = 0x06D7u;
 constexpr m_word kDigitBase = 0x07DBu; // score digits
@@ -1006,4 +1015,54 @@ void StreetsOfRage::vblank_update_gameplay_health_bars(m_long /*entry_*/) {
         bossBar(kBossHealthSecondary + 2);
     }
     cpu().ssp += 4;
+}
+
+// ---------------------------------------------------------------------------
+// $01852C / $018532 (round_clear_build_row_highlighted / round_clear_build_row) — a1 -> a row of the round-clear
+// tally: a VDP command long, then tile bytes up to $FF. It goes to the scratch buffer as the command, a long
+// $00160000 and the words $7C0 + byte + d7 (palette line 2 for the highlighted row, 1 for the other); the upload
+// is requested and the substate moves on. Under 1 PLAYER AI ASSIST the P2 row's "2UP" reads "COM" (user).
+// ---------------------------------------------------------------------------
+namespace {
+
+void buildTallyRow(CPU68K &cpu, SystemMemory &mem) {
+    const bool computer = cpu.a[1] == kP2TallyRow && SoRRemoteInput::aiAssist();
+    cpu.a[4] = kScratchBuffer;
+    mem.writeLong(cpu.a[4], mem.readLong(cpu.a[1]));
+    cpu.a[1] += 4;
+    cpu.a[4] += 4;
+    mem.writeLong(cpu.a[4], 0x00160000u);
+    cpu.a[4] += 4;
+    unsigned index = 0;
+    while (true) {
+        cpu.d[0] = 0;
+        const m_byte tile = mem.readByte(cpu.a[1]);
+        cpu.setDb(0, tile);
+        cpu.a[1] += 1;
+        if (tile == 0xFFu)
+            break;
+        if (computer && index >= 8 && index < 11)
+            cpu.setDb(0, kComputerTallyLabel[index - 8]);
+        ++index;
+        addWord(cpu, 0, 0x07C0u);
+        addWord(cpu, 0, cpu.dw(7));
+        writeWordPostInc(cpu, mem, 4, cpu.dw(0));
+    }
+    mem.writeByte(kRoundClearVblankRequest, 0x01);
+    mem.writeWord(kRoundClearSubstate, static_cast<m_word>(mem.readWord(kRoundClearSubstate) + 2u));
+    cpu.ssp += 4;
+}
+
+} // namespace
+
+void StreetsOfRage::round_clear_build_row_highlighted(m_long /*entry_*/) {
+    traceEnter(0x0001852Cu);
+    cpu().setDw(7, 0x4000u);
+    buildTallyRow(cpu(), memory());
+}
+
+void StreetsOfRage::round_clear_build_row(m_long /*entry_*/) {
+    traceEnter(0x00018532u);
+    cpu().setDw(7, 0x2000u);
+    buildTallyRow(cpu(), memory());
 }
