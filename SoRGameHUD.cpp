@@ -1,4 +1,5 @@
 #include "SoRCpuOps.hpp"
+#include "SoRRemoteInput.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -80,6 +81,18 @@ constexpr m_long kExtraLifeThresholds = 0x00004DECu; // longs, one a step
 constexpr m_long kBcdTable            = 0x00010DDEu; // longs, read backwards one byte at a time
 constexpr m_long kJoinCharacterTable  = 0x0001167Eu; // P1's character -> P2's
 constexpr m_long kBarSpecialShapes    = 0x00011930u; // one long per eighth of a bar tile
+
+// 1 PLAYER AI ASSIST (user): P2's label reads "COM-", not "2UP-". The two tile lists that hold the label (the
+// gameplay HUD's, `$4D38`, written by `$4D1E`, and the continue prompt's, `$117F4`, by `$117BC`) are the ROM's
+// count, base and four tile bytes; the bytes are the HUD font's A = 1 ... Z = 26, `-` = $26.
+constexpr m_long kP2NameList         = 0x00004D38u;
+constexpr m_long kP2ContinueNameList = 0x000117F4u;
+constexpr m_byte kComputerLabel[4]   = {0x03, 0x0F, 0x0D, 0x26}; // C O M -
+
+// True when the tile list at `list` (before its count word is read) is P2's label and the computer plays P2.
+bool computerLabel(m_long list) {
+    return (list == kP2NameList || list == kP2ContinueNameList) && SoRRemoteInput::aiAssist();
+}
 
 constexpr m_word kBlankTile = 0x06D7u;
 constexpr m_word kDigitBase = 0x07DBu; // score digits
@@ -255,13 +268,17 @@ void StreetsOfRage::hud_write_tile_list(m_long /*entry_*/) {
     traceEnter(0x00004D1Eu);
     auto &mem = memory();
 
+    const bool computer = computerLabel(cpu().a[3]);
     cpu().setDw(7, mem.readWord(cpu().a[3]));
     cpu().a[3] += 2;
     cpu().setDw(1, mem.readWord(cpu().a[3]));
     cpu().a[3] += 2;
+    unsigned index = 0;
     do {
         cpu().d[0] = 0;
-        cpu().setDb(0, mem.readByte(cpu().a[3]));
+        const m_byte tile = mem.readByte(cpu().a[3]);
+        cpu().setDb(0, computer && index < 4 ? kComputerLabel[index] : tile);
+        ++index;
         cpu().a[3] += 1;
         addWord(cpu(), 0, cpu().dw(1));
         writeWordPostInc(cpu(), mem, 2, cpu().dw(0));
@@ -568,13 +585,17 @@ void StreetsOfRage::hud_draw_player_name_tiles(m_long /*entry_*/) {
         cpu().a[3] = 0x000117F4u;
     }
     cpu().a[4] = kHudRows + sext16(cpu().dw(0));
+    const bool computer = computerLabel(cpu().a[3]);
     cpu().setDw(7, mem.readWord(cpu().a[3]));
     cpu().a[3] += 2;
     cpu().setDw(1, mem.readWord(cpu().a[3]));
     cpu().a[3] += 2;
+    unsigned index = 0;
     do {
         cpu().d[0] = 0;
-        cpu().setDb(0, mem.readByte(cpu().a[3]));
+        const m_byte tile = mem.readByte(cpu().a[3]);
+        cpu().setDb(0, computer && index < 4 ? kComputerLabel[index] : tile);
+        ++index;
         cpu().a[3] += 1;
         addWord(cpu(), 0, cpu().dw(1));
         writeWordPostInc(cpu(), mem, 4, cpu().dw(0));

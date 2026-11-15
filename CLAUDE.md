@@ -694,6 +694,7 @@ in `$8064` and `$10F80`: the routines that write the block (`SoRGameHUD.cpp`, `$
 at its address and know nothing of the mode, so a change there shows in both, and a change to the two upload
 routines must be looked at in both. Checked live with `--widescreen` and without: score, lives, specials, timer and the
 blinking "PRESS 2UP START" as the ROM draws them, in the frame (4:3) and without it (16:9).
+**1 PLAYER AI ASSIST labels P2 `COM-`** (user): `$4D1E` and `$117BC` swap the four tile bytes of the two P2 label lists (`$4D38`, written when P2 spawns, and `$117F4`, the continue prompt) for C O M `-` when `SoRRemoteInput::aiAssist()`; the ROM's lists are not touched. Still "2UP" there: the round-clear tally's P2 row (`$185F0`, built by `round_clear_build_row`, a group of several entries) and the name entry header (`$57CE`, which AI Assist skips). Checked live through the mode menu, 4:3 and 16:9. The check below predates it and does not cover this change.
 **How the routines were checked** (the fuzz recipe of **Manual subroutines**, run in the live game): a scratch tree with
 the old manual list, each routine renamed `_OLD`, the port `_NEW`, and a wrapper that runs both from one state with the
 interrupt mask at 7 and compares `d0`-`d7`, `a0`-`a6`, `ssp` and the 64 KiB of work RAM (dead stack below `ssp`
