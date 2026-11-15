@@ -1,7 +1,7 @@
 # Functions whose declarations/call sites remain generated, but whose bodies
 # are provided by hand-written C++ in SoRManualFunctions.cpp,
 # SoRControls.cpp, SoRInteractions.cpp, SoRMainMenus.cpp, SoRObjectRoutines.cpp,
-# SoRBossRoutines.cpp, SoRCheckpoint.cpp, SoRRNG.cpp, or SoRSound.cpp.
+# SoRBossRoutines.cpp, SoRCheckpoint.cpp, SoRGameHUD.cpp, SoRRNG.cpp, or SoRSound.cpp.
 0003A2 # game_infinite_loop
 003028 # player_normal_attack_input (alt-controls pickup input hook)
 003084 # player_held_object_attack_input (alt-controls pickup input hook)
@@ -23,7 +23,7 @@
 010D2E # handle_pause_start_input
 0107F2 # spawn_round_players (a checkpoint inside the round puts the camera back first)
 
-# Window-plane HUD upload; --widescreen reshapes the gameplay HUD block and clears its plate.
+# Window-plane HUD upload (SoRGameHUD.cpp); --widescreen reshapes the gameplay HUD block and clears its plate.
 008064 # vdp_copy_stride
 010F80 # vblank_update_gameplay_health_bars (inlines the bar uploads)
 
@@ -144,3 +144,22 @@
 01572A # animation start and facing
 01573C # pair animation
 01577C # pair animation and bounce
+
+# The gameplay HUD (SoRGameHUD.cpp): the tile writers of the window block at $FF6000, the round timer, the
+# score and the lives and specials, the JOIN and CONTINUE rows, and the boss bar row.
+004D1E # hud_write_tile_list
+004D60 # update_score_hud_and_check_extra_life
+004E14 # draw_player_lives_and_specials
+005620 # hud_clear_p1_status_rows
+00563E # hud_clear_p2_status_rows
+010CA8 # hud_tick_round_timer
+010CCC # hud_draw_round_timer_digits
+010DCA # add_bcd_resource_value
+011090 # hud_write_plate_row
+0115CC # update_join_and_continue_hud
+0116DC # hud_blink_join_prompt
+011708 # hud_write_tile_string
+011774 # hud_draw_p1_score_digits
+01177A # hud_draw_p2_score_digits
+0117BC # hud_draw_player_name_tiles
+011876 # hud_draw_object_health_bar

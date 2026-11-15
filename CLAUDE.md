@@ -35,6 +35,7 @@ Before changing files:
 | `RecompilationEnvironment.*` | Runtime integration and CPU ownership |
 | `SorRuntime.*` | Host orchestration around the recompiled cartridge |
 | `SoRManualFunctions.cpp` | Hand-written implementations of selected ROM routines |
+| `SoRGameHUD.cpp` | The gameplay HUD: the routines that write the window block at `$FF6000` (tile lists, score, lives and specials, round timer, JOIN and CONTINUE rows, boss bar row), and the window-plane upload `$8064` and bar tile rows `$10F80`, which give it its 4:3 and `--widescreen` (16:9) forms (see **Widescreen**) |
 | `SoRControls.cpp` | Hand-written controller sampling, input remap, OPTIONS controls and character-select input |
 | `SoRInput.*` | Keyboard and gamepad input read from SDL by the game, as actions (see **Controls**) |
 | `SoRControlsConfig.*` | `~/.config/StreetsOfRageProject/controls.yaml`: schemes, bindings, gamepad choice, deadzone |
@@ -662,7 +663,7 @@ Mode 40, so sprites stay aligned with the backgrounds. Remote snapshots
 The gameplay HUD is the window plane (rows 0-3 at VRAM `$D000`): the static
 upload `$FF8000` (40×4 at window row 0) and the per-VBlank `$FF6000` block (40×3
 at row 1), both written by `$8064 (vdp_copy_stride)`. Everything below lives in
-the game (`SoRManualFunctions.cpp`) and only runs with `--widescreen`;
+the game (`SoRGameHUD.cpp`) and only runs with `--widescreen`;
 `MegaDriveEnvironment` is not involved beyond Mode 48 itself.
 
 - The manual `vdp_copy_stride` drops the bottom edge, turns the frame tiles
@@ -687,6 +688,20 @@ the game (`SoRManualFunctions.cpp`) and only runs with `--widescreen`;
 Without `--widescreen` both routines copy exactly like the ROM (checked: the
 plain gameplay frame is byte-identical, and a forced bar upload keeps the plate
 rows).
+
+**The HUD has two forms, 4:3 (the ROM's, 320×224) and 16:9 (`--widescreen`), and both stay** (user). They differ only
+in `$8064` and `$10F80`: the routines that write the block (`SoRGameHUD.cpp`, `$4D1E`-`$11876`) write the ROM's block
+at its address and know nothing of the mode, so a change there shows in both, and a change to the two upload
+routines must be looked at in both. Checked live with `--widescreen` and without: score, lives, specials, timer and the
+blinking "PRESS 2UP START" as the ROM draws them, in the frame (4:3) and without it (16:9).
+**How the routines were checked** (the fuzz recipe of **Manual subroutines**, run in the live game): a scratch tree with
+the old manual list, each routine renamed `_OLD`, the port `_NEW`, and a wrapper that runs both from one state with the
+interrupt mask at 7 and compares `d0`-`d7`, `a0`-`a6`, `ssp` and the 64 KiB of work RAM (dead stack below `ssp`
+ignored). Autoplay in round 1 gave about 5,500 live calls of the score and join routines and 60 of the timer, all equal;
+every routine had 3,000 random cases (registers, scores, lives, thresholds, flags, health, BCD) with no difference.
+Not covered: `$11090` (writes the VDP; read against the ASM), the `$1196A` entry of `$11876` (the generated body has no
+such entry; read), the join and continue screens in a real game (random cases only), and the condition codes of
+`update_join_and_continue_hud` (they differ; its caller does not read them, and the recompiler drops dead flags).
 
 ### Widescreen arena (`SoRWidescreenArena.cpp`)
 
@@ -841,8 +856,9 @@ keeping the generated declaration, dispatcher, and call sites intact.
   generated callee, reimplement the callee rather than calling into generated code. Done for the object
   routines (`SoRObjectRoutines.cpp`) and the bespoke boss routines (`SoRBossRoutines.cpp`). The player and enemy
   routines written for the arena and interaction ports (action change, box cache, enemy walk and attacker
-  lookup, health, HUD) were removed again (user: not understood well enough yet), so those ports call generated
-  code once more, as do the menus, the controls, the pause menu and `SoRManualFunctions.cpp`.
+  lookup, health) were removed again (user: not understood well enough yet), so those ports call generated
+  code once more, as do the menus, the controls, the pause menu and `SoRManualFunctions.cpp`. The HUD came back
+  as `SoRGameHUD.cpp` (user request, 2026-11-15), whose routines call only manual ones.
 - A jump table inside a reimplemented routine is inlined for its valid entries and an out-of-range index goes to
   `unhandledDispatch`, as the ROM would jump into data. A routine only reached by `jmp` (`$9896`) needs its address in
   `code-analysis/aux_addresses.txt` before it can be manual, and so does a block that follows a manual routine and is
