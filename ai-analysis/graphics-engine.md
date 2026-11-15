@@ -1181,7 +1181,7 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$1844 (char_select_upload_preview_art_dma_one)` | Character-select version of upload_player_art_dma_one_player |
 | `$190EA (camera_update_parallax_strip_rows)` | Scales the camera delta by each strip ratio of a camera record for the scroll rows |
 | `$10B2E (prepend_sprite_records_to_sat)` | Copies d7+1 fixed sprite records to a buffer, appends the current SAT with links raised by d6 and writes it back |
-| `$10B70 (prepend_continue_overlay_sprites)` | While continue_sprite_overlay_active is set prepends the overlay sprites, with level index 6 variants, and advances the sprite counters |
+| `$10B70 (prepend_continue_overlay_sprites)` | While continue_sprite_overlay_active is set prepends the 8 overlay sprites of $10BB8 (level index 7: the 10 of $10C38, or the 8 of $10BF8 with $FFFF44 bit 7) and advances the sprite counters and the SAT cursor a2 |
 | `$19AF4 (initialize_visible_tilemap_plane)` | Fills one plane of a camera record from the blockmap for initialize_visible_tilemaps |
 | `$11708 (hud_write_tile_string)` | Reads count, base and tile bytes and writes base plus byte as tile words, stopping at a negative byte |
 | `$11876 (hud_draw_object_health_bar)` | Draws one health bar from +$32 of the object in the list, with special tiles above 80 |
@@ -1190,13 +1190,13 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$81DC (nemesis_read_next_code)` | Peeks eight payload bits and resolves the token through nemesis_decode_table |
 | `$110AC (load_round_hud_resources)` | Loads the round art, HUD bundles and starting HUD tile data |
 | `$11564 (load_status_palette_and_art)` | Loads palette list and art bundle 5 and writes eight longs of tile data at VRAM $1B20 |
-| `$119AC (load_demo_mode_scene_art)` | In demo mode decompresses the Kosinski art at $389A0, uploads a tile list and creates type $3E at $FFD100 |
+| `$119AC (load_demo_mode_scene_art)` | In demo mode decompresses the Kosinski art at $389A0, uploads the tiles listed at $11A20 to VRAM $D400, creates type $3E at $FFD100 and sets the demo's players: Axel and Blaze, 3 lives each, both active, $FFFB52 = $384 |
 | `$10E42 (load_status_screen_graphics)` | Outside demo mode decodes the Nemesis art at $6F3D4 for HUD and round-clear screens with level-indexed RAM tables |
 | `$7F18 (clear_vdp_plane_c000)` | Sets the VDP address to $C000 and fills the plane |
 | `$7F24 (clear_vdp_plane_e000)` | Sets the VDP address to $E000 and fills the plane |
 | `$125FA (load_tilemap_bundle_2_trampoline)` | load_vdp_tilemap_bundle with d0 = 2 |
 | `$12604 (load_tilemap_bundle_8_trampoline)` | load_vdp_tilemap_bundle with d0 = 8 |
-| `$1BDC (char_select_preview_jump_reaction)` | Runs the preview jump when +$5C is set, plays $A6, and lands back on the floor when it ends |
+| `$1BDC (char_select_preview_demo_control)` | While +$5C is set starts the attack demonstration from the standing states (state 6, animation $18 or $1A, sound $A6); when it clears during the demonstration puts the preview back on the floor in state 2 |
 | `$B736 (story_resolve_palette_list)` | Resolves palette list d0 in a6 through the offset table at $3F29C |
 | `$B7F8 (titlescreen_clear_plane_c000)` | Sets the VDP address to $C000 and writes 128 blocks of zero through vdp_fill_long |
 | `$B9BA (story_draw_tilemap_asset)` | Draws asset d7 of the table at $3F5B6: source, VRAM address, width and height, adding d6 to each word and d4 to the address per row |

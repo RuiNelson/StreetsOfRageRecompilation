@@ -287,7 +287,7 @@ Each frame (simplified):
 | `$81`–`$9F` | **Music** | `$7288C (music_pointer_table)` → arm FM + PSG (+ DAC) channels |
 | `$A0`–`$CF` | **SFX** | `$73B56 (sfx_pointer_table)` → arm SFX channels; may steal music slots |
 | `$D0`–`$DF` | **Direct PCM** | `(ID + $B6)` → `$A01FFF (z80_dac_command)` under BUSREQ |
-| `$E0`–`$E3` | **Special** | Jump table at `$72D90`; see 5.4 |
+| `$E0`–`$E3` | **Special** | Jump table at `$72D90 (sound_special_e0_entry)`; see 5.4 |
 | `$E4`–`$FF`, or bit 7 clear | Reset | `$72F8A (sound_reset_all)` |
 | `$80` | Idle | No action; every exit marks `sound_pending_id = $80` |
 
@@ -295,13 +295,13 @@ Priorities: music ~**`$80`**; SFX roughly **`$2F`–`$7F`** (e.g. `$BD`/`$BF` at
 
 ### 5.4 Special commands and the engine gate
 
-Decoded from the four `bra.w` entries at `$72D90`:
+Decoded from the four `bra.w` entries at `$72D90 (sound_special_e0_entry)`:
 
 | ID | Target | Effect |
 |----|--------|--------|
 | `$E0` | `$7302E (sound_start_music_fade)` | Fade, only from `$FFF002 (stop_music)` = 0: `$FFF002 (stop_music)` = `$10`, timer 4; clears the active bit of the music DAC (`$FFF130 (sound_music_dac)`) and PSG blocks and branches into the PSG silence, so drums and PSG stop at once (a DPCM sample already streaming plays out); FM carriers' attenuation +1 (0.75 dB) every 5 frames for 15 steps, then `$72F8A (sound_reset_all)`. Measured on Genesis Plus GX 30 s into each looping track: -11 to -13 dB at step 15 for all of them, in even steps for most; tracks whose sequences rewrite channel volume step unevenly (`$84`, `$85`, `$8F`), and 20 s into `$8A` the fade only reaches about -6 dB |
 | `$E1` | `$72F8A (sound_reset_all)` | Immediate stop of music and effects (a PCM sample already streaming on the Z80 is not stopped) |
-| `$E2` | `$72FE4` | Clears and keys off the two FM effect channels `$FFF1F0 (sound_sfx_fm0)` and `$FFF220 (sound_sfx_fm1)`, restores their music channels, resets `$FFF000 (sound_active_priority)`; music keeps playing |
+| `$E2` | `$72FE4 (sound_stop_sfx_fm)` | Clears and keys off the two FM effect channels `$FFF1F0 (sound_sfx_fm0)` and `$FFF220 (sound_sfx_fm1)`, restores their music channels, resets `$FFF000 (sound_active_priority)`; music keeps playing |
 | `$E3` | `$72F8A (sound_reset_all)` | Same as `$E1` |
 
 Game code posts `$E0` from the level flow (twice) and `$8890
@@ -312,7 +312,7 @@ before playing), `$108E (game_start_screen_update)`, `$17A2
 Starting any music also runs `$72F8A (sound_reset_all)` first, so a new track
 cuts every playing effect; no effect stops the music.
 
-Sequence command `$F9` (`$73384`) toggles `$FFF007 (sound_engine_gate)`: zero
+Sequence command `$F9` (`$73384 (sound_fm_cmd_toggle_engine_gate)`) toggles `$FFF007 (sound_engine_gate)`: zero
 becomes `$01`, non-zero becomes `$80`. While the gate is positive,
 `$72914 (sound_engine)` keys every FM channel off, silences the PSG and skips
 the music channels (frozen in place) but still processes the queue and ticks
@@ -348,29 +348,29 @@ Pointed by **`$73B56 (sfx_pointer_table)`**. Routing tables at `$72E74` / `$72E8
 ### 6.3 Sequence stream
 
 - **Byte &lt; `$F0`**: duration (bit 7 often rest / key-off); optional pitch byte follows.
-- **Byte ≥ `$F0`**: command → **`$732EA (sound_seq_command)`**, with separate FM vs PSG jump tables (`$73302` / `$73342`).
+- **Byte ≥ `$F0`**: command → **`$732EA (sound_seq_command)`**, with separate FM vs PSG jump tables (`$73302 (sound_fm_cmd_f0_entry)` / `$73342 (sound_psg_cmd_f0_entry)`).
 
 The two 16-entry tables are now fully decoded. The descriptions below stay at
 the bounded state/register effect where a musical name is not yet proved:
 
 | Cmd | FM target/effect | PSG target/effect |
 |---:|---|---|
-| `$F0` | `$7361E`: select/program FM voice | `$73832`: write channel `+$0A` |
-| `$F1` | `$735D6`: set base attenuation and derived operator levels | `$73838`: set PSG attenuation |
-| `$F2` | `$733A0`: load three pitch/modulation bytes | same |
-| `$F3` | `$733C2`: set channel `+$0D` | same |
-| `$F4` | `$733CA`: configure/dispatch modulation parameters | same |
-| `$F5` | `$73466`: begin counted relative loop | same |
-| `$F6` | `$7348C`: decrement/repeat or leave loop | same |
-| `$F7` | `$734D2`: load four YM channel-3 mode bytes and write register `$27` | `$7385E`: configure PSG noise channel |
-| `$F8` | `$73512`: update YM `$B4` pan/AMS/FMS bits | `$7384A`: consume one byte |
-| `$F9` | `$73384`: toggle the global sound-engine gate | `$7384E`: write channel `+$0B` |
-| `$FA` | `$7353E`: write a supplied YM register/value pair and remember it | `$7384E`: write channel `+$0B` |
-| `$FB` | `$735BC`: add attenuation/volume delta | `$73854`: add attenuation delta |
-| `$FC` | `$73588`: write YM `$22` LFO and `$B4` modulation/pan fields | `$73382`: deliberate self-loop trap if reached |
-| `$FD` | `$735B4`: set channel flag bit 5 (hold/no-retrigger path) | same |
-| `$FE` | `$734AE`: conditional relative skip using the active loop counter | same |
-| `$FF` | `$7380C`: signed relative sequence jump; clear selected modulation/hold flags | same |
+| `$F0` | `$7361E (sound_fm_cmd_select_voice)`: select/program FM voice | `$73832 (sound_psg_cmd_set_field_0a)`: write channel `+$0A` |
+| `$F1` | `$735D6 (sound_fm_cmd_set_volume)`: set base attenuation and derived operator levels | `$73838 (sound_psg_cmd_set_volume)`: set PSG attenuation |
+| `$F2` | `$733A0 (sound_cmd_set_detune)`: load three pitch/modulation bytes | same |
+| `$F3` | `$733C2 (sound_cmd_set_note_cutoff)`: set channel `+$0D` | same |
+| `$F4` | `$733CA (sound_cmd_modulation)`: configure/dispatch modulation parameters | same |
+| `$F5` | `$73466 (sound_cmd_loop_begin)`: begin counted relative loop | same |
+| `$F6` | `$7348C (sound_cmd_loop_end)`: decrement/repeat or leave loop | same |
+| `$F7` | `$734D2 (sound_fm_cmd_channel3_mode)`: load four YM channel-3 mode bytes and write register `$27` | `$7385E (sound_psg_cmd_noise_mode)`: configure PSG noise channel |
+| `$F8` | `$73512 (sound_fm_cmd_set_pan)`: update YM `$B4` pan/AMS/FMS bits | `$7384A (sound_psg_cmd_skip_byte)`: consume one byte |
+| `$F9` | `$73384 (sound_fm_cmd_toggle_engine_gate)`: toggle the global sound-engine gate | `$7384E (sound_psg_cmd_set_envelope)`: write channel `+$0B` |
+| `$FA` | `$7353E (sound_fm_cmd_write_register)`: write a supplied YM register/value pair and remember it | `$7384E (sound_psg_cmd_set_envelope)`: write channel `+$0B` |
+| `$FB` | `$735BC (sound_fm_cmd_add_volume)`: add attenuation/volume delta | `$73854 (sound_psg_cmd_add_volume)`: add attenuation delta |
+| `$FC` | `$73588 (sound_fm_cmd_set_lfo)`: write YM `$22` LFO and `$B4` modulation/pan fields | `$73382 (sound_psg_cmd_trap)`: deliberate self-loop trap if reached |
+| `$FD` | `$735B4 (sound_cmd_tie)`: set channel flag bit 5 (hold/no-retrigger path) | same |
+| `$FE` | `$734AE (sound_cmd_loop_skip)`: conditional relative skip using the active loop counter | same |
+| `$FF` | `$7380C (sound_cmd_jump)`: signed relative sequence jump; clear selected modulation/hold flags | same |
 
 The PSG `$FC` entry is literally `bra.s` to itself, so valid PSG streams must
 not issue it. This is a data contract, not an unimplemented branch in the

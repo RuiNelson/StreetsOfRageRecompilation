@@ -158,10 +158,10 @@ table gives the exact pipeline:
 | `$08` | `$936 (select_deferred_spawn)` | scan deferred records for a spawn whose palette/art can be resident |
 | `$0A` | `$B76 (load_deferred_spawn_art_and_spawn)` | load required art, then materialize the deferred entity |
 | `$0C` | `$C28 (clear_object_table)` | wait for tracked gameplay entities to drain |
-| `$0E` | `$059C` | transitional level-resource reload/fade path |
-| `$10` | `$0748` | short wait for a scripted acknowledgement flag |
+| `$0E` | `$59C (level_pipeline_boss_section_start)` | boss section: fades the music (`$E0`), locks the camera at its X, queues the section's art set, then plays the boss music `$87` and goes to `$12` |
+| `$10` | `$748 (level_pipeline_wait_scripted_release)` | short wait for a scripted acknowledgement flag |
 | `$12` | `$D70 (write_art)` | staged art-transfer sequencer |
-| `$14` | `$04CA` | reload/reset after a player or phase transition |
+| `$14` | `$4CA (level_pipeline_final_section)` | round 8's last section: reloads the level data, drops players that are continue objects, starts the scripted pan and waits for the scene before the spawn records resume |
 | `$16` | `$464 (level_flow_handler)` | boss/end-phase music and flow gates |
 
 The labels in the last column are functional descriptions, not claims that each
@@ -341,7 +341,7 @@ palette residency and enemy art uploads together.
 | 7 | `$03513C` | `$08` | `$00` |
 | 8 | `$035172` | `$05` | `$00` |
 
-`$59C` consumes byte 4 as a resource/sound-load parameter and waits for the art
+`$59C (level_pipeline_boss_section_start)` consumes byte 4 as a resource/sound-load parameter and waits for the art
 queue. The meaning of byte 5 is not proved by the inspected path.
 
 ---
@@ -943,13 +943,13 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 
 | Routine | What it does |
 | --- | --- |
-| `$188BE (round_clear_player_tally_dispatch)` | From round_clear_substate $14 to $51, outside level index 7, dispatches on player_mode through the table at $188EC |
+| `$188BE (round_clear_player_tally_dispatch)` | From round_clear_substate $14 to $51, outside level index 7, runs the Start-skip test of player_mode through the table at $188EC |
 | `$1260E (build_top10_score_screen)` | Loads the screen, starts music $8D and draws the ten entries with colour from each entry flag |
 | `$12730 (high_score_check_player_entry)` | Compares a player score with the 10th entry and marks the name entry in +$4B bit 7 when it beats it |
 | `$12832 (init_top10_score_table)` | Enigma-decodes the default ten-entry table at $12842 into top10_score_table at power-on |
 | `$18324 (round_clear_add_bonus_repeated)` | Adds the score table entry d0 to the total at a4 d6 times through add_bcd_score_value |
-| `$18824 (vblank_round_clear_draw_tally_request)` | Consumes round_clear_tally_draw_request and draws one of the tally rows through the table at $18840 |
-| `$18A02 (vblank_round_clear_dispatch_request)` | Consumes round_clear_vblank_request and runs its entry of the table at $18A1E |
+| `$18824 (vblank_round_clear_draw_tally_request)` | Consumes round_clear_tally_draw_request (1-5) and draws that row's bonus digits through the table at $18840 |
+| `$18A02 (vblank_round_clear_dispatch_request)` | Consumes round_clear_vblank_request and runs its entry of the table at $18A1E: 1 uploads the row in the scratch buffer, 2 redraws all the rows |
 | `$18A96 (vblank_round_clear_draw_player_scores)` | Draws the score digits of the active players, by player_mode through the table at $18AB4 |
 | `$12766 (high_score_clear_player_new_flags)` | Clears the player bit (7 for P1, 6 for P2) in all ten top10_score_table entries and returns d0 = 0 |
 | `$127BA (sort_top10_score_table)` | Sorts the twelve-byte entries of top10_score_table by score, ignoring the two flag bits, then by the fields at +$0A and +$04 |
@@ -1095,7 +1095,7 @@ Each object update hands `+$30` to `$B186 (dispatch_object_primary_state_table)`
 
 | Object | Table | States |
 | --- | --- | --- |
-| continue_object | `$5236 (continue_object_state_table)` | 3 |
+| continue_object | `$5236 (continue_object_state_table)` | 16 |
 | high_score_name_entry | `$56EE (high_score_name_entry_state_table)` | 3 |
 | police_vehicle | `$5984 (police_vehicle_state_table)` | 13 |
 | bottle_weapon | `$6126 (bottle_weapon_state_table)` | 6 |
@@ -1254,7 +1254,7 @@ Read from the code; the street enemies, Jack and Abadede also from `enemy-ai.md`
 | `$6D94 (object_type14_fall_state)` | State 4: falls to a floor 24 px under it |
 | `$6DB2 (object_type14_respawn_state)` | State 6: deletes itself and reinstalls type $14 at the starting height |
 | `$6DEE (object_type13_init_state)` | State 0: height from the table at $6E06 by +$49 |
-| `$6E0E (object_type13_wait_flag_state)` | State 1: with +$40 set waits on $FFFA54 and then hides |
+| `$6E0E (object_type13_wait_flag_state)` | State 1: with +$40 set, sets +$01 bit 2 while $FFFA54 is set and clears it otherwise |
 | `$6E46 (object_type12_init_state)` | State 0: art $6D32E, animation by +$60 |
 | `$6E60 (object_type12_launch_state)` | State 1: launches and advances |
 | `$6E7E (object_type12_fly_state)` | State 2: flies up until screen X $60 deletes it |
@@ -1274,8 +1274,8 @@ Read from the code; the street enemies, Jack and Abadede also from `enemy-ai.md`
 | `$71FE (round3_controller_type4e_frame_flag_state)` | State 1: with $FFFA05 bit 6 and $FFF50E set shows frame 1 |
 | `$7238 (object_type16_init_state)` | State 0: starts in the state +$40 selects |
 | `$7250 (object_type16_idle_state)` | State 1: rts |
-| `$7252 (object_type16_random_drift_state)` | State 2: picks a random X velocity |
-| `$728A (object_type16_random_wait_state)` | State 3: picks a random wait and velocity |
+| `$7252 (object_type16_random_drift_state)` | State 2: on entry picks one of the eight X velocities at $727A and sets +$01 bit 2, then moves on it |
+| `$728A (object_type16_random_wait_state)` | State 3: on entry picks a wait of 0-31 updates and one of the eight X velocities at $72D2; moves until the wait ends, then state 5 with a 16-update timer |
 | `$72E2 (object_type16_wait_state)` | State 5: counts +$50 down and returns to state 3 |
 | `$72F4 (object_type16_wait_wave_step_state)` | State 4: at round3_wave_tile_step 1 moves up the lanes |
 | `$7312 (object_type16_move_out_state)` | State 6: moves up the lanes until lane $30 |
@@ -1344,12 +1344,12 @@ Read from the code; the street enemies, Jack and Abadede also from `enemy-ai.md`
 | `$BEEC (presentation_type85_cycle_state)` | State 1: every 4 updates runs $BF2A with d6 = 0 |
 | `$BF16 (presentation_type86_cycle_state)` | State 1: every 4 updates runs $BF2A with d6 = 1 |
 | `$BF8C (presentation_type84_init_state)` | State 0: initialization |
-| `$BFAE (presentation_type84_write_priority_on_state)` | State 1: every 2 updates writes tiles with priority set |
+| `$BFAE (presentation_type84_write_priority_on_state)` | State 1: every 2 updates runs one tile-script step with priority tiles ($8000, row stride $80); when the script's row count +$58 reaches +$31 loads the pause of the table at $BFF2 by +$59 and goes to state 2 |
 | `$BFFA (presentation_type84_wait_a_state)` | State 2: counts down and goes to state 3 |
-| `$C00C (presentation_type84_write_priority_off_state)` | State 3: every 2 updates writes tiles with priority clear |
+| `$C00C (presentation_type84_write_priority_off_state)` | State 3: every 2 updates runs one tile-script step that writes the fill tile over the text; at the end of the rows takes the next text +$59: a 300-update wait in state 4 up to the fourth, then state 5 |
 | `$C05E (presentation_type84_wait_restart_state)` | State 4: counts down and goes back to state 1 |
 | `$C076 (presentation_type84_wait_flag_state)` | State 5: waits on +$37 and goes to state 6 |
-| `$C088 (presentation_type84_write_priority_final_state)` | State 6: every 2 updates writes tiles with priority set |
+| `$C088 (presentation_type84_write_priority_final_state)` | State 6: as state 1, clearing the slot at the end of the rows |
 | `$C12C (presentation_type82_init_state)` | State 0: initialization |
 | `$C160 (presentation_type82_fade_in_state)` | State 1: steps line +$58 in |
 | `$C16E (presentation_type82_fade_out_state)` | State 2: steps line +$58 out |
@@ -1363,11 +1363,11 @@ Read from the code; the street enemies, Jack and Abadede also from `enemy-ai.md`
 | `$C3A6 (presentation_type77_init_state)` | State 0: initialization |
 | `$C3DE (presentation_type77_spawn_type76_state)` | State 1: at the timer creates a type $76 |
 | `$C3FE (presentation_type77_draw_tilemaps_state)` | State 2: at the timer draws tilemaps 9 and $0A |
-| `$C442 (presentation_type77_fade_in_state)` | State 3: steps line 0 in until the timer ends |
+| `$C442 (presentation_type77_fade_in_state)` | State 3: steps line 0 in until the timer ends, then creates a type $7D object and waits 100 updates in state 4 |
 | `$C46E (presentation_type77_spawn_type79_state)` | State 4: at the timer creates a type $79 |
 | `$C4A2 (presentation_type81_init_state)` | State 0: initialization |
 | `$C4E6 (presentation_type81_draw_tilemaps_state)` | State 1: at the timer draws tilemaps $0B and $0C |
-| `$C536 (presentation_type81_fade_in_state)` | State 2: steps line 0 in until the timer ends |
+| `$C536 (presentation_type81_fade_in_state)` | State 2: steps line 0 in until the timer ends, then creates a type $7D object and waits 100 updates in state 3 |
 | `$C562 (presentation_type81_spawn_type79_state)` | State 3: at the timer creates a type $79 |
 | `$C59A (presentation_type79_palette_cycle_init_state)` | State 0: initialization |
 | `$C5AC (presentation_type79_palette_cycle_step_state)` | State 1: every 5 updates copies the next of four palettes |
@@ -1399,7 +1399,7 @@ Read from the code; the street enemies, Jack and Abadede also from `enemy-ai.md`
 | `$CAA2 (presentation_type6a_wait_state)` | State 1: counts down, then state 2 and $CBAA |
 | `$CAB4 (presentation_type6a_sound_step_state)` | State 2: every 4 updates plays $A1 and steps |
 | `$CB36 (presentation_type6a_wait_flag_state)` | State 3: waits on +$58 |
-| `$CB5C (presentation_type6a_timed_tile_state)` | State 4: every 16 updates writes a tile until the timer ends |
+| `$CB5C (presentation_type6a_timed_tile_state)` | State 4: toggles the tile at +$50 between $14D and $4D every 16 updates until the timer ends, then leaves $14D and returns to state 2 |
 | `$CBFE (presentation_type64_tile_strip_anim_init_state)` | State 0: initialization |
 | `$CC1E (presentation_type64_tile_strip_anim_step_state)` | State 1: every 64 updates writes the next tile strip |
 | `$CCAC (presentation_type64_tile_strip_anim_repeat_state)` | State 2: every 64 updates writes the strips from $3FB0E |
@@ -1518,12 +1518,12 @@ Read from the code; the street enemies, Jack and Abadede also from `enemy-ai.md`
 | `$12B94 (mr_x_office_controller_init_state)` | State 0: pose $28 and creates the type $34 scene object |
 | `$12C0A (mr_x_office_controller_wait_signal_a_state)` | State 1: on $FFFA78 bit 0 queues next state 2 with a 60-update pose |
 | `$12C26 (mr_x_office_controller_raise_signal_state)` | State 2: sets $FFFA78 bit 1 and starts a pose with next state 3 |
-| `$12C3E (mr_x_office_controller_wait_signal_b_state)` | State 3: waits on $FFFA78 bit 0 |
+| `$12C3E (mr_x_office_controller_wait_signal_b_state)` | State 3: on $FFFA78 bit 0 runs the answer code of its high nibble (1-3) through the table at $12C5C |
 | `$12CA4 (mr_x_office_controller_trigger_type38_state)` | State 4: moves the type $38 object to state 3 and queues state 5 |
 | `$12CCA (mr_x_office_controller_wait_flow_state)` | State 5: waits on level_flow_flags bit 1, queuing state 6 |
 | `$12D22 (mr_x_office_controller_start_delay_state)` | State 7: a 10-update delay, then state $15 |
 | `$12D30 (mr_x_office_controller_queue_state9_state)` | State 8: starts a pose with next state 9 |
-| `$12D42 (mr_x_office_controller_wait_signal_c_state)` | State 9: waits on $FFFA78 bit 0 |
+| `$12D42 (mr_x_office_controller_wait_signal_c_state)` | State 9: on $FFFA78 bit 0 keeps its high nibble; code 2 queues state $0A after a pose, any other code state $17 |
 | `$12D84 (mr_x_office_controller_wait_signal_d_state)` | State $17: on $FFFA78 bit 0 starts a pose with next state 4 |
 | `$12DB4 (mr_x_office_controller_trigger_both_state)` | State $15: after +$56 triggers the scene objects |
 | `$12DDA (mr_x_office_controller_wait_clear_signal_state)` | State $16: after +$54 clears $FFFA78 bit 0 and queues state 8 |

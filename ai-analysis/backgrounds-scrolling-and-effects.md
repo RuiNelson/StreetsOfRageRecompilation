@@ -448,7 +448,7 @@ min_x < 4` and treats the corridor as a locked arena (`game-engine-and-levels.md
 ### 6.3 Scripted pan
 
 `$FFFA56 (camera_scripted_left_pan)` overrides the follow velocity in state 0
-with a constant −4 px/frame. Pipeline state `$14` (`$4CA`) and the Mr. X offer
+with a constant −4 px/frame. Pipeline state `$14` (`$4CA (level_pipeline_final_section)`) and the Mr. X offer
 logic at `$11E72 (mr_x_offer_wait_duel_end)` set it. It is cleared when the players reach their marks
 (`$50A6 (final_section_player_script_update)`, which then raises `$FFDE00 (mr_x_offer_flag)`) and by `$13E4C
 (mr_x_final_encounter_init)`. Round 8 is the only state-0 round that scrolls
@@ -611,7 +611,7 @@ through `$19C4C (level_background_effect_init_table)`:
 | 3 | `$19C5C (init_round3_background_effect)` | `$19D08 (arm_round3_shoreline_sfx)`, then seed |
 | 4 | `$19C92 (init_round4_ripple_effect)` | prime the ripple 32 times, then seed |
 | 5 | `$19C62 (init_round5_ship_background)` | stream flags, bob oscillator, `$CC` timer, then seed |
-| 7 | `$19D06` | `rts` (state 3 writes its strip each frame; the grid draw uses camera X) |
+| 7 | `$19D06 (init_round7_background_effect)` | `rts` (state 3 writes its strip each frame; the grid draw uses camera X) |
 
 Separately, `$104D8 (rng_draw)`'s level init calls `$1119E (init_animated_palette_sequences)`
 and `$112C0 (init_level_index2_background_effect)` (§11.2, §11.7).
@@ -780,7 +780,7 @@ effect: no gameplay object moves vertically. Objects that ride the scenery
 (`$7DAA (round7_fixed_type51_wait_elevator_state)`, `$7DC4 (round7_fixed_type51_move_state)`) check `$FFFA15 (round7_elevator_moving)`. `$3FCC (try_activate_police_special)`
 refuses while `$FFFA14 (round7_jolt_active)` or `$FFFA15 (round7_elevator_moving)` is set.
 
-`$FFFA27 (scripted_spawn_release_flag)` is the acknowledgement that level-pipeline state `$10` (`$748`) waits
+`$FFFA27 (scripted_spawn_release_flag)` is the acknowledgement that level-pipeline state `$10` (`$748 (level_pipeline_wait_scripted_release)`) waits
 for after its timer. Each jolt is what releases the next scripted spawn step.
 
 ### 11.6 Police special camera excursion
@@ -879,7 +879,7 @@ their own also get sound:
 Because VSRAM is always loaded from `$FFE00E (camera_y)`/`$FFE10E (secondary_camera_y)`, cut-scenes
 reuse the camera structure as a plain scroll register:
 
-- the bad ending's text crawl (`$8A62`) adds 0.5 px/frame to `$FFE00E (camera_y)`. At each
+- the bad ending's text crawl (`$8A62 (bad_ending_credits_scroll_state)`) adds 0.5 px/frame to `$FFE00E (camera_y)`. At each
   16-pixel step it writes the next text row into the name table, 240 px ahead;
 - presentation object type `$65`, `$CCE8
   (presentation_type65_camera_y_drift_dispatcher)`, adds one pixel every four
@@ -972,7 +972,7 @@ table pointers; the animated-palette RAM; and the ROM tables `$5F5B8 (level_grap
 - Who writes `$FFFA5D (round3_wave_tiles_suspended)`? No absolute-address
   writer exists in the listing, so it may be a word write at `$FFFA5C`.
 - Camera header word `+$30` (`$10` / `$60`) has no reader in the camera code.
-- Whether pipeline state `$14` (`$4CA`), and so `$FFFA56 (camera_scripted_left_pan)`, is reachable outside
+- Whether pipeline state `$14` (`$4CA (level_pipeline_final_section)`), and so `$FFFA56 (camera_scripted_left_pan)`, is reachable outside
   Round 8. A bounded live run that logs `$FFFA56 (camera_scripted_left_pan)` per round would settle §6.3.
 - The visual identity of each band (sea, sky, shaft walls) is inferred from the
   code and the round themes. A screenshot pass with layers toggled in

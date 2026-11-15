@@ -92,7 +92,7 @@ The assembly proves the unit:
 - A further multiplication by four converts `tile_count` to `tile_count * 8` 32-bit writes.
 - Eight longs are the eight rows of one 8x8, 4-bpp tile, hence `tile_count * 32` output bytes.
 
-If bit 15 is set, the entry advances the writer address by ten bytes, selecting `$00825E` (VDP) or `$008274` (RAM). These variants XOR every decoded long with the preceding decoded long held in `d2`, initially zero. This is vertical XOR/delta reconstruction: the stored row is a delta from the previous row, which often increases runs of zero nibbles.
+If bit 15 is set, the entry advances the writer address by ten bytes, selecting `$00825E` (VDP) or `$8274 (nemesis_write_row_xor)` (RAM). These variants XOR every decoded long with the preceding decoded long held in `d2`, initially zero. This is vertical XOR/delta reconstruction: the stored row is a delta from the previous row, which often increases runs of zero nibbles.
 
 ### Code table
 
@@ -276,7 +276,7 @@ word 4: common tile word, plus caller's d0 base
 then:   MSB-first payload
 ```
 
-The second byte is shifted left three at `$0082E2`. `$008394-$0083DE` tests its five significant flags and conditionally consumes payload bits for tile-word bits `$8000`, `$4000`, `$2000`, `$1000`, and `$0800` (priority, palette selection, vertical flip, horizontal flip in VDP tile attributes). It then consumes the declared number of index bits and adds the caller's base tile word.
+The second byte is shifted left three at `$0082E2`. `$008394-$0083DE` tests its five significant flags and conditionally consumes payload bits for tile-word bits `$8000`, `$4000`, 2000h, `$1000`, and `$0800` (priority, palette selection, vertical flip, horizontal flip in VDP tile attributes). It then consumes the declared number of index bits and adds the caller's base tile word.
 
 ### Commands
 
@@ -292,7 +292,7 @@ Each command includes a four-bit count; the actual run length is `count + 1`.
 | `111` | `$00835A` | Decode an inline word for every output |
 | `111` + count `$F` | `$00837C` | End stream and align `a0` to an even address |
 
-The command dispatch table is the eight-word branch table at `$00836C`. The first two entries both target `$008320`, and the next two target `$00832A`, because the short command form is six bits while the inline forms are seven bits.
+The command dispatch table is the eight-word branch table at `$836C (enigma_type0_increment)`. The first two entries both target `$008320`, and the next two target `$00832A`, because the short command form is six bits while the inline forms are seven bits.
 
 ### Pseudocode
 

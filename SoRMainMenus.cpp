@@ -380,7 +380,7 @@ void StreetsOfRage::select_menu_resolve_choice(m_long /*entry_*/) {
 void StreetsOfRage::options_menu_build(m_long /*entry_*/) {
     traceEnter(0x117Cu);
 
-    SOR_CALL_68K(sub_007f00(), 0x1180u, 0x007F00u);
+    SOR_CALL_68K(clear_planes_window_and_sprites(), 0x1180u, 0x007F00u);
     memory().writeLong(0xFFFFDA00u, 0);
 
     // The ROM's CONTROL label (bundle $0D) and A/B/C layouts are replaced by

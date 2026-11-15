@@ -181,7 +181,7 @@ pickup hooks read native per-player edges instead (`SoRCheats`).
 ## Gameplay action priority
 
 The player action code consumes the logical object input produced by
-`$568A (remap_player_gameplay_input)`. On the idle/ground path around `$2CD2`
+`$568A (remap_player_gameplay_input)`. On the idle/ground path around `$2CD2 (player_ground_control)`
 the priority chain is:
 
 ```text
@@ -291,7 +291,7 @@ actually observing.
 #### The chord update by update, from the ROM
 
 The measured frame counts above are the ROM's own schedule, which the
-decode makes exact. `$2EF2` starts the action's animation and loads
+decode makes exact. `$2EF2 (player_set_action_restore_frame)` starts the action's animation and loads
 `+$0D` from `$3A30 (player_frame_timing_table)`'s per-frame rows (`$3A14 (player_load_frame_timer)`: row `+$0C`, entry `+$0A`),
 and the chord's handler (`$20EC (player_rear_attack_update)`, armed `$225C (player_armed_rear_attack_update)`) steps a frame each time
 `+$0D` runs out (`$39E8 (player_step_animation_frame)`) and hands back to the ground control
@@ -333,13 +333,13 @@ ROM code/data unless prefixed with `FF` (work RAM). Player objects live at
 
 | Action | Name | Handler | Role |
 |---:|---|---:|---|
-| `$10/$11` | Jump start | `$1FC0` | Crouch timer, then launch |
-| `$12/$13` | Free flight | `$1FDC` | Gravity, air steer, attack edge |
-| `$16/$17` | Jump attack (kick) | `$2000` | Lighter fall gravity + damage |
-| `$14/$15` | Jump land | `$1FE8` | Recovery → ground `$02` |
+| `$10/$11` | Jump start | `$1FC0 (player_jump_crouch_update)` | Crouch timer, then launch |
+| `$12/$13` | Free flight | `$1FDC (player_jump_flight_update)` | Gravity, air steer, attack edge |
+| `$16/$17` | Jump attack (kick) | `$2000 (player_jump_kick_update)` | Lighter fall gravity + damage |
+| `$14/$15` | Jump land | `$1FE8 (player_jump_land_update)` | Recovery → ground `$02` |
 
-Held-weapon jumps use the parallel family `$3C–$43` (`$2158` / `$2174` /
-`$2198` / `$2180`) with the same physics helpers.
+Held-weapon jumps use the parallel family `$3C–$43` (`$2158 (player_armed_jump_crouch_update)` / `$2174 (player_armed_jump_flight_update)` /
+`$2198 (player_armed_jump_attack_update)` / `$2180 (player_armed_jump_land_update)`) with the same physics helpers.
 
 ```text
 ground ──C ($2FCC)──► $10 JUMP_START ──(timer)──► $12 FREE FLIGHT
@@ -358,12 +358,12 @@ ground ──C ($2FCC)──► $10 JUMP_START ──(timer)──► $12 FREE F
 1. queues sound id `$A0` through `$35D6 (player_queue_sound_trampoline)`;
 2. sets action `$10` (plus facing) via `$2EE8 (player_set_action_faced_restore_frame)`.
 
-`$2EE8 (player_set_action_faced_restore_frame)` / `$2EF2` always call `$3614 (player_load_action_velocity)`, which loads character walk speeds from
+`$2EE8 (player_set_action_faced_restore_frame)` / `$2EF2 (player_set_action_restore_frame)` always call `$3614 (player_load_action_velocity)`, which loads character walk speeds from
 the tables at `$3670` / `$3706` / `$379C`. **Jump rows of those tables are
 zero**, so entering `$10` clears horizontal and lane velocity. Walk momentum
 does not carry into a jump.
 
-Jump-start handler `$1FC0` only decrements frame timer `+$0D`. All three
+Jump-start handler `$1FC0 (player_jump_crouch_update)` only decrements frame timer `+$0D`. All three
 characters use jump anim bank `c = $04` with frame-0 duration **5**, so crouch
 lasts **5 object updates** before launch. Animation does not advance during
 crouch.
@@ -380,12 +380,12 @@ lockstep" below for the whole flight.
 
 ### Launch (end of crouch)
 
-When the crouch timer expires, `$1FC0`:
+When the crouch timer expires, `$1FC0 (player_jump_crouch_update)`:
 
 1. advances action by 2 (`$10 → $12`);
-2. `$2EF2` re-enters free-flight anim and again zeros X/Y via `$3614 (player_load_action_velocity)`;
-3. `$3832` writes initial Z velocity from the character table at `$3842`;
-4. `$384E` sets X velocity to **±`$00030000` (±3.0 px/update)** if Left or
+2. `$2EF2 (player_set_action_restore_frame)` re-enters free-flight anim and again zeros X/Y via `$3614 (player_load_action_velocity)`;
+3. `$3832 (player_load_jump_launch_velocity)` writes initial Z velocity from the character table at `$3842`;
+4. `$384E (player_load_jump_direction)` sets X velocity to **±`$00030000` (±3.0 px/update)** if Left or
    Right is held, and updates facing; if neither is held, **X stays 0**.
 
 On that same transition update, gravity is **not** applied yet; `$442C (player_integrate_velocity)`
@@ -402,23 +402,23 @@ velocity falls toward the floor sample from `$AD2A (probe_floor_at_object)`.
 
 ### Free flight
 
-Each free-flight update (`$1FDC`), in this order:
+Each free-flight update (`$1FDC (player_jump_flight_update)`), in this order:
 
 | Step | Routine | Effect |
 |---|---|---|
-| Gravity | `$389A` | \(v_z \mathrel{+}= `$E800`\) (**+0.90625** px/update²) |
-| Air steer | `$38C0` | Left/Right adds **±`$6000` (±0.375)** to \(v_x\); clamp **±`$38000` (±3.5)**; updates facing |
-| Kick edge | `$3914` | If attack bit 4 is newly pressed: set `+$58` bit 2, action ← `(action & $FE) + 4` (`$12 → $16`), re-init anim, play kick sound |
+| Gravity | `$389A (player_apply_gravity)` | \(v_z \mathrel{+}= `$E800`\) (**+0.90625** px/update²) |
+| Air steer | `$38C0 (player_air_steer)` | Left/Right adds **±`$6000` (±0.375)** to \(v_x\); clamp **±`$38000` (±3.5)**; updates facing |
+| Kick edge | `$3914 (player_air_attack_edge)` | If attack bit 4 is newly pressed: set `+$58` bit 2, action ← `(action & $FE) + 4` (`$12 → $16`), re-init anim, play kick sound |
 | Fall clamp | `$3886 (player_clamp_fall_speed)` | \(v_z \le `$C0000` (**12.0**) |
 | Integrate | `$442C (player_integrate_velocity)` | \(x \mathrel{+}= v_x\), \(y \mathrel{+}= v_y\), \(z \mathrel{+}= v_z\) |
 
 There is **no mid-air lane (Up/Down) control**. Lane Y is frozen at takeoff.
-`$3914` sets `+$58` bit 2 before `$2EE8 (player_set_action_faced_restore_frame)` so `$3614 (player_load_action_velocity)` **preserves** the current
+`$3914 (player_air_attack_edge)` sets `+$58` bit 2 before `$2EE8 (player_set_action_faced_restore_frame)` so `$3614 (player_load_action_velocity)` **preserves** the current
 X velocity when entering the kick (it does not re-zero it).
 
 ### Jump-kick gravity and damage
 
-Kick handler `$2000` uses `$38AE`:
+Kick handler `$2000 (player_jump_kick_update)` uses `$38AE (player_apply_kick_gravity)`:
 
 - while rising (\(v_z < 0\)): full gravity `$E800`;
 - while falling (\(v_z \ge 0\)): lighter gravity **`$8800` (+0.53125)** so a
@@ -454,19 +454,19 @@ Lane half-width is about **8** pixels. The Z band sits high on the body, so a
 kick connects best while the player is not at maximum apex against a grounded
 foe—timing the B edge on the way down (or early at close range) matters.
 
-On connect, `$21B4` can set `+$59` bit 7 (hit freeze); `$442C (player_integrate_velocity)` then skips
+On connect, `$21B4 (player_jump_attack_hit_freeze)` can set `+$59` bit 7 (hit freeze); `$442C (player_integrate_velocity)` then skips
 position integration for the jump-attack anim group.
 
 ### Landing
 
-When falling collision in `$3E78` finds floor height `d6`: snap `+$18` to the
+When falling collision in `$3E78 (player_land_on_floor)` finds floor height `d6`: snap `+$18` to the
 floor, clear \(v_z\), play land sound, set action `$14` (or weapon `$40`). Land
-handler `$1FE8` uses another **5-update** timer (10 frames), then returns to
+handler `$1FE8 (player_jump_land_update)` uses another **5-update** timer (10 frames), then returns to
 ground idle `$02` via `(action & $FE) − $12`.
 
 ### Hit freeze
 
-`$21B4`, the first thing the kick handler `$2000` calls, starts a freeze on
+`$21B4 (player_jump_attack_hit_freeze)`, the first thing the kick handler `$2000 (player_jump_kick_update)` calls, starts a freeze on
 the update after a damaging contact (`+$7C` = 2): `+$59` bit 7 is set and
 `+$4F` loaded with 4, and while it counts down the handler skips gravity and
 `$442C (player_integrate_velocity)` skips integration. The flight stands still for 4 updates and then
@@ -549,9 +549,9 @@ The C crossover runs through the `$76`/`$80` family for roughly 28 agent
 ticks before back hold `$66` appears, and the actor is still holding the body
 for all of them.
 
-### Player holding an enemy: knee vs throw (`$2BA8`)
+### Player holding an enemy: knee vs throw (`$2BA8 (player_front_hold_attack_input)`)
 
-While the player is in a confirmed hold, `$2BA8` resolves a new logical attack
+While the player is in a confirmed hold, `$2BA8 (player_front_hold_attack_input)` resolves a new logical attack
 edge (bit 4 of `+$55`):
 
 | Logical input | Result | Player action |
@@ -580,7 +580,7 @@ Three counters in the holding player's own object decide what a hold can
 still do. All three were confirmed frame by frame in lockstep against a held
 Souther (autoplay's `tools/souther_hold_lab.py`).
 
-**The knee chain.** `$2BA8`'s B edge sets `+$58` bit 6 and writes `$6A` to
+**The knee chain.** `$2BA8 (player_front_hold_attack_input)`'s B edge sets `+$58` bit 6 and writes `$6A` to
 `+$61` on a hold's first knee. While bit 6 is set and `+$61` is inside
 `[$6A, $6E)`, the next knee is `+$61 + 2`: `$6A`, `$6C`, then `$6E`. The third
 one also changes the reaction code it hands the held body (`$08` to `$0C`),
@@ -612,7 +612,7 @@ the claw landed three frames later.
 ### Player held by an enemy: counter is C then B
 
 Enemy-held player actions are `$78` (acquire) → `$7A` (held) → optional
-crossover `$7C` → counter throw `$7E`. Handlers `$2606` and `$26B0` implement
+crossover `$7C` → counter throw `$7E`. Handlers `$2606 (player_held_back_escape_input)` and `$26B0 (player_held_vault_update)` implement
 the protocol:
 
 1. **C edge** in `$7A` starts crossover `$7C` (unless the holder is in excluded
@@ -641,7 +641,7 @@ player held $78 → $7A
 
 During `$72` (and ordinary launch `$5C` without the tech flag) the state
 handlers **do not read** `+$54`/`+$55`. There is no mid-air D-pad steer, no
-jump-kick (`$3914` is free-flight `$12` only), and **B+Up does nothing**.
+jump-kick (`$3914 (player_air_attack_edge)` is free-flight `$12` only), and **B+Up does nothing**.
 
 `$3F24` bounce/recovery for action families `$5C`, `$72`, and `$88`:
 
@@ -660,10 +660,10 @@ A separate, narrow tech can skip the knockdown bounce and land like a jump:
 | Latch | `+$46 = 1` (clears `+$45`) |
 | Land effect | if `+$46` set at `$3F24`, branch to `$3EDC` → action **`$14`** (~5-frame jump land → idle `$02`) instead of bounce → `$54` |
 
-Sampling windows (player collision path `$3B00 (player_update_world_collision)` → `$3CE2`):
+Sampling windows (player collision path `$3B00 (player_update_world_collision)` → `$3CE2 (player_resolve_vertical_collision)`):
 
-- rising (`vz < 0`): `$3D12`;
-- floor-test path: `$3D64` (same C-edge + Up test when `+$45` is set).
+- rising (`vz < 0`): `$3D12 (player_rising_check_landing_tech)`;
+- floor-test path: `$3D64 (player_floor_none)` (same C-edge + Up test when `+$45` is set).
 
 C must be a **fresh edge** while Up is held; holding C from before the window
 without a new press does not satisfy `$55` bit 5.
@@ -674,18 +674,18 @@ Only selected throw-release handlers set `+$45` when they launch into **`$5C`**:
 
 | Choreography action | Handler | Launch |
 |---|---|---|
-| `$82` / `$8E` | `$284A` | `$34CA` → `$5C` + horizontal velocity + **`+$45 = 1`** |
-| `$88` | `$28A2` | same pattern + **`+$45 = 1`** |
-| `$8C` | `$2AA4` | `$5C` + **`+$45 = 1`** only if `+$44` bit 0 is set |
+| `$82` / `$8E` | `$284A (player_thrown_82_update)` | `$34CA (player_start_knockdown_flight)` → `$5C` + horizontal velocity + **`+$45 = 1`** |
+| `$88` | `$28A2 (player_thrown_88_update)` | same pattern + **`+$45 = 1`** |
+| `$8C` | `$2AA4 (player_thrown_8c_update)` | `$5C` + **`+$45 = 1`** only if `+$44` bit 0 is set |
 
 Those choreography states are entered from the **held** reaction table at
 `$24CC` (action `$78` dispatcher), for example reaction **6** → `$82`,
 **9** → `$88`, **11** → `$8C` (boss / special hold reactions).
 
-The ordinary enemy path `$7A` reaction **4** → `$84` → `$72` (**`$29D0`**)
+The ordinary enemy path `$7A` reaction **4** → `$84` → `$72` (**`$29D0 (player_thrown_carry_release)`**)
 **does not** write `+$45`. C+Up is therefore inert on a normal street throw.
 
-`$34CA` alone (shared launch into `$5C` with `vz = $FFFB0000`) also does **not**
+`$34CA (player_start_knockdown_flight)` alone (shared launch into `$5C` with `vz = $FFFB0000`) also does **not**
 set `+$45`; only the callers above arm the tech flag after that launch.
 
 #### Practical summary
@@ -737,23 +737,23 @@ while the main pause path only considers players whose bits are already set in
 | `$322A (player_attack_jump_chord)` | Same-decision B+C rear/escape attack (blocks jump-kick). |
 | `$2FCC (player_try_jump)` | Jump edge → action `$10`. |
 | `$1CE2` | Player primary-state jump table (includes jump family). |
-| `$1FC0` / `$1FDC` / `$2000` / `$1FE8` | Jump start / free flight / kick / land handlers. |
-| `$3832` / `$3842` | Character launch Z-velocity table. |
-| `$384E` / `$38C0` | Launch X velocity and air L/R steer. |
-| `$389A` / `$38AE` | Full and kick-fall gravity. |
-| `$3914` | Free-flight attack edge → jump-kick action `$16`. |
+| `$1FC0 (player_jump_crouch_update)` / `$1FDC (player_jump_flight_update)` / `$2000 (player_jump_kick_update)` / `$1FE8 (player_jump_land_update)` | Jump start / free flight / kick / land handlers. |
+| `$3832 (player_load_jump_launch_velocity)` / `$3842` | Character launch Z-velocity table. |
+| `$384E (player_load_jump_direction)` / `$38C0 (player_air_steer)` | Launch X velocity and air L/R steer. |
+| `$389A (player_apply_gravity)` / `$38AE (player_apply_kick_gravity)` | Full and kick-fall gravity. |
+| `$3914 (player_air_attack_edge)` | Free-flight attack edge → jump-kick action `$16`. |
 | `$41EA (compute_player_attack_descriptor)` | Per-frame kick damage / reaction nibbles. |
 | `$4140 (player_cache_boxes)` / `$1ABA8 (player_shape_table)` | Body and attack AABB construction. |
 | `$442C (player_integrate_velocity)` | Position integrate (`+$1C`/`+$20`/`+$24` → `+$10`/`+$14`/`+$18`). |
-| `$3B00 (player_update_world_collision)` / `$3CE2` | Per-frame vertical collision: rising `$3D12`, floor dispatch `$3D5C`. |
-| `$3D12` / `$3D64` | C-edge + Up held while `+$45` set → latch `+$46` (landing tech). |
-| `$3E78` / `$3F24` | Floor land for throw-air families; bounce or tech branch. |
+| `$3B00 (player_update_world_collision)` / `$3CE2 (player_resolve_vertical_collision)` | Per-frame vertical collision: rising `$3D12 (player_rising_check_landing_tech)`, floor dispatch `$3D5C`. |
+| `$3D12 (player_rising_check_landing_tech)` / `$3D64 (player_floor_none)` | C-edge + Up held while `+$45` set → latch `+$46` (landing tech). |
+| `$3E78 (player_land_on_floor)` / `$3F24` | Floor land for throw-air families; bounce or tech branch. |
 | `$3EDC` | Tech land: clear `vz`, action `$14` (jump-land recovery). |
-| `$2BA8` | Hold B edge: knee `$6A` vs back throw `$62`/`$64` (L/R only; Up ignored). |
-| `$2606` / `$26B0` | Enemy-held counter: C → `$7C` window, then B → `$7E`. |
-| `$25DE` / `$291E` / `$29D0` | Ordinary throw choreography `$84` → launch `$72`. |
-| `$284A` / `$28A2` / `$2AA4` | Special throw releases that arm `+$45` into `$5C`. |
-| `$34CA` | Shared launch into action `$5C` with `vz = $FFFB0000`. |
+| `$2BA8 (player_front_hold_attack_input)` | Hold B edge: knee `$6A` vs back throw `$62`/`$64` (L/R only; Up ignored). |
+| `$2606 (player_held_back_escape_input)` / `$26B0 (player_held_vault_update)` | Enemy-held counter: C → `$7C` window, then B → `$7E`. |
+| `$25DE (player_held_back_start_thrown)` / `$291E (player_thrown_carry_update)` / `$29D0 (player_thrown_carry_release)` | Ordinary throw choreography `$84` → launch `$72`. |
+| `$284A (player_thrown_82_update)` / `$28A2 (player_thrown_88_update)` / `$2AA4 (player_thrown_8c_update)` | Special throw releases that arm `+$45` into `$5C`. |
+| `$34CA (player_start_knockdown_flight)` | Shared launch into action `$5C` with `vz = $FFFB0000`. |
 | `$2FE4 (player_hold_crossover_start)` | Partner-hold C → vault jump `$76`/`$80`. |
 | `$10D2E (handle_pause_start_input)` | Start buffering, pause toggle, and demo abort. |
 | `$115CC (update_join_and_continue_hud)` | Inactive-player Start join and continue HUD path. |

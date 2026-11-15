@@ -647,8 +647,8 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$B884 (presentation_step_palette_line)` | Steps one palette line from $FFF400 towards $FFF480 by d4 |
 | `$BA40 (presentation_add_hscroll_rows)` | Adds d0 to the scroll rows of $FF5E02 from row d1, the count in d1 high |
 | `$BA5C (presentation_set_hscroll_rows)` | Writes d0 high to the scroll rows of $FF5E00 or $FF5E02 by d0 low, from row d1 |
-| `$BA82 (presentation_tile_script_step)` | Reads one byte of a tile script at a1 and runs its write or command |
-| `$BC2E (presentation_type87_89_scroll_state)` | State 1 of types $87 and $89: until +$58 moves left and wraps to X $F0 with a random draw |
+| `$BA82 (presentation_tile_script_step)` | Runs one step of the tile script at a1: with d7 set and a non-negative byte writes the fill tile +$5A, a positive byte writes that byte plus d2 as a tile at the cursor d0, and zero or negative bytes run the commands of the table at $BAA8; stores the cursor in +$50 and the script pointer in +$5E |
+| `$BC2E (presentation_type87_89_scroll_state)` | State 1 of types $87 and $89: clears the slot once +$58 is set; moves on its velocity and at X $46 wraps to X $F0 at height $40 plus a random 0-15 |
 | `$BED0 (presentation_type85_86_init_state)` | State 0 of types $85 and $86 |
 | `$C318 (presentation_type83_draw_next_and_spawn)` | presentation_type83_draw_next_tilemap, then presentation_type83_spawn_type82 with d7 = 0 |
 | `$C31E (presentation_type83_spawn_type82)` | Creates presentation type $82 with +$59 = d7 and lifetime $6C |

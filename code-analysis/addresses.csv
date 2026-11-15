@@ -419,7 +419,7 @@ FFFA5F, type17_palette_cycle_timer, "95% - B - Countdown of object_type17_palett
 06EE52, status_tile_index_table, "85% - B[] - Four-byte tile index groups read by copy_status_tile_blocks_d6"
 
 ; --- Object state tables, read by dispatch_object_primary_state_table or dispatch_presentation_object_state_table ---
-005236, continue_object_state_table, "100% - W[3] - State table of continue_object"
+005236, continue_object_state_table, "100% - W[16] - State table of continue_object: 0 init, 1 and 6 countdown, 2 game-over fade, 4/8/$0D the Yes/No input, 5/9/$0E the confirmation; 3 is empty and 7, $0A, $0C and $0F point at $5388"
 0056EE, high_score_name_entry_state_table, "100% - W[3] - State table of high_score_name_entry"
 005984, police_vehicle_state_table, "100% - W[13] - State table of police_vehicle"
 006126, bottle_weapon_state_table, "100% - W[6] - State table of bottle_weapon"

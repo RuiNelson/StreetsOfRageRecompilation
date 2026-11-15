@@ -292,8 +292,8 @@ The byte at weapon `+$51` is a command/state handshake rather than a simple Bool
 
 | Family | Rule | Code |
 | --- | --- | --- |
-| Bat / pipe | `+$50` use counter. While `+$50 < 3` and `+$51 == 1`, each held-use entry does `+$50++`. When `+$50 >= 3`, retire (hide, `+$56 = $10` frames, then delete). | `$5C66 (weapon_shared_state1)` |
-| Knife | Melee keeps the held object; **throw** (`+$51 = 3` → `$5D84 (launch_released_weapon)`) is one projectile arc. Solid hit deletes the projectile; ground settle at `$5DEA` can force `+$50 = 3` (unpickable). | `$3084 (player_held_object_attack_input)`, `$5D34 (weapon_shared_state3)`, `$5DEA`, `$21E6 (player_release_thrown_weapon)` |
+| Bat / pipe | `+$50` use counter. While `+$50 < 3` and `+$51 == 1`, each held-use entry does `+$50++`. When `+$50 >= 3`, retire (hide, `+$56 = $10` frames, then delete). | `$5C66 (weapon_on_floor_state)` |
+| Knife | Melee keeps the held object; **throw** (`+$51 = 3` → `$5D84 (launch_released_weapon)`) is one projectile arc. Solid hit deletes the projectile; ground settle at `$5DEA (knife_bounce_fall_state)` can force `+$50 = 3` (unpickable). | `$3084 (player_held_object_attack_input)`, `$5D34 (weapon_thrown_flight_state)`, `$5DEA (knife_bounce_fall_state)`, `$21E6 (player_release_thrown_weapon)` |
 | Bottle | One-way shatter on first impact (`+$54` guard); three shards; never re-collectable as a bottle. | `$614E (break_bottle_into_shards)` |
 | Pepper | `+$50` is effect lifecycle, not a three-swing counter; canister becomes a timed smoke emitter. | `$6270+`, `$6328 (begin_pepper_smoke_emission)` |
 
@@ -415,7 +415,7 @@ frames (`$A43E (ordinary_enemy_pepper_state)`).
 
 #### Knife bounce (ROM + forced path)
 
-On ground impact in `$5D34 (weapon_shared_state3)`: \(v_x \leftarrow -v_x/4\) (live: \(-16\rightarrow+4\)).
+On ground impact in `$5D34 (weapon_thrown_flight_state)`: \(v_x \leftarrow -v_x/4\) (live: \(-16\rightarrow+4\)).
 
 ### Melee reach (bat / pipe)
 
@@ -440,7 +440,7 @@ Live Axel numbers are in the probe table above. Unarmed first-punch boxes
 ### Bottle shard velocities (type `$1E`)
 
 Tables `$61B2` (Z) / `$61B8` (X); X sign flipped by facing. Gravity `+$8800`
-per frame (`$61E0`). Treated as debris (not re-collectable weapons).
+per frame (`$61E0 (bottle_shard_fall_state)`). Treated as debris (not re-collectable weapons).
 
 | Shard | \(v_z\) | \(v_x\) |
 | ---: | ---: | ---: |
@@ -450,14 +450,14 @@ per frame (`$61E0`). Treated as debris (not re-collectable weapons).
 
 **Shards deal no damage.** Type `$1E` never writes `+$34`, never calls `$95CE (register_enemy_attacker)`
 (attacker-list registration), and only runs gravity + ground-delete
-(`$61CA`/`$61E0`). Confirmed in ROM and by play observation.
+(`$61CA (bottle_shard_init_state)`/`$61E0 (bottle_shard_fall_state)`). Confirmed in ROM and by play observation.
 
 ### Weapon `+$51` command values (static)
 
 | Value | Meaning | Producers / consumers |
 | ---: | --- | --- |
 | 0 | Free / settled on ground | Cleared by launch, drop settle, retire; required by `$3136 (find_close_interaction_target)` pickup |
-| 1 | Reserved / held | `$3136 (find_close_interaction_target)` on pickup; enemy attach spawn; `$5C66 (weapon_shared_state1)` held-use gate |
+| 1 | Reserved / held | `$3136 (find_close_interaction_target)` on pickup; enemy attach spawn; `$5C66 (weapon_on_floor_state)` held-use gate |
 | 2 | Drop / detach | `$5E2E (update_held_weapon)` drop branch; enemy knockdown writes `#2` to held weapon |
 | 3 | Throw command | `$21E6 (player_release_thrown_weapon)` on knife/pepper release frame; consumed by `$5D84 (launch_released_weapon)` / `$62DA (throw_pepper_spray)` |
 
@@ -495,7 +495,7 @@ always remapped press bit 4 on player `+$55` (B under the default layout).
 | 0 (unarmed) | `$3028 (player_normal_attack_input)` → punch/combo |
 | nonzero (holding) | `$3084 (player_held_object_attack_input)` → weapon anim |
 
-Idle chain: unarmed uses `$2CD2` → normal attack; armed uses `$2D20` → held-object
+Idle chain: unarmed uses `$2CD2 (player_ground_control)` → normal attack; armed uses `$2D20 (player_armed_ground_control)` → held-object
 attack (after grab/chord/jump gates).
 
 ### What `$3084 (player_held_object_attack_input)` starts for each weapon
@@ -575,7 +575,7 @@ The type `$1E` children use the small debris handler at `$61BE (bottle_shard_dis
 
 ### Types `$0A` and `$0B`: long melee weapons
 
-The two handlers at `$61F6 (baseball_bat_weapon_dispatcher)` and `$6226 (steel_pipe_weapon_dispatcher)` differ mainly in art data (`$6FA9A` versus `$6FB5A`) and both initialize damage 4. Type `$0A` is the baseball bat and type `$0B` is the steel pipe. Their dispatch tables route through the shared `$5C66 (weapon_shared_state1)` wear path (three held uses), `$5CE4 (weapon_shared_state2)`, `$5D34 (weapon_shared_state3)`, `$5DDE` → `$5E2E (update_held_weapon)` (not the knife throw launcher), and `$5DE0 (weapon_shared_state5)`. Unlike the bottle, they have no shatter flag or shard-spawn path.
+The two handlers at `$61F6 (baseball_bat_weapon_dispatcher)` and `$6226 (steel_pipe_weapon_dispatcher)` differ mainly in art data (`$6FA9A` versus `$6FB5A`) and both initialize damage 4. Type `$0A` is the baseball bat and type `$0B` is the steel pipe. Their dispatch tables route through the shared `$5C66 (weapon_on_floor_state)` wear path (three held uses), `$5CE4 (weapon_dropped_fall_state)`, `$5D34 (weapon_thrown_flight_state)`, `$5DDE (weapon_held_state)` → `$5E2E (update_held_weapon)` (not the knife throw launcher), and `$5DE0 (weapon_expire_state)`. Unlike the bottle, they have no shatter flag or shard-spawn path.
 
 The visual mapping was confirmed during gameplay. Mechanically the distinction
 is small: both provide the same outgoing damage, can be dropped and collected
@@ -720,10 +720,10 @@ void apply_pickup_effect(Player *p, unsigned effect) {
 | `$21E6 (player_release_thrown_weapon)` | Commands a carried knife or pepper spray to detach on the attack-animation release frame. |
 | `$3136 (find_close_interaction_target)` | Finds free weapon types `$08-$0C` and six consumable pickup types in the ±20/±16/±8 box. |
 | `$5C1E (knife_weapon_dispatcher)` | Type-$08 knife dispatcher; damage 5 at `$5C54`. |
-| `$5C66 (weapon_shared_state1)` | Shared bat/pipe three-use wear (`+$50`); retire when `+$50 >= 3`. |
-| `$5D34 (weapon_shared_state3)` | Active throw impact: collide, bounce \(v_x \leftarrow -v_x/4\), or delete on hit. |
+| `$5C66 (weapon_on_floor_state)` | Shared bat/pipe three-use wear (`+$50`); retire when `+$50 >= 3`. |
+| `$5D34 (weapon_thrown_flight_state)` | Active throw impact: collide, bounce \(v_x \leftarrow -v_x/4\), or delete on hit. |
 | `$5D84 (launch_released_weapon)` | Command-3 launch: spawn ±48 X / +16 Z, \(v_x=\pm 16\). |
-| `$5DEA` | Ground settle forces `+$50 = 3` (exhaust pickability). |
+| `$5DEA (knife_bounce_fall_state)` | Ground settle forces `+$50 = 3` (exhaust pickability). |
 | `$5E2E (update_held_weapon)` | Shared held/drop/throw ownership, attach tables `$5FC8`/`$60A0`, collision enable. |
 | `$6114 (bottle_weapon_dispatcher)` | Type-$09 bottle dispatcher; damage 3 at `$613C`. |
 | `$614E (break_bottle_into_shards)` | Bottle break and three-shard spawn (vel tables `$61B2`/`$61B8`). |
@@ -732,7 +732,7 @@ void apply_pickup_effect(Player *p, unsigned effect) {
 | `$6226 (steel_pipe_weapon_dispatcher)` | Type-$0B steel-pipe dispatcher; damage 4 at `$6244`. |
 | `$6256 (pepper_spray_weapon_dispatcher)` | Type-$0C pepper dispatcher; damage 2 at `$627A`. |
 | `$62DA (throw_pepper_spray)` | Pepper launch: ±48 X / +16 Z, \(v_x=\pm 6\), \(v_z=-3\). |
-| `$6312` / `$6328 (begin_pepper_smoke_emission)` / `$6372 (emit_pepper_smoke_sequence)` | Pepper flight gravity `+$A800`, smoke emission sequence. |
+| `$6312 (pepper_spray_flight_state)` / `$6328 (begin_pepper_smoke_emission)` / `$6372 (emit_pepper_smoke_sequence)` | Pepper flight gravity `+$A800`, smoke emission sequence. |
 | `$95CE (register_enemy_attacker)` / `$95E8 (unregister_enemy_attacker)` | Register/unregister weapon in attacker list `$FFFB22 (enemy_attacker_count)`. |
 | `$9B88 (ordinary_enemy_apply_contact_damage)` | `health -= attacker[+$34]`; pepper branch `$9C1E` → state `$0400`. |
 | `$AA22 (resolve_object_contact)` / `$ABA4 (resolve_enemy_registered_attacker_contact)` / `$1A68E` | Attacker-list collision and shape AABB table. |
@@ -836,13 +836,13 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$7D7A (round7_fixed_type51_dispatcher)` | Type $51: state table $7D82; seeded in level index 6 |
 | `$7DF0 (round7_fixed_type52_dispatcher)` | Type $52: state table $7DF8; seeded in level index 6 |
 | `$7E20 (round7_fixed_type53_dispatcher)` | Type $53: state table $7E28; seeded in level index 6 |
-| `$7424 (thrown_prop_contact_reaction)` | Contact response of a thrown prop: reaction 1 on the object hit, except that type $45 with +$40 clear only clears +$7E and +$7C on it |
+| `$7424 (thrown_prop_contact_reaction)` | Contact response of a thrown prop: writes reaction 1 to the object hit; a type $45 with +$40 = 0 instead clears that object's +$7E and +$7C |
 | `$708A (object_type17_palette_cycle)` | Every four calls steps type17_palette_cycle_index through five palette lists from the table at $70BA |
 | `$7BCE (object_type42_contact_reaction)` | resolve_object_contact, then by result: 3 clears +$7E and +$7C on the other object, 1 sets its +$7D to 1 |
-| `$5C66 (weapon_shared_state1)` | State 1 of the bottle table in the knife family code |
-| `$5CE4 (weapon_shared_state2)` | State 2 of the bottle table in the knife family code |
-| `$5D34 (weapon_shared_state3)` | State 3 of the bottle table in the knife family code |
-| `$5DE0 (weapon_shared_state5)` | State 5 of the bottle table in the knife family code |
+| `$5C66 (weapon_on_floor_state)` | State 1 of the weapons (on the floor): a pickup (+$51 = 1) counts a use in +$50 and goes to the held state 4; after 3 uses blinks out through state 5 in 16 updates; otherwise follows the floor attribute through the table at $5CB4 |
+| `$5CE4 (weapon_dropped_fall_state)` | State 2 of the weapons (dropped): unregisters the attacker and falls at $8800 until the floor, or the level's height from $5D24 where there is none, then lies in state 1 |
+| `$5D34 (weapon_thrown_flight_state)` | State 3 of the weapons (thrown): cleared off screen; a contact writes reaction 1 to a player it hit and ends in state 7; the floor bounces it back at a quarter of its speed in state 6 |
+| `$5DE0 (weapon_expire_state)` | State 5 of the weapons: counts +$56 down and clears the slot |
 | `$69B6 (pickup_fall_to_floor_state)` | State 1 of the six pickups: falls at 3 px per update until the floor probe, then advances |
 | `$69CA (pickup_idle_state)` | State 2 of the six pickups: rts; the player interaction collects it |
 | `$6C3C (prop_fragment_fall_state)` | Shared by the booth and types $41 and $44: moves with gravity $F000 until the floor probe deletes it |

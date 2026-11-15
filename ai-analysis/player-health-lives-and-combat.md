@@ -51,7 +51,7 @@ P1 is always the object at `$FFB800 (p1_object)`; P2 is always at `$FFB880 (p2_o
 | `+$51` | byte | Animation/object interaction gate, also used to reserve a grabbed target. | Medium-high. |
 | `+$54` | word | Remapped held/pressed input pair; byte `+$55` is the edge/press byte used by action tests. | High. |
 | `+$56` | byte | Deferred/fallback incoming damage when the attacker's live `+$34` cannot be used. | High. |
-| `+$58`, `+$59` | bytes | Player action, combo, invulnerability, and transition flags. `+$59` bit 1 is the hit-reaction bit: every hit reaction sets it (`$333E (resolve_player_hit_or_ko)`, `$33EC`, `$3468`, `$34CA`) and the floor landing `$3F24` clears it; while it is set `$AA34 (test_contact_attackers_and_players)` tests no enemy contact on the player and a later boss's `$179F8 (later_boss_target_unavailable)` counts the player as unavailable (`enemy-ai.md`, Antonio). | Medium; `+$59` bit 1 high (writers, readers and a lockstep trace), the other bits need names per state. |
+| `+$58`, `+$59` | bytes | Player action, combo, invulnerability, and transition flags. `+$59` bit 1 is the hit-reaction bit: every hit reaction sets it (`$333E (resolve_player_hit_or_ko)`, `$33EC`, `$3468 (player_hit_reaction_light)`, `$34CA (player_start_knockdown_flight)`) and the floor landing `$3F24` clears it; while it is set `$AA34 (test_contact_attackers_and_players)` tests no enemy contact on the player and a later boss's `$179F8 (later_boss_target_unavailable)` counts the player as unavailable (`enemy-ai.md`, Antonio). | Medium; `+$59` bit 1 high (writers, readers and a lockstep trace), the other bits need names per state. |
 | `+$5A`, `+$5B` | bytes | Saved animation frame and duration during an interrupted/continued action. | High. |
 | `+$5C` | byte | Short timer used by attack/combo and temporary-state logic. | Medium. |
 | `+$5E` | word | Pointer to the object currently grabbed/held. | High. |
@@ -68,7 +68,7 @@ The health and outgoing-hit fields are especially important: health belongs to t
 
 `$568A (remap_player_gameplay_input)` copies the correct player's controller word into object `+$54`. If `$FFFFC8 (control_scheme)` is nonzero, it permutes the three face-button bits while preserving directions and Start. This lets the rest of player code use a fixed logical layout regardless of the OPTIONS setting.
 
-The idle/ground action path around `$2CD2` applies a priority chain:
+The idle/ground action path around `$2CD2 (player_ground_control)` applies a priority chain:
 
 ```text
 resolve collision/throw contact state ($3266)
@@ -93,7 +93,7 @@ facing variant).
 This is the bridge from a close normal attack into the weapon/item pickup
 animation, not the enemy-grab detector. Enemy grabs are negotiated by the
 separate collision/contact paths. Once an enemy is held, the alternate path at
-`$2D20` selects grab strikes and throws from directional input and the target's
+`$2D20 (player_armed_ground_control)` selects grab strikes and throws from directional input and the target's
 state. The target and player exchange reaction values through `+$37`, `+$51`,
 `+$52`, `+$5E`, `+$60`, `+$7C`, and `+$7D`; throws apply explicit X/Z
 velocities and clear the relationship on both objects.
@@ -102,22 +102,51 @@ The attack+jump chord (`$322A (player_attack_jump_chord)`) recognizes either ord
 
 ### Action-state numbers
 
-The byte at `+$30` is not a simple enum in isolation. Bit 0 is commonly facing, while helpers map action numbers through the table at `$2F2C` into character animation indices. Examples that are well supported are:
+The byte at `+$30` is the player's action; bit 0 is the facing (set = left), so each action has two numbers. `$1C44 (update_player_object)` dispatches it through the absolute word table at `$1CE2`, and `$2F2C` maps it to the character's animation index. Every handler the game reaches is named:
 
-| State family | Observed role |
-|---:|---|
-| `$00/$01` | Initial/neutral facing state. |
-| `$02/$03` | Normal ground/idle state. |
-| `$10/$11` | Jump initiation selected by bit-5 press. |
-| `$18+` | Normal attack/combo family. |
-| `$20+` | Attack+jump chord / rear attack family. |
-| `$28+` | Grab acquisition and held-target actions. |
-| `$44+` | Grab attack/throw selection. |
-| `$50..$5F` | Hurt, knockdown, and death transitions; these states are protected from ordinary re-entry by `$333E (resolve_player_hit_or_ko)`. |
-| `$56/$57` | Fatal-hit launch/death animation entry. |
-| `$60+` | Player/player or grab/throw reaction families. |
+| Action | Handler | What it is |
+|---:|---|---|
+| `$00` | `$1E0E (player_spawn_or_respawn)` | spawn or respawn |
+| `$02` | `$1F7C (player_stand_update)` | standing; ground control |
+| `$04` | `$1F8E (player_idle_animation_update)` | idle animation; ground control |
+| `$06`-`$0E` | `$1FB0 (player_walk_update)` | the eight walk directions; ground control |
+| `$10` / `$12` / `$14` / `$16` | `$1FC0 (player_jump_crouch_update)`, `$1FDC (player_jump_flight_update)`, `$1FE8 (player_jump_land_update)`, `$2000 (player_jump_kick_update)` | jump crouch, free flight, landing, jump kick |
+| `$18` / `$1A` / `$1C` | `$201E (player_punch_combo_update)` | the three punches of the combo |
+| `$1E` | `$2096 (player_combo_finisher_update)` | the combo's last hit |
+| `$20` | `$20EC (player_rear_attack_update)` | rear attack (Axel, Blaze) |
+| `$22` / `$24` | `$2100 (player_rear_hop_crouch_update)`, `$211C (player_rear_hop_flight_update)` | Adam's rear attack: crouch, then the hop |
+| `$28` | `$212C (player_pickup_update)` | picking up |
+| `$30` | `$2140 (player_armed_stand_update)` | standing with a weapon; armed ground control |
+| `$32`-`$3A` | `$2148 (player_armed_walk_update)` | walking with a weapon |
+| `$3C` / `$3E` / `$40` / `$42` | `$2158 (player_armed_jump_crouch_update)`, `$2174 (player_armed_jump_flight_update)`, `$2180 (player_armed_jump_land_update)`, `$2198 (player_armed_jump_attack_update)` | the armed jump |
+| `$44` / `$46` | `$21E6 (player_release_thrown_weapon)` | weapon attack: throw or stab |
+| `$48` / `$4A` | `$225C (player_armed_rear_attack_update)` | the swing, and the armed rear attack |
+| `$4C` / `$4E` | `$2100 (player_rear_hop_crouch_update)`, `$211C (player_rear_hop_flight_update)` | Adam's armed rear attack |
+| `$52` | `$2ADC (player_fall_update)` | falling off a ledge |
+| `$54` | `$2B14 (player_lying_update)` | lying on the floor |
+| `$56` / `$58` | `$2B38 (player_fatal_flight_update)`, `$2B3C (player_death_update)` | fatal hit: flight, then dead on the floor |
+| `$5A` | `$2AF0 (player_hit_stun_update)` | hit stun |
+| `$5C` | `$2B10 (player_knockdown_flight_update)` | knocked down, in the air |
+| `$5E` / `$74` | `$2B20 (player_getup_update)`, `$2426 (player_getup_end_update)` | getting up |
+| `$60` / `$66` | `$2260 (player_front_hold_update)`, `$22E0 (player_back_hold_update)` | holding from the front, from behind |
+| `$62` / `$64` / `$7E` | `$23B4 (player_throw_update)`, `$23B8 (player_throw_blaze_update)` | throw, Blaze's throw, counter throw |
+| `$68` / `$70` | `$23D6 (player_suplex_update)`, `$23F8 (player_suplex_recover_update)` | suplex and its recovery |
+| `$6A` / `$6C` / `$6E` | `$2444 (player_knee_update)`, `$2452 (player_last_knee_update)` | first, second and third knee |
+| `$72` | `$2A10 (player_thrown_flight_update)` | thrown, in the air |
+| `$76` / `$80` | `$26E2 (player_hold_crossover_update)` | the vault over a held body |
+| `$78` / `$7A` | `$24C4 (player_held_front_update)`, `$25B8 (player_held_back_update)` | held from the front, from behind |
+| `$7C` | `$26B0 (player_held_vault_update)` | the vault out of a hold |
+| `$82`, `$8E` / `$84` / `$88` / `$8C` | `$284A (player_thrown_82_update)`, `$291E (player_thrown_carry_update)`, `$28A2 (player_thrown_88_update)`, `$2AA4 (player_thrown_8c_update)` | being thrown: the choreographies |
+| `$8A` | `$2A14 (player_kneed_update)` | kneed in a hold |
+| `$90` / `$92` / `$94` | `$2A22 (player_partner_launch_start_update)`, `$2A6E (player_partner_launch_spin_update)`, `$2AA0 (player_partner_launch_fall_update)` | the launch off a partner hold |
 
-Because the same base state maps differently for Axel, Adam, and Blaze, names should be applied to state-transition routines before assigning universal names to every state value.
+The table's other entries (`$26`, `$2A`-`$2E`, `$86`) are 0, and `$50` points at `$2AE0`, which no session has reached.
+
+`$2CD2 (player_ground_control)` and `$2D20 (player_armed_ground_control)` are the ends of the standing and walking handlers: grab contact, chord, jump, attack, then the direction table (`$2D00`, armed `$2D6C`), whose 16 entries are the `player_walk_*` and `player_armed_walk_*` routines.
+
+A held player reads the holder's reaction code in `+$7D`. `$33C8` (in `$333E (resolve_player_hit_or_ko)`) starts the reaction: 0 `$3468 (player_hit_reaction_light)`, 1 `$3496 (player_hit_reaction_knockdown)`, 2 `$34EA (player_start_held_front)`, 3 `$34E6 (player_start_held_back)`. Once held, `$24CC` (action `$78`) and `$25C0` (action `$7A`) take over: 2 and 3 swap the two holds when the holder vaults over, 4 is the throw (`$25DE (player_held_back_start_thrown)`), 5 the release, 6 and 9 a player's throws in the duel, 7 the partner launch, 8 a knee (`$2550 (player_reaction_type8_damage)`), `$0B` action `$8C` and `$0C` the third knee.
+
+The floor probe returns an attribute that the vertical collision (`$3CE2 (player_resolve_vertical_collision)`) dispatches through `$3D5C`: 0 `$3D64 (player_floor_none)`, 1 `$3E78 (player_land_on_floor)`, 2 `$3E4A (player_floor_belt_right)`, 3 `$3E52 (player_floor_belt_left)`. Weapons on the floor (`$5CB4`) and ordinary enemies (`$92C8 (ordinary_enemy_apply_floor_belt)`) move 1 px on attributes 2 and 3 the same way, which is what makes them round 6's belts.
 
 ## Outgoing attacks and damage descriptors
 
@@ -196,7 +225,7 @@ bool apply_player_damage(Player *victim) {
 }
 ```
 
-`$333E (resolve_player_hit_or_ko)` is the hit/KO gate. It ignores already protected hurt/death states, checks health, interprets the reaction selector in `+$7D`, and jumps through a reaction table. When health is zero, it enters the fatal path at `$33E4`: release any grabbed object, detach contact partners, orient away from the attacker, enter state `$56/$57`, and apply an upward velocity of `$FFF70000`.
+`$333E (resolve_player_hit_or_ko)` is the hit/KO gate. It ignores already protected hurt/death states, checks health, interprets the reaction selector in `+$7D`, and jumps through a reaction table. When health is zero, it enters the fatal path at `$33E4 (player_start_fatal_fall)`: release any grabbed object, detach contact partners, orient away from the attacker, enter state `$56/$57`, and apply an upward velocity of `$FFF70000`.
 
 Several hurt/throw paths call `$351E (apply_player_damage)` only when the relevant animation/contact phase is reached. Thus collision detection records a pending result first; damage and animation response are synchronized later by the player's state machine.
 
@@ -597,22 +626,22 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$32D8 (player_write_hold_reaction)` | Writes +$7D from the action-indexed byte table $32F2 (zero for a negative entry): what a holder reports to the held target |
 | `$3B00 (player_update_world_collision)` | Per-update collision: loads the frame extents, solid objects, side walls, floor and the vertical path at $3CE2 |
 | `$479C (player_position_held_partner)` | For actions from $70 positions the holder or the held player in +$4C from the per-character offset tables at $4884, by animation frame |
-| `$4F72 (player_update_hold_link_flags)` | Reads action-indexed table $4FC4: clears +$59 bit 1 and +$4C for actions without a hold and sets the sprite-order bit +$01 bit 7 on holder or held |
+| `$4F72 (player_update_hold_link_flags)` | Reads the action-indexed table $4FC4: a zero high nibble clears +$59 bit 1 and a zero low nibble clears +$4C; otherwise sets the sprite-order bit +$01 bit 7 on the held enemy (1) or on the player (other values; 2 for a held player) |
 | `$2C74 (player_set_action_faced)` | Adds the facing bit to d0 and falls into player_set_action |
 | `$2C7E (player_set_action)` | Changes +$30 to d0 when different: animation from table $2F2C, frame timer, action velocity and state-bit mask |
 | `$2DE6 (player_set_action_faced_weapon_adjust)` | player_set_action with the +$5A/+$5B frame restore (+$58 bit 1), then player_weapon_pickup_animation_adjust |
-| `$2ED0 (player_set_action_facing_attacker)` | Adds 1 to d0 when the attacker in +$7E is to the left, then the $2EF2 action change |
+| `$2ED0 (player_set_action_facing_attacker)` | Adds 1 to d0 (facing left) unless the attacker in +$7E is to the right of the player, then player_set_action_restore_frame |
 | `$2EE8 (player_set_action_faced_restore_frame)` | Adds the facing bit to d0 and falls into $2EF2: action change that restores +$A/+$D from +$5A/+$5B when +$58 bit 1 is set |
 | `$3266 (player_resolve_grab_contact)` | On a contact result of 3 starts the front ($60) or back ($66) hold of the object in +$7E and clears +$4B bit 7; returns d7 = -1 when a hold began |
 | `$3614 (player_load_action_velocity)` | Loads X and lane velocity from the character speed table $3664 by action, each skipped once by a set +$58 bit 2 |
-| `$2E32 (player_weapon_pickup_animation_adjust)` | For action families $28 and $30 with a weapon type in +$60, applies the weapon-specific animation adjustment through the table at $2E5A |
+| `$2E32 (player_weapon_pickup_animation_adjust)` | For animations $28-$2B and $30-$33 with a weapon type in +$60 runs the type's entry of the table at $2E5A: 4 more on the animation index for the bat $0A and the pipe $0B, nothing for the others |
 | `$3010 (player_armed_try_jump)` | On a jump press (+$55 bit 5) plays $A0 and starts armed jump action $3C; returns d7 = -1 |
 | `$2FCC (player_try_jump)` | On a jump press (+$55 bit 5) plays $A0 and starts free-flight action $10; returns d7 = -1 |
 | `$35D0 (player_init_animation_frame_trampoline)` | jmp init_object_animation_frame |
 | `$35D6 (player_queue_sound_trampoline)` | jmp queue_sound_id |
 | `$3504 (player_drop_carried_weapon)` | When +$60 is set clears it and +$5E and sets the weapon object +$51 to 2 |
-| `$4104 (player_clear_combat_fields)` | Clears the animation, hit, grab and link fields of a player, keeping the +$4B and +$59 bits outside its masks |
-| `$4462 (player_rear_attack_sound_on_frame1)` | On frame 1 with +$51 set plays sound $A6 |
+| `$4104 (player_clear_combat_fields)` | Clears the animation, hit, grab and link fields of a player, keeping the +$4B and +$59 bits outside its masks, and falls into player_cache_boxes |
+| `$4462 (player_attack_swing_sound_on_frame1)` | On frame 1 with +$51 set plays sound $A6; called by the punch combo, its last hit and the rear attack |
 | `$27CE (player_hold_crossover_find_blocker)` | Scans 68 slots with +$3A bit 0 for an object inside the box in front of the player; returns d7 = -1 when found |
 | `$4192 (player_write_box_from_shape)` | Writes one six-word X/lane/height box for player_cache_boxes from shape record d1 |
 | `$450C (player_vs_player_test_boxes)` | Tests the attacker +$64 box against the victim +$70 box and writes the reciprocal contact results |
@@ -625,9 +654,9 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$5620 (hud_clear_p1_status_rows)` | Fills the two window-plane HUD rows at $FF600A and $FF605A with blank tile $6D7; hud_clear_p2_status_rows is the same on the right side |
 | `$106DA (player_queue_character_ko_voice)` | Plays the voice selected by character +$50 from table $106E6 |
 | `$3B12 (player_load_frame_extents)` | Copies +$02 and +$03 from the current animation frame record, from the other pair of bytes when the frame word has bit 15 set |
-| `$3B4E (player_resolve_lane_wall)` | With lane velocity and outside level index 6 probes the floor and, when blocked through the table at $3B74, undoes the lane move and clears +$20 |
+| `$3B4E (player_resolve_lane_wall)` | With lane velocity and outside level index 6 probes the floor and, when it is more than 8 px above the player, runs the attribute's entry of the table at $3B74: attribute 1 undoes the lane move and clears +$20 |
 | `$3BAE (test_solid_object_collision)` | Tests a0 against one solid object with the X box chosen by its type from the table at $3C6A; a player ignores a moving type $45 |
-| `$3C92 (player_resolve_side_wall)` | Probes the floor 8 px ahead of the X velocity and acts through the table at $3CAE; $3CB6 restores X and lane from player_transform_snapshot_cursor |
+| `$3C92 (player_resolve_side_wall)` | Probes the floor 8 px ahead of the X velocity and 8 px up and runs the attribute's entry of the table at $3CAE: attributes 1-3 block through player_side_wall_blocked |
 | `$4D1E (hud_write_tile_list)` | Reads count and base from a3 and writes that many tile bytes plus base as words at a2 |
 | `$5768 (high_score_draw_name_entry_header)` | Writes the name-entry tile list to the player side of the HUD at $FF600A, then the score digits |
 | `$58E0 (high_score_draw_name_letter)` | Draws the letter +$62 through table $5904 at HUD offset +$60 on the player side, tile base $7C0 |

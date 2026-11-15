@@ -578,7 +578,7 @@ lane, and his axes still in the air follow him, so a **front hold on a
 juggling Jack is itself a hit**: his offsets point at whoever he faced when
 each arc began, which is the holder. A back hold keeps them on the far side
 until they drop at the end of their arcs. In the hold, knees do the holder's
-`+$34` (2, 2, then 3 and a knockback) and the suplex (`$A2EC`) a flat 5.
+`+$34` (2, 2, then 3 and a knockback) and the suplex (`$A2EC (ordinary_enemy_held_suplexed)`) a flat 5.
 
 ## HakuRo: rising from below deck
 
@@ -660,7 +660,7 @@ in the pipeline excluded it from targeting. The fix
 own-street-surface reference `hazards.is_wall_class` already uses for a
 raised collision class -- a **generic** geometry check, not a HakuRo- or
 round-5-specific one, since the ROM fact behind it (a body's `world_z` *is*
-its floor's surface once landed, per `hazards.py`'s own citation of `$3E78`)
+its floor's surface once landed, per `hazards.py`'s own citation of `$3E78 (player_land_on_floor)`)
 is generic to every ordinary enemy and every round, not particular to this
 one rise-from-below mechanic. Verified live after the fix: the same wave 3
 capture completed cleanly in ~27.5s with the AI issuing
@@ -728,12 +728,12 @@ hold (`$66`) when they face the same way with the enemy ahead of the player
 -- and nothing at all when they face the same way with the enemy's origin
 behind the player's (the walking box, 19 px ahead, still meets a body whose
 origin is a few px behind). The enemy was already put in state 5 by
-`$A9D4`, and `$A04A (ordinary_enemy_held_state)`, reading the holder's `+$7D` still 0, sends it to state 1
+`$A9D4 (ordinary_enemy_contact_grabbed)`, and `$A04A (ordinary_enemy_held_state)`, reading the holder's `+$7D` still 0, sends it to state 1
 on its next update -- a contact the player can repeat every other update
 without ever holding (the autoplay AI did, for 60 s, against a Nora 3 px
 behind it).
 
-`$A9BA (ordinary_enemy_contact_dispatch)`'s table sends 2 to state 2, 3 to state 5, and 4/5 to `$A9DC`: state 3
+`$A9BA (ordinary_enemy_contact_dispatch)`'s table sends 2 to state 2, 3 to state 5, and 4/5 to `$A9DC (ordinary_enemy_contact_object_hit)`: state 3
 (knockdown) less the attacker's `+$34` (2 for a slot below `$FFC900 (object_pool_c900)`), or
 state 4 for the pepper. So a swung weapon knocks an enemy down outright, and a
 walking box already on his body takes the hold even through his own attack.
@@ -908,7 +908,7 @@ three (bat, pipe; then nine of recovery) or five (knife, bottle).
   to `$0100`. Police-special prep also forces `$0400` with health `$FFFF` for
   sweep removal — same state index, different intent.
 
-`$009C50` handles another airborne/grab reaction, including vertical launch and collision tests. `$A04A (ordinary_enemy_held_state)` dispatches responses from the interacting player's `$7D` state. `$00A0C2` positions an enemy relative to a holding/throwing player and selects facing/animation.
+`$9C50 (ordinary_enemy_hit_launch)` handles another airborne/grab reaction, including vertical launch and collision tests. `$A04A (ordinary_enemy_held_state)` dispatches responses from the interacting player's `$7D` state. `$A0C2 (ordinary_enemy_place_at_holder)` positions an enemy relative to a holding/throwing player and selects facing/animation.
 
 Death accounting is centralized:
 
@@ -1443,15 +1443,15 @@ then every object. `$16DA0 (antonio_state1_active_combat)` does, in order:
 
 | `+$67` | Handler | What it does |
 | ---: | --- | --- |
-| 0 | `$16F96` | near: back off 1.5 px/update for `$20` updates, lane from `$179AC (later_boss_lane_step_from_delta)`; far: stop, then the pose (`+$50 >= $C0`) or the lane approach |
-| 1 | `$16FFE` | the pose (animation `$2C`) for `$1C` updates, then a 1 px/update walk -- toward from `$80` out, away inside it |
-| 2 | `$1703E` | that walk (`$28`), `$1C` updates, the lane wobbling by `$17A6E`; then the lane approach |
+| 0 | `$16F96 (antonio_tactical0_back_off)` | near: back off 1.5 px/update for `$20` updates, lane from `$179AC (later_boss_lane_step_from_delta)`; far: stop, then the pose (`+$50 >= $C0`) or the lane approach |
+| 1 | `$16FFE (antonio_tactical1_pose)` | the pose (animation `$2C`) for `$1C` updates, then a 1 px/update walk -- toward from `$80` out, away inside it |
+| 2 | `$1703E (antonio_tactical2_walk)` | that walk (`$28`), `$1C` updates, the lane wobbling by `$17A6E (antonio_lane_wobble)`; then the lane approach |
 | 3, 4 | `$1705C`, `$170B8` | stand (`$24`), then walk toward; reached only from tactical 2 with `+$50 < $14`, which "far" excludes |
-| 5 | `$170E4` | lane walk 1 px/update toward the target; `+$52 < $14` starts the wind-up |
-| 6 | `$17120` | the throw (`$30`): `$24` updates standing still; its frame 2 launches the boomerang (see "Boomerang linked object") |
-| 7 | `$17132` | after the throw (`$34`); a target that turned its back within `$E0` and `$14` of lane gets the dash; otherwise he waits on the boomerang -- walks toward the lane it homes on, catches it within 8 px of his hand, and is back in tactical 0 once it is gone |
-| 8 | `$16F68` | the dash: on while `+$50 >= $28` (or inside it with `+$52 < $10`), off at `$E0`; lane homing by `$1797E (later_boss_lane_home)`, 4/2/1/0 px at `+$52` of `$20`/`$10`/`$08`/less |
-| 9 | `$16F56` | the walk back on screen, `+$5C` updates |
+| 5 | `$170E4 (antonio_tactical5_lane_walk)` | lane walk 1 px/update toward the target; `+$52 < $14` starts the wind-up |
+| 6 | `$17120 (antonio_tactical6_throw)` | the throw (`$30`): `$24` updates standing still; its frame 2 launches the boomerang (see "Boomerang linked object") |
+| 7 | `$17132 (antonio_tactical7_wait_boomerang)` | after the throw (`$34`); a target that turned its back within `$E0` and `$14` of lane gets the dash; otherwise he waits on the boomerang -- walks toward the lane it homes on, catches it within 8 px of his hand, and is back in tactical 0 once it is gone |
+| 8 | `$16F68 (antonio_tactical8_dash)` | the dash: on while `+$50 >= $28` (or inside it with `+$52 < $10`), off at `$E0`; lane homing by `$1797E (later_boss_lane_home)`, 4/2/1/0 px at `+$52` of `$20`/`$10`/`$08`/less |
+| 9 | `$16F56 (antonio_tactical9_walk_back)` | the walk back on screen, `+$5C` updates |
 
 Tacticals 1, 2, 4, 5 and 7 hand a near target straight back to tactical 0,
 so everything from 1 to 7 happens only with the target 120 px or more away:
@@ -1495,7 +1495,7 @@ that meets his leaning body -- 22 px out on frames 1-2, 40 px on frames 3-6
 
 Whether any of that is tested at all is read off the *player*. `$AA34 (test_contact_attackers_and_players)`
 skips a player whose `+$59` bit 1 is set -- every hit reaction sets it
-(`$333E (resolve_player_hit_or_ko)`, `$33EC`, `$3468`, `$34CA`) and the floor
+(`$333E (resolve_player_hit_or_ko)`, `$33EC`, `$3468 (player_hit_reaction_light)`, `$34CA (player_start_knockdown_flight)`) and the floor
 landing `$3F24` clears it, so a knocked-down player is not kicked again --
 and tests no contact at all while the player's `+$7C` bit 0 still holds a
 contact code not yet consumed. The player's boxes are the ones `$4140 (player_cache_boxes)`
@@ -1508,12 +1508,12 @@ hit reaction, and a walk held into the camera's left edge took the hold
 2 px short of where the clamped walking box reaches.
 
 **Held** (`$17CF2 (later_boss_held_dispatch)`, jump table at `$17D10`, indexed by the holder's `+$7D`):
-0 and 8 release him (`$17D3E`: straight to primary 1 where he stands); 1 is
-the front hold (`$17D54`, placed by `$17D76`'s `$28` -- 40 px in front of the
-holder, on its lane; Souther's entry is `$20`); 2 the back hold (`$17D7C`);
+0 and 8 release him (`$17D3E (later_boss_held_released)`: straight to primary 1 where he stands); 1 is
+the front hold (`$17D54 (later_boss_held_front)`, placed by `$17D76`'s `$28` -- 40 px in front of the
+holder, on its lane; Souther's entry is `$20`); 2 the back hold (`$17D7C (later_boss_held_back)`);
 3 a knee (2); 4 the third knee (3, plus the knockback flag); 5 thrown
-(`$17DB6`, primary 6); 6 the suplex (`$17E52`, primary 7); 7 the throw
-(`$17E96`, primary 8); 9 nothing.
+(`$17DB6 (later_boss_held_thrown)`, primary 6); 6 the suplex (`$17E52 (later_boss_held_suplexed)`, primary 7); 7 the throw
+(`$17E96 (later_boss_held_thrown_blaze)`, primary 8); 9 nothing.
 
 Taken together there is one geometry that is kick-proof and grab-ready by
 construction: **8 to 16 px above his lane**. autoplay's `ai/antonio.py`
@@ -1530,7 +1530,7 @@ plus raw object dumps):
   `$66`/`$67`); B there is the suplex `$68`/`$69`, 5 damage, and it drops him
   into primary `$07`.
 - While held, Antonio's primary byte `+$30` reads **`$04`** — the same value
-  as the shared later-boss hit reaction (`$164CA`). There is no separate
+  as the shared later-boss hit reaction (`$164CA (later_boss_state4_held)`). There is no separate
   "grabbed" primary for this path: `$06`-`$09` are only reached by the throw
   itself. So the boss object alone cannot distinguish "recovering from a
   punch" from "in the player's hands".
@@ -1601,7 +1601,7 @@ The "catch check" and "attached timer" names predate this decode; the
   `lea $64(a0),a1`, `$17A94 (later_boss_measure_x)`, `$17B2C (later_boss_measure_lane)`, `move.w $14(a1),$52(a0)` is meant to
   aim its return at the target's lane, but `lea` leaves `a1` pointing into
   the boomerang itself, so `+$52` becomes its own `+$78` word -- 0 in a slot
-  that `$171F8` cleared whole -- and `+$61` that word's side of its lane.
+  that `$171F8 (clear_128_bytes_at_a2)` cleared whole -- and `+$61` that word's side of its lane.
   State 2. Out, it travels 217 px past the launch point in 31 moving updates
   and dives 46 px down the street (52 at the bottom of the arc, 24 in).
 - **Back** (`$17320 (antonio_boomerang_catch_check_b)`): the same contact test, the X speed building `0.4375`
@@ -1616,7 +1616,7 @@ The "catch check" and "attached timer" names predate this decode; the
 Its flying animations `$40`/`$42` cycle four boxes, one update each -- X
 `-4..22`, `-18..18`, `-20..6`, `-20..16` for `$40`, mirrored for `$42`, lane
 `-8..+8`, the same box for attack and body -- and the riding animations
-`$38` to `$3E` have none. Tactical 7 (`$17132`), past its near and
+`$38` to `$3E` have none. Tactical 7 (`$17132 (antonio_tactical7_wait_boomerang)`), past its near and
 turned-back checks, waits on it: while it returns he walks his lane 1 px an
 update toward its `+$52` and catches it when his hand, `$18` in front of
 him, is within 8 px of it -- the object is cleared and he is back in
@@ -1654,10 +1654,10 @@ table at `$15E84` via the shared `$15848`:
 | `$00` | `$15E9A (souther_state0_init)` | one-shot init |
 | `$01` | `$15EDA (souther_state1_active_combat)` | active combat, family-specific |
 | `$02` | `$16118 (souther_state2_claw_commit)` | committed claw, family-specific |
-| `$03` | `$163D0` | shared hit reaction |
-| `$04` | `$164CA` | shared recovery |
-| `$05` | `$164FC` | shared lethal gate |
-| `$06`-`$09` | `$1659A`, `$16702`, `$168CC`, `$16B88` | shared grabbee/throw/airborne |
+| `$03` | `$163D0 (later_boss_state3_hit_reaction)` | shared hit reaction |
+| `$04` | `$164CA (later_boss_state4_held)` | shared: held by a player (the held dispatch `$17CF2 (later_boss_held_dispatch)` runs here) |
+| `$05` | `$164FC (later_boss_state5_floor_or_death)` | shared: on the floor after a knockdown, or the death |
+| `$06`-`$09` | `$1659A (later_boss_state6_thrown)`, `$16702 (later_boss_state7_suplexed)`, `$168CC (later_boss_state8_thrown_blaze)`, `$16B88 (later_boss_state9_object_stun)` | shared grabbee/throw/airborne |
 | `$0A` | `$16A60 (later_boss_police_special_reaction)` | shared police-special reaction |
 
 Entries `$03`-`$0A` are byte-identical to Antonio's table at `$16CF4` and the
@@ -1938,7 +1938,7 @@ the walking frame's box out therefore takes a hold even through a claw that is
 already swinging, as long as that box reaches his leaning body first.
 `loc_17B8C` accepts the grab in his primaries `$01`, `$02` and `$04`, and a set
 `+$66` blocks the commit. A strike is the opposite case: `+$34` non-zero turns
-the same contact into a hit, and the hitstun `$163D0` buys is a state whose
+the same contact into a hit, and the hitstun `$163D0 (later_boss_state3_hit_reaction)` buys is a state whose
 collision is not processed, so it cannot be grabbed from.
 
 **Holding him.** `$3266 (player_resolve_grab_contact)` takes a front hold `$60` when the two face each other
@@ -2039,9 +2039,9 @@ players and the objects).
 | Primary | Handler | Behaviour |
 |---:|---:|---|
 | `$00` | `$144E0 (abadede_init)` | creates `$31`, stats, then primary 1 |
-| `$01` | `$145EC (abadede_approach_state)` | approach: substate 0 `$145F8` aims, 1 `$14616` walks |
+| `$01` | `$145EC (abadede_approach_state)` | approach: substate 0 `$145F8 (abadede_approach_setup)` aims, 1 `$14616 (abadede_approach_walk)` walks |
 | `$02` | `$14656 (abadede_pause_decide_state)` | the pause, then the decision |
-| `$03` | `$146F0 (abadede_retreat_state)` | retreat: 0 `$146FC` aims, 1 `$1472E` walks away |
+| `$03` | `$146F0 (abadede_retreat_state)` | retreat: 0 `$146FC (abadede_retreat_setup)` aims, 1 `$1472E (abadede_retreat_walk)` walks away |
 | `$04`/`$05` | `$1477A (abadede_strike_shake_a_state)`/`$147A6 (abadede_strike_shake_b_state)` | a strike landed: the shake (no contact test), then primary 3 |
 | `$06` | `$14B0E (abadede_knocked_down_state)` | knocked down (a heavy hit, the police, a lethal blow): flight, floor, then `$0A` or the death |
 | `$07` | `$14BDC (abadede_charge_state)` | the charge: 0 set-up, 1 the run, 2 the brake, 3 the punch |
@@ -2068,14 +2068,14 @@ players and the objects).
 - **State 3** walks away from the target at 6 px an update, facing it, with
   no lane speed, for 20 updates or until `+$28` leaves `[$80, $1C0)`, then
   pauses again.
-- **State 7**: the set-up (`$14BEC`) turns a 12 px/update X velocity toward
+- **State 7**: the set-up (`$14BEC (abadede_charge_setup)`) turns a 12 px/update X velocity toward
   the target and zeroes the lane speed -- **the lane he starts on is the lane
   he keeps**, and nothing re-aims the run. Each run update (`$14C38 (abadede_state7_run_update)`) tests
   contact, then, while `|dx| >= $10`, steps and stops at a screen edge
   (`+$28` as the last render left it: `<= $80` running left, `>= $1C0`
   running right) into the pause with `+$54` = 1. Under `$10` the brake: 2
-  updates with no contact test (`$14CB4`), then the punch, animation `$14`,
-  for 15 updates (`$14CDC`), then primary 3.
+  updates with no contact test (`$14CB4 (abadede_charge_brake)`), then the punch, animation `$14`,
+  for 15 updates (`$14CDC (abadede_charge_punch)`), then primary 3.
 
 #### What touches a player
 
@@ -2098,7 +2098,7 @@ The contact codes (`$15504`):
 - **1, his box on the player**: in states 1 and 2 he takes the player
   (`+$7C`/`+$7D` = 1/2) into state 8's hold and throw; in the run it is a hit
   (`+$7D` = 1) for his `+$34`; in state 3 it is dropped (`+$7C` cleared). In
-  the punch `$14CDC` clears the target's `+$7C` right after the test, so **the
+  the punch `$14CDC (abadede_charge_punch)` clears the target's `+$7C` right after the test, so **the
   punch that ends the charge never lands on the player it targets**: the run's
   box is the charge's only damage.
 - **2, a strike on him** (counted only inside `[$78, $1C8)` of his screen X):
@@ -2118,14 +2118,14 @@ walking box can reach his body (19 px for Blaze, against his 12), and his
 12 px an update always lands in it against a standing player; only a strike
 reaches further (Blaze's punch box ends 68 px out) and meets the run first.
 
-His lethal tests (`$15632`, `$15094`, `$14A56`) subtract and branch `bgt` to
+His lethal tests (`$15632 (abadede_take_damage)`, `$15094 (abadede_thrown_bounce)`, `$14A56 (abadede_held_last_knee_launch)`) subtract and branch `bgt` to
 the living path: a health of exactly 0 is dead, and the knockdown hands him
 to `$0C`.
 
 #### Being held (`$1485C (abadede_held_state)`)
 
-Substate 0 (`$1486E`) stands him 24 px in front of the holder (`+$3E`, the
-last collider), facing it, with `+$54` = 40. Substate 1 (`$148C8`) counts
+Substate 0 (`$1486E (abadede_held_setup)`) stands him 24 px in front of the holder (`+$3E`, the
+last collider), facing it, with `+$54` = 40. Substate 1 (`$148C8 (abadede_held_read_holder)`) counts
 `+$54` down and dispatches the **holder's** `+$7D` through `$14992`. The
 holder writes its own `+$7D` from its action through the byte table at
 `$32F2 (player_hold_reaction_table)` (`$32D8 (player_write_hold_reaction)`): `$60` 1, `$66` 2, knees `$6A`/`$6C` 3, the third knee
@@ -2136,7 +2136,7 @@ crossovers `$76`/`$80` 9.
 |---:|---|
 | 0 (released) | primary 3, standing where the hold left him -- and his first contact test there is a fresh grab for a player walking back in |
 | 1, 2 | nothing |
-| 3 | the holder's `+$34` off his health, then 12 updates (substates 2-3, `$14A10`/`$14A42`) reading nothing, then substate 0 again (`+$54` back to 40) |
+| 3 | the holder's `+$34` off his health, then 12 updates (substates 2-3, `$14A10 (abadede_held_kneed_setup)`/`$14A42 (abadede_held_kneed_shake)`) reading nothing, then substate 0 again (`+$54` back to 40) |
 | 4 | 6 updates later the holder's `+$34`, and the knockdown |
 | 5, 7 | primary `$0E`, the throw's flight: 4 points on the landing |
 | 6 | primary `$0D`, then `$09` while the holder's `+$7D` stays 6: the suplex, 5 points |
@@ -2172,10 +2172,10 @@ charge loops.
 
 ### Bongo (`$57`, `$174E0 (bongo_update)`)
 
-Bongo uses the family-D table at `$174F4`: primary `$00` `$1750A` (init:
+Bongo uses the family-D table at `$174F4`: primary `$00` `$1750A (bongo_state0_init)` (init:
 ground `+$4C` from `+$18`, pair link, stats, animation set `$2EF62`), `$01`
-`$175BA` (approach), `$02` `$17682` (wind-up and charge), and the shared
-later-boss states `$03`-`$0A` (`$163D0`...`$16A60 (later_boss_police_special_reaction)`). `$174E0 (bongo_update)`
+`$175BA (bongo_state1_approach)` (approach), `$02` `$17682 (bongo_state2_charge)` (wind-up and charge), and the shared
+later-boss states `$03`-`$0A` (`$163D0 (later_boss_state3_hit_reaction)`...`$16A60 (later_boss_police_special_reaction)`). `$174E0 (bongo_update)`
 runs `$16AEC (later_boss_enter_police_special_reaction)` and `$16A1A (later_boss_consume_forced_reaction)`, clears
 his `+$34` -- he never deals damage with his own body -- and dispatches.
 Everything runs once per object update, 30 Hz (`$AD8E (update_objects_and_build_sprites)` waits a VBlank
@@ -2188,7 +2188,7 @@ turn `$30` (and their mirrored members, bit 1 of `+$08`) all show attack id
 The attack boxes in the set (`$B4`-`$B7`, `$C0`/`$C1`) belong to the shared
 thrown/knocked-down animations. His one weapon is the flame.
 
-#### State 1 (`$175BA`): face, approach, keep the lane gap
+#### State 1 (`$175BA (bongo_state1_approach)`): face, approach, keep the lane gap
 
 After `$1753A (bongo_select_target)`, `$17AF6 (later_boss_measure_x_and_side)` (`+$50`/`+$52` absolute X and
 lane distance, `+$60`/`+$61` target left/above -- it does *not* turn him),
@@ -2211,17 +2211,17 @@ contact test `$17B52 (later_boss_contact_test)`:
   keeps the frame index and the running countdown and changes only the
   reload and the latched boxes.
 
-#### State 2 (`$17682`): wind-up, launch, charge
+#### State 2 (`$17682 (bongo_state2_charge)`): wind-up, launch, charge
 
 The same preamble, then the tactical table at `$176AA`:
 
 | Tactical | Handler | Behaviour |
 |---:|---:|---|
-| 0 | `$176B4` | `+$68` from 5, drifting at state 1's last velocities; then animation `$28`, `+$68` = 5 |
-| 1 | `$176D6` | the same, then animation `$2C`, `+$68` = 10 |
-| 2 | `$176E6` | the same, then **the launch**: the flame (`$1781E (bongo_spawn_flame)`), sound `$B6`, X velocity 2 px/update on his facing, lane velocity `+$52 / (+$50 / 2)` in 8.8 (`divs.w`, so he would reach the target's lane as he reaches its X), capped at 6, toward the target's lane; animation `$04` |
-| 3 | `$17762` | the charge: both speeds + `$2000` (0.125) an update, capped at 6, the lane only while `+$52 >= 8`, each keeping its sign (`tst.w` of the high word) -- it never re-aims; with the target on his back side and `+$50 >= $50`, tactical 4 with `+$79` = `$14` |
-| 4 | `$177E2` | the run-out: 20 updates, or until his screen X `+$28` leaves `[$50, $1F0)`; then primary 1 facing the way he ran (`$177FE`), which the next update answers with the turn |
+| 0 | `$176B4 (bongo_tactical0_windup_a)` | `+$68` from 5, drifting at state 1's last velocities; then animation `$28`, `+$68` = 5 |
+| 1 | `$176D6 (bongo_tactical1_windup_b)` | the same, then animation `$2C`, `+$68` = 10 |
+| 2 | `$176E6 (bongo_tactical2_launch)` | the same, then **the launch**: the flame (`$1781E (bongo_spawn_flame)`), sound `$B6`, X velocity 2 px/update on his facing, lane velocity `+$52 / (+$50 / 2)` in 8.8 (`divs.w`, so he would reach the target's lane as he reaches its X), capped at 6, toward the target's lane; animation `$04` |
+| 3 | `$17762 (bongo_tactical3_charge)` | the charge: both speeds + 2000h (0.125) an update, capped at 6, the lane only while `+$52 >= 8`, each keeping its sign (`tst.w` of the high word) -- it never re-aims; with the target on his back side and `+$50 >= $50`, tactical 4 with `+$79` = `$14` |
+| 4 | `$177E2 (bongo_tactical4_run_out)` | the run-out: 20 updates, or until his screen X `+$28` leaves `[$50, $1F0)`; then primary 1 facing the way he ran (`$177FE`), which the next update answers with the turn |
 
 So the launch comes 21 updates after the `$B0` gate (1 + 5 + 5 + 10), and
 every charge ends past the target at a screen edge on a lane clamp -- the
@@ -2257,7 +2257,7 @@ His update's `$17B52 (later_boss_contact_test)` runs first: the player's attack 
 included) against his body -- the grab (code 3) when the player's `+$34` is
 clear, `+$4C` clear and heights within 8. The flame's test in the same pass
 then sees the grab's code in the player's `+$7C` and `$AA34 (test_contact_attackers_and_players)` tests nothing.
-The hold is the shared `$17D54`/`$17D7C` (front at `$17D76`'s 32 px out,
+The hold is the shared `$17D54 (later_boss_held_front)`/`$17D7C (later_boss_held_back)` (front at `$17D76`'s 32 px out,
 facing the holder; back at `$17DB0`'s 32 px, facing away). An **igniting**
 flame keeps being placed on him through the hold, so a front grab inside the
 first 12 updates after a launch is the flame's hit on the holder; a burning
@@ -2321,13 +2321,13 @@ Primary-state table at `$158D8` (absolute ROM addresses, high word forced to
 
 | `+$30` | Address | Role |
 |---:|---:|---|
-| `$00` | `$158EE` | One-shot init (link pair, stats, anim, first target) |
+| `$00` | `$158EE (onihime_yasha_state0_init)` | One-shot init (link pair, stats, anim, first target) |
 | `$01` | `$159C2 (onihime_yasha_state1_active_combat)` | **Active combat** — approach / backflip / grab setup |
 | `$02` | `$15D0C (onihime_yasha_state2_commit)` | **Committed**: the flying kick, or the throw of a grabbed player |
-| `$03` | `$163D0` | Shared hit reaction / recovery entry |
-| `$04` | `$164CA` | Shared recovery continuation |
-| `$05` | `$164FC` | Shared lethal / death gate |
-| `$06`–`$09` | `$1659A`…`$16B88` | Shared grabbee / throw / airborne cleanup paths |
+| `$03` | `$163D0 (later_boss_state3_hit_reaction)` | Shared hit reaction / recovery entry |
+| `$04` | `$164CA (later_boss_state4_held)` | Shared: held by a player |
+| `$05` | `$164FC (later_boss_state5_floor_or_death)` | Shared: on the floor after a knockdown, or the death |
+| `$06`–`$09` | `$1659A (later_boss_state6_thrown)`…`$16B88 (later_boss_state9_object_stun)` | Shared: thrown, suplexed, Blaze's throw, and the stun of a carried or thrown object |
 | `$0A` | `$16A60 (later_boss_police_special_reaction)` | Shared police-special reaction (fixed −10 HP) |
 
 Family-specific AI lives almost entirely in states `$00`–`$02`. States `$03+`
@@ -2354,7 +2354,7 @@ flowchart TD
     PS --> SH
 ```
 
-#### Initialization (`$158EE`)
+#### Initialization (`$158EE (onihime_yasha_state0_init)`)
 
 ```text
 function onihime_yasha_init(boss):
@@ -2651,7 +2651,7 @@ the top. With a weapon in hand the chord is action `$4A` (`$4C` for Adam) --
 the same animation, box and damage. Every live frame's descriptor carries hit
 property 1, which `$AAA0 (resolve_enemy_player_contact)` ORs into the twin's `+$37`: the strike is a
 **knockdown**. `$17C36 (boss_apply_pending_damage)` applies it on the twin's *next*
-update: 5 px an update away from the attacker with `+$24` = -5, `$163D0`'s
+update: 5 px an update away from the attacker with `+$24` = -5, `$163D0 (later_boss_state3_hit_reaction)`'s
 gravity of 1.0 and one bounce (`+$24` = -3): **90 px in 18 updates**, 30
 updates in state 3, 8 more getting up in state 5 (which sets `+$4B` bit 0),
 none of it with a box. Blaze's body box moves *behind* her for the chord
@@ -2685,7 +2685,7 @@ Key interactions with the shared framework:
 
 - **Forced reactions** `$16A1A (later_boss_consume_forced_reaction)`: if `$FFFA53 (boss_forced_reaction_flags)` is set, a living twin outside
   states `$00` and `$03`–`$09` is forced into the reaction path (3 px an
-  update back, `+$24` = -5). `$9494` sets it to 3 when a player respawns
+  update back, `+$24` = -5). `$9494 (knock_down_ordinary_enemies_for_respawn)` sets it to 3 when a player respawns
   (`$1E0E (player_spawn_or_respawn)`), so a respawn knocks both twins down. Pair role
   selects which bit of the flag byte is consumed, so both twins are not always
   yanked on the same frame.
@@ -2757,7 +2757,7 @@ back.
 | Back attack damage | 3 | player `+$34` while `$20` runs (Axel: 10 damaging frames from frame 3; per-character chord timing in `controls-and-input.md`) |
 | Back attack box `+$64` | Axel X −40..−8, Y ±8 | direct read of the attack box (`+$70` is the body box) |
 | Punch reach vs a twin | **28–52 px** | teleport sweep: miss 8/12/16/20/24, hit 28…52, miss 56+ |
-| Twin health at the encounter | 22 | `+$32` -- 32 on Normal (`$17EDC (boss_init_combat_stats)`); a player's respawn (`$9494`) was recorded taking 10 from each twin on the same frame |
+| Twin health at the encounter | 22 | `+$32` -- 32 on Normal (`$17EDC (boss_init_combat_stats)`); a player's respawn (`$9494 (knock_down_ordinary_enemies_for_respawn)`) was recorded taking 10 from each twin on the same frame |
 | Twin contact damage | 32 of an 80 HP bar | player health delta on a landed throw |
 
 **Correction:** earlier revisions drew two consequences from this sweep that
@@ -2880,7 +2880,7 @@ its fraction kept.
 | `$0D` | `$1344A (mr_x_stateD_suplexed)` | follows the holder's frame; on its frame 3 the slam, 10 updates later the knockdown and 5 points |
 | `$0E` | `$13808 (mr_x_stateE_dying)` | death: flight, bounces, the fade and the stopped clock |
 
-A respawn landing (`$9494` sets bit 0 of `$FFFA53 (boss_forced_reaction_flags)`)
+A respawn landing (`$9494 (knock_down_ordinary_enemies_for_respawn)` sets bit 0 of `$FFFA53 (boss_forced_reaction_flags)`)
 knocks him down through `$13FB4 (mr_x_knockdown_launch)` unless he is down,
 held or dead.
 
@@ -3158,7 +3158,7 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$AB88 (test_axis_overlap_from_shape)` | Tests one axis of a shape record against the box at a2: inclusive, d7 = 1 on overlap |
 | `$AD18 (probe_floor_at_x_offset)` | probe_floor_at_object_offset with no lane or height offset; d1 is the X offset |
 | `$AA22 (resolve_object_contact)` | Runs the contact test $AA34; on a hit writes +$3E here and +$7E, +$7C on the other object; Z set when there is none |
-| `$A9BA (ordinary_enemy_contact_dispatch)` | resolve_object_contact, then the table at $A9C8 by contact result |
+| `$A9BA (ordinary_enemy_contact_dispatch)` | resolve_object_contact, then the contact result (1-5) through the table at $A9C8 |
 | `$ABF8 (test_attacker_shape_box_overlap)` | Box overlap test used by resolve_enemy_registered_attacker_contact |
 | `$AD04 (test_target_body_box_overlap)` | Tests a shape against the +$70 body box of the target in +$42; d7 = 0 when the box is empty |
 | `$A56C (object_update_screen_position)` | Writes +$28 and +$2C from world position, cam_x and camera_y unless +$01 bit 1 is set |
@@ -3166,8 +3166,8 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$96C0 (enemy_set_action_facing_target)` | Sets the facing in d0 from the target in +$42, stores it in +$08 and starts the animation; flags from the facing bit |
 | `$969E (enemy_set_action_facing_attacker)` | As enemy_set_action_facing_target for the attacker in +$3E, following a player holder or a weapon owner |
 | `$9842 (ordinary_enemy_vector_abs_deltas)` | Reduces X and lane deltas to absolute values with sign bits in d2 for ordinary_enemy_vector_to_velocity |
-| `$92C8 (ordinary_enemy_floor_contact_gate)` | Floor probe; returns when clear and otherwise goes to the wall-contact path, stepping X back on a result of 3 |
-| `$92D0 (ordinary_enemy_floor_contact_reaction)` | The contact part of ordinary_enemy_floor_contact_gate, without the probe |
+| `$92C8 (ordinary_enemy_apply_floor_belt)` | Floor probe; with no floor attribute returns, on a belt moves him 1 px right (attribute 2) or left (attribute 3, returning d7 = 1) |
+| `$92D0 (ordinary_enemy_fall_or_apply_floor_belt)` | Floor probe; with no floor under him goes to enemy_apply_gravity_and_land, otherwise the belt step of ordinary_enemy_apply_floor_belt |
 | `$973E (enemy_apply_gravity_and_land)` | Adds $12000 to +$24 up to $100000, moves +$18, handles pits and the landing, deregisters and enters state $0600 at the bottom |
 | `$9654 (enemy_aim_at_target_offset)` | Stores the walk goal in +$60/+$62 from the target and offsets +$66/+$68, reflected at the lane limits |
 | `$9648 (enemy_aim_at_target_lane)` | Stores the walk goal from the target lane and the +$66 X offset |
@@ -3192,7 +3192,7 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$AA34 (test_contact_attackers_and_players)` | Tests a0 first against enemy_attacker_list and then against the active players; the contact test of resolve_object_contact |
 | `$AC78 (test_axis_overlap_two_shapes)` | Tests one axis between two shape records; d7 = 1 on overlap |
 | `$E7B0 (signal_type24_contact_wrapper)` | Signal contact: a target in action $5C sends him to state $0D; his own box on a free player at a height within 8 is his hold, state $0C |
-| `$949E (kill_ordinary_enemies_and_release_players)` | Sets the players +$7D to 5 and status_bitfield_1 to $C, and puts every ordinary enemy of the first 32 slots not already dying into state $0300 with health $FFFF |
+| `$949E (kill_ordinary_enemies_and_release_players)` | Sets the players' +$7D to 5 and status_bitfield_1 to $C, and gives every ordinary enemy of the first 32 slots that is shown, initialised and not already dying a negative health in state $0300 |
 | `$9D16 (ordinary_enemy_death_state)` | State 6 of the ordinary enemies: death |
 | `$A04A (ordinary_enemy_held_state)` | State 5 of the ordinary enemies: held by a player |
 | `$A43E (ordinary_enemy_pepper_state)` | State 4 of the ordinary enemies: pepper freeze and scripted hold |
@@ -3223,7 +3223,7 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$E0EC (garcia_far_head_box_check)` | From 48 px away on X runs garcia_head_box_start_attack |
 | `$FFE102 (secondary_cam_x)` | Tests box $12, or $13 on the other facing, on the target and enters state $0A00 on a hit |
 | `$F544 (jack_spawn_juggle)` | Creates the type $28 juggle object at state $0500 with this Jack in +$42 |
-| `$F93C (haku_ro_type2a_aim_past_screen_centre)` | Sets the walk goal to the target lane and, with +$40 = 2, 96 px past the screen centre on his far side, recording the side in +$77 |
+| `$F93C (haku_ro_type2a_aim_past_screen_centre)` | Sets the walk goal to the target lane and an X off the screen centre: variant 2 goes 96 px past it on his far side and records the side in +$77; the others take $A0 (variant 0) or $80 on the side recorded by the leader in +$70 |
 | `$F996 (haku_ro_type2a_check_crossed_centre)` | Enters state $1000 when he has crossed the screen centre from the side in +$77 |
 
 ## Boss helpers identified from the call map
@@ -3233,7 +3233,7 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | Routine | What it does |
 | --- | --- |
 | `$16A1A (later_boss_consume_forced_reaction)` | Consumes boss_forced_reaction_flags for this boss in the update of types $55-$58 and leaves its caller when the primary state permits the reaction |
-| `$163B0 (souther_clear_attack_link_state)` | For primaries from 3 clears +$6D, and +$67 with +$01 bit 2 set outside primary 9 |
+| `$163B0 (souther_clear_attack_link_state)` | For primaries from 3 clears +$6D and, outside primary 9, also clears +$67 and sets +$01 bit 2 |
 | `$162C4 (souther_measure_target_side_and_lane)` | Measures X distance, whether the target faces him and absolute lane distance into d1, d5 and d3 |
 | `$17AF6 (later_boss_measure_x_and_side)` | Writes absolute X distance to +$50 and the side to +$60, then later_boss_measure_lane |
 | `$179AC (later_boss_lane_step_from_delta)` | Picks the lane velocity step from +$52 and +$61 |
@@ -3244,8 +3244,8 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$154E0 (abadede_contact_reaction)` | Abadede contact test: stores a player attacker in +$5C and dispatches by contact result through the table at $15504 |
 | `$1569C (abadede_sync_linked_sprite)` | Copies his position to the type $31 sprite in +$50 plus the d0 offset of table $35054 |
 | `$156E0 (abadede_sync_facing_from_velocity)` | Sets +$09 bit 1 on him and the linked sprite from the X velocity sign |
-| `$1573C (abadede_init_linked_sprite_pose)` | Sets his and the linked sprite animation to their base pose with tile word $225C |
-| `$1588A (later_boss_start_action_mirrored)` | Sets the facing bit from +$60 and starts the type-indexed animation set |
+| `$1573C (abadede_init_linked_sprite_pose)` | Starts his animation 6 with tile word $225C, shows the linked sprite on animation 2 in state 1 and syncs it to him |
+| `$1588A (later_boss_start_action_mirrored)` | Sets the mirror bit of the animation index d0 when +$60 is set (the target on the left) and starts it from the type's animation set of the table at $158B4 |
 | `$15898 (later_boss_restart_current_action)` | Restarts +$08 from the animation set table indexed by type minus $55 |
 | `$166D4 (boss_death_sound_and_stop_clock)` | Plays the type death sound and raises stop_clock for the last boss of a section |
 | `$B36C (abadede_update_trampoline)` | Type $30: jmp abadede_update |
@@ -3262,7 +3262,7 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$B3B4 (onihime_yasha_update_trampoline)` | Type $58: jmp onihime_yasha_update |
 | `$145C4 (abadede_find_partner)` | Scans the first 32 object slots for another type $30 and stores it in +$52, or 0 |
 | `$15604 (abadede_start_knockback)` | Sets the upward velocity, the X velocity and the +$5E drag away from the attacker in +$5C |
-| `$15878 (later_boss_start_action_unmirrored_side)` | Sets the facing bit when +$60 is clear and starts the type-indexed animation; the opposite of later_boss_start_action_mirrored |
+| `$15878 (later_boss_start_action_unmirrored_side)` | Sets the mirror bit of the animation index d0 when +$60 is clear (the target on the right) and starts it from the type's animation set of the table at $158B4 |
 | `$15888 (later_boss_start_base_action)` | later_boss_start_action_mirrored with action 0 |
 | `$16542 (later_boss_award_score)` | Reads the score from the type-indexed table $16564 and adds it to the player in +$70 through add_bcd_score_value |
 | `$16886 (later_boss_load_type_offsets)` | Loads a signed pair from the type-indexed table $168A4 into d1 and d2 |
@@ -3270,7 +3270,7 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$178D0 (bongo_place_flame)` | Places the flame 20 px ahead of him on his side, 4 lanes down, and sets its height from his frame |
 | `$12F14 (mr_x_office_scene_type34_update)` | Type $34 update |
 | `$12FB4 (mr_x_type38_update)` | Type $38 update |
-| `$14214 (mr_x_projectile_bounce_update)` | Shared by bullets and shells: on-screen test, stops lane motion at the top, bounces on the floor at height $A0 with halved speed, and moves |
+| `$14214 (mr_x_projectile_bounce_update)` | Shared by bullets and shells: d7 = 1 when off screen or when the bounce is under 1 px; otherwise stops the lane motion above screen Y $80, bounces on the floor at height $A0 with halved speed, adds the gravity +$62 and moves |
 | `$14318 (abadede_variant_type39_update)` | Type $39 update |
 | `$1566E (abadede_steer_velocity_toward_target)` | Reads the target signs from bespoke_boss_target_signs and turns his X and lane velocity to match |
 | `$15794 (abadede_linked_sprite_update)` | Type $31 update |

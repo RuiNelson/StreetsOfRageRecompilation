@@ -763,6 +763,9 @@ Generated and hand-written subroutines must trace their true dynamic entry.
 Do not launch or leave the game unbounded for analysis unless asked; follow
 **Run and observe safely** below.
 
+A full game is about 127 million events (several GB). `--call-log` accepts a named pipe: a reader that only counts
+identical lines keeps a whole playthrough in a few thousand rows, and `call_map.py`'s `CallMap` takes the counts.
+
 ### Collapsing logs with `tools/call_map.py`
 
 `tools/call_map.py` consumes one or more call-log CSV files (typed
@@ -1011,6 +1014,18 @@ delivery. When a code label changes, also regenerate the derived views:
 ```
 
 Never rename symbols directly in `output/sor.asm` or generated `SoR-XXX.cpp`.
+
+Three things about labels that the tools do not say:
+
+- **Every routine the recompiler emits has a name** (2026-11-15): the only `sub_XXXXXX` left in `generated/SoR.hpp` is `sub_000208`, which is `main`. A new one
+  means a new entry point; name it from its table (`<object>_stateN`, `<boss>_stateN_<what>`, `<table>_entry`).
+- `output/sor.asm` lists only what `aux_addresses.txt` reaches. The recompiler also follows the state and jump
+  tables, so 82 of its routines were not in the listing, labelled or not. To read them, disassemble into a scratch
+  file with an aux file that adds the `labels.csv` addresses and the entry addresses of `generated/SoR.hpp`. A label
+  on a `loc_` adds no function: the declarations were the same 1765 before and after 35 of them.
+- A label at a round address makes the sync link every backticked constant of that value (`$2000` became the jump
+  kick's handler in two manuscripts). Write such a constant as `2000h`. Hand-written C++ that calls a generated
+  routine by its old name (`sub_01577c`) must be renamed with the label.
 
 ## Address conventions
 

@@ -227,7 +227,7 @@ void StreetsOfRage::abadede_init_linked_sprite_pose(m_long /*entry_*/) {
 // ---------------------------------------------------------------------------
 // $01577C: the pair's animation start above, both velocities $6.0000, then the bounce.
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_01577c(m_long /*entry_*/) {
+void StreetsOfRage::abadede_walk_setup(m_long /*entry_*/) {
     traceEnter(0x0001577Cu);
     auto &c   = cpu();
     auto &mem = memory();
@@ -266,7 +266,7 @@ void StreetsOfRage::abadede_start_knockback(m_long /*entry_*/) {
 // ---------------------------------------------------------------------------
 // $015632: d0 taken from health (+$32); at zero or below the recoil starts in state 6 ($15604).
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_015632(m_long /*entry_*/) {
+void StreetsOfRage::abadede_take_damage(m_long /*entry_*/) {
     traceEnter(0x00015632u);
     auto &c   = cpu();
     auto &mem = memory();
@@ -289,7 +289,7 @@ void StreetsOfRage::sub_015632(m_long /*entry_*/) {
 // also d7), state 7 asks it to hold (+$7D = 1), anything else knocks the object to state 8 and the
 // attacker to grab 1 / follow-up 2.
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_01550e(m_long /*entry_*/) {
+void StreetsOfRage::abadede_contact_touch(m_long /*entry_*/) {
     traceEnter(0x0001550Eu);
     auto &c   = cpu();
     auto &mem = memory();
@@ -328,7 +328,7 @@ void StreetsOfRage::sub_01550e(m_long /*entry_*/) {
 // $015560: the reaction to a hard contact: the hit sound, state 4 (state 6 and the recoil when +$37 bit 0
 // was set), then the attacker's damage (+$34) from health through $15632.
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_015560(m_long /*entry_*/) {
+void StreetsOfRage::abadede_contact_struck(m_long /*entry_*/) {
     traceEnter(0x00015560u);
     auto &c   = cpu();
     auto &mem = memory();
@@ -351,14 +351,14 @@ void StreetsOfRage::sub_015560(m_long /*entry_*/) {
     }
     c.d[0] = mem.readByte(c.a[1] + 0x34u);
     tst(c, c.db(0), 8);
-    sub_015632();
+    abadede_take_damage();
 }
 
 // ---------------------------------------------------------------------------
 // $01559A: the object's next state (+$30) from the table at $155B2 by the attacker's follow-up (+$7D), unless
 // the table says -1.
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_01559a(m_long /*entry_*/) {
+void StreetsOfRage::abadede_contact_grabbed(m_long /*entry_*/) {
     traceEnter(0x0001559Au);
     auto &c   = cpu();
     auto &mem = memory();
@@ -383,7 +383,7 @@ void StreetsOfRage::sub_01559a(m_long /*entry_*/) {
 // a type above $0C, 1 for a $0C) from health, state 6 and the recoil; a type $0C attacker gives state $0F
 // instead.
 // ---------------------------------------------------------------------------
-void StreetsOfRage::sub_0155be(m_long /*entry_*/) {
+void StreetsOfRage::abadede_contact_object_hit(m_long /*entry_*/) {
     traceEnter(0x000155BEu);
     auto &c   = cpu();
     auto &mem = memory();
@@ -445,16 +445,16 @@ void StreetsOfRage::abadede_contact_reaction(m_long /*entry_*/) {
     const m_long target = kReactionJumpBase + sext16(c.dw(5));
     switch (target) {
     case 0x0001550Eu:
-        sub_01550e();
+        abadede_contact_touch();
         break;
     case 0x00015560u:
-        sub_015560();
+        abadede_contact_struck();
         break;
     case 0x0001559Au:
-        sub_01559a();
+        abadede_contact_grabbed();
         break;
     case 0x000155BEu:
-        sub_0155be();
+        abadede_contact_object_hit();
         break;
     default:
         unhandledDispatch(target);
