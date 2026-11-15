@@ -354,6 +354,9 @@ void StreetsOfRage::select_menu_resolve_choice(m_long /*entry_*/) {
         return;
     }
     if (cursor <= kCursorAiAssist) {
+        // A new game replaces the saved one (user).
+        SoRCheckpoint::discard();
+        continueShown = false;
         cpu().setDw(0, cursor);
         const bool aiAssist = cursor == kCursorAiAssist;
         // 1 PLAYER AI ASSIST is the ROM's 2-player game, with the AI on P2.

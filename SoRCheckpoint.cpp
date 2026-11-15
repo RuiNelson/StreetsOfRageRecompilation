@@ -477,6 +477,11 @@ bool save() {
     return true;
 }
 
+void discard() {
+    if (available())
+        erase();
+}
+
 bool beginContinue(SystemMemory &memory) {
     std::optional<Checkpoint> cp = read();
     erase(); // used once, and an unusable one is gone too

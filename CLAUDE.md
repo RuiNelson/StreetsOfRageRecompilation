@@ -327,6 +327,7 @@ The user's rules are in the workspace `CLAUDE.md`, **Checkpoint saves**.
   (`$4E14` and `$4E88` in C++). When the fade-in ends it sets the pipeline to `$00`: `$5F4` then runs as after a cleared
   wave. Not earlier: the fade copies the target palette, which would undo `$5F4`'s palettes.
 - **SAVE AND QUIT** leaves the way Start leaves the demo (`demo_mode` bit 7, fade, `game_state` 0).
+- **A new game deletes it**: `select_menu_resolve_choice` calls `discard` on 1 PLAYER, 2 PLAYERS and AI ASSIST. Checked live: the file there on the mode menu, gone at character select.
 - **Mr. X's room** (user: no saving there): `saveAllowed` is false from the first frame in round 8 with
   `camera_scripted_left_pan`, `final_section_gate_flags` bit 0 or `mr_x_offer_flag` set, until a round loads. Seen live:
   the pan starts right after the wave-5 gate (Onihime & Yasha) as the camera moves from `$200` into the room (`$80`).

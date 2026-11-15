@@ -37,6 +37,10 @@ bool save();
 /// deleted then too.
 bool beginContinue(SystemMemory &memory);
 
+/// The mode menu's 1 PLAYER, 2 PLAYERS and AI ASSIST: a new game deletes the checkpoint (user), so
+/// CONTINUE never brings back a game older than the one last started.
+void discard();
+
 /// Inside `spawn_round_players`, after the round has loaded: true when a checkpoint inside the round is
 /// being restored, and then it has put back the camera and the pipeline (the caller redraws the planes).
 bool restoreInsideRound(SystemMemory &memory);
