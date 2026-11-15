@@ -397,10 +397,10 @@ moved 80px of lane distance away.
 
 ### Not a lunge, and not shared
 
-`$F5F2 (ordinary_enemy_special_lunge_lane_setup)`,
-`$F64A (ordinary_enemy_special_lunge_distance_gate)` and
-`$F6BC (ordinary_enemy_special_lunge)` are Jack's states `$08`-`$0A`, and only
-his: Nora's table ends before them (above). Nor is `$F6BC (ordinary_enemy_special_lunge)` a lunge. It does
+`$F5F2 (jack_lane_setup_state)`,
+`$F64A (jack_distance_gate_state)` and
+`$F6BC (jack_diagonal_back_off_state)` are Jack's states `$08`-`$0A`, and only
+his: Nora's table ends before them (above). Nor is `$F6BC (jack_diagonal_back_off_state)` a lunge. It does
 write `+$1C`/`+$20` once, on entry, to `$0002C000`/`$00022000` (2.75 and 2.125
 px an update), but its X sign runs *away* from the target:
 
@@ -443,16 +443,16 @@ twelve bytes are the relative table of his `$28` helper (`$103A2 (jack_projectil
 | State | Handler | Role |
 | --- | --- | --- |
 | `$00` | `$937A (ordinary_enemy_activate)` | Activation |
-| `$01` | `$F2CE (ordinary_enemy_reselect_target_state)` | Re-select the target, then `$F2DE[+$40 & $0F]`: `$0C`, `$0D`, `$0F` or `$12` |
+| `$01` | `$F2CE (jack_reselect_target_state)` | Re-select the target, then `$F2DE[+$40 & $0F]`: `$0C`, `$0D`, `$0F` or `$12` |
 | `$02` | `$9B36 (ordinary_enemy_hit_reaction_dispatch)` | Hitstun (a grab still lands) |
-| `$03` | `$F2AC (ordinary_enemy_knockdown_trigger_state)` | Clears `+$52`, then the knockdown `$11` |
+| `$03` | `$F2AC (jack_knockdown_trigger_state)` | Clears `+$52`, then the knockdown `$11` |
 | `$04` | `$A43E (ordinary_enemy_pepper_state)` | Pepper freeze / scripted |
 | `$05` | `$A04A (ordinary_enemy_held_state)` | Held by a player |
 | `$06` | `$9D16 (ordinary_enemy_death_state)` | Death |
-| `$07` | `$F2BC (ordinary_enemy_blocked_delegate_state)` -> `$DBCC (ordinary_enemy_blocked_state)` | Lane dodge, facing the target every update |
-| `$08` | `$F5F2 (ordinary_enemy_special_lunge_lane_setup)` | Lane 8 or 56, then 40 px toward the target |
-| `$09` | `$F64A (ordinary_enemy_special_lunge_distance_gate)` | The X gate |
-| `$0A` | `$F6BC (ordinary_enemy_special_lunge)` | Diagonal back-off onto the target's lane |
+| `$07` | `$F2BC (jack_lane_dodge_state)` -> `$DBCC (ordinary_enemy_blocked_state)` | Lane dodge, facing the target every update |
+| `$08` | `$F5F2 (jack_lane_setup_state)` | Lane 8 or 56, then 40 px toward the target |
+| `$09` | `$F64A (jack_distance_gate_state)` | The X gate |
+| `$0A` | `$F6BC (jack_diagonal_back_off_state)` | Diagonal back-off onto the target's lane |
 | `$0B` | `$F728 (jack_aligned_throw_state)` | Aligned throw (both juggled axes) |
 | `$0C` | `$F55E (jack_juggle_approach_state)` | Juggle approach |
 | `$0D` | `$F4A6 (jack_retreat_to_screen_edge)` | Retreat to the screen edge |
@@ -472,10 +472,10 @@ batch, several two-player only) and personality 3 in round 5.
 - **0, approach and aligned throw.** `$F55E (jack_juggle_approach_state)` spawns his juggle (`$F544 (jack_spawn_juggle)`) if
   `+$52` bit 0 was clear, faces the target, and walks at 2 px an update to
   108 px on his side of it, on its lane (a 160-update timeout resets him).
-  `$F5F2 (ordinary_enemy_special_lunge_lane_setup)` then walks to lane 8 when the target is below lane `$20`, lane 56
-  otherwise, and 40 px toward it. `$F64A (ordinary_enemy_special_lunge_distance_gate)` gates on the X gap: past 64 px the
+  `$F5F2 (jack_lane_setup_state)` then walks to lane 8 when the target is below lane `$20`, lane 56
+  otherwise, and 40 px toward it. `$F64A (jack_distance_gate_state)` gates on the X gap: past 64 px the
   back-off `$0A`, 40-64 px a reset, closer a 40 px back-off at 3.5 px an
-  update and the gate again. `$F6BC (ordinary_enemy_special_lunge)`'s diagonal ends within 8 lanes of the
+  update and the gate again. `$F6BC (jack_diagonal_back_off_state)`'s diagonal ends within 8 lanes of the
   target (off screen, in `$07`), and `$F728 (jack_aligned_throw_state)` stands and throws.
 - **1, retreat and ranged throw.** `$F4A6 (jack_retreat_to_screen_edge)` walks to the screen edge behind
   him (`cam_x + $120` facing left, `cam_x + $20` facing right) over eight legs
@@ -3181,7 +3181,7 @@ Named from `call-map.sqlite` callers and read in `output/sor.asm`. The confidenc
 | `$93B4 (ordinary_enemy_init_accounting_selector)` | Writes +$39 from ordinary_enemy_accounting_selector_table by type and variant |
 | `$9406 (ordinary_enemy_init_art_base)` | Finds the resident art family in pal_correct and builds the tile word from it |
 | `$945A (ordinary_enemy_init_spawn_offsets)` | Fills the spawn metadata from +$41 and the approach offsets +$66/+$68 by type |
-| `$F7C0 (ordinary_enemy_special_lunge_contact)` | ordinary_enemy_contact_dispatch for the lunge; a negative result clears +$52 and returns d7 = -1 |
+| `$F7C0 (jack_contact_dispatch)` | ordinary_enemy_contact_dispatch for Jack's states; a negative result clears +$52 (his juggle latch) and returns d7 = -1 |
 | `$F482 (jack_abort_retreat_if_target_near)` | With the target within 64 px on X enters state $0700 and returns d7 = -1 |
 | `$DBCC (ordinary_enemy_blocked_state)` | Primary state shared by the ordinary types for a blocked enemy |
 | `$966 (select_deferred_spawn_family_art)` | Checks that an ordinary-enemy spawn record has its art family resident, or claims a free residency slot |

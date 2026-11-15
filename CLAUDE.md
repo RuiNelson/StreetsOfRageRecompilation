@@ -1016,6 +1016,7 @@ Three things about labels that the tools do not say:
 
 - **Every routine the recompiler emits has a name** (2026-11-15): the only `sub_XXXXXX` left in `generated/SoR.hpp` is `sub_000208`, which is `main`. A new one
   means a new entry point; name it from its table (`<object>_stateN`, `<boss>_stateN_<what>`, `<table>_entry`).
+- **Names and descriptions in `labels.csv`** (user, 2026-11-15): a generic prefix (`ordinary_enemy_`, `enemy_`, `object_`) only for code several types share; code of one type takes its prefix (`jack_`, `nora_type26_`), even when it sits in a shared-looking range. A description names a routine, never `sub_XXXX`; a bare `$ADDR` of a labelled routine or table is followed by its name.
 - `output/sor.asm` lists only what `aux_addresses.txt` reaches. The recompiler also follows the state and jump
   tables, so 82 of its routines were not in the listing, labelled or not. To read them, disassemble into a scratch
   file with an aux file that adds the `labels.csv` addresses and the entry addresses of `generated/SoR.hpp`. A label
