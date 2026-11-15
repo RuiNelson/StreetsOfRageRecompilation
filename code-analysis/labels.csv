@@ -1441,6 +1441,7 @@
 000022A4, player_hold_drop_unlinked_mr_x, "85% - While the held object +$4C is Mr. X (type $35) not in state $0A holding this player (+$5C), drops the hold and returns to standing; d7 = -1 when dropped"
 000022E0, player_back_hold_update, "95% - Player action $66 (back hold): the same checks, the held player's escape (+$37 bit 3) to $82, the crossover, the suplex on a punch press, else the hold-back release"
 00002332, player_back_hold_try_suplex, "95% - On a punch press starts the suplex $68 and reports reaction 4 to a held player; d7 = -1"
+0000235A, player_hold_release_step, "90% - Hold-release tail shared by player_front_hold_update and player_back_hold_update: while the stick is held back (+$54 bits 2/3 against the facing in +$8 bit 1) counts +$63 down, and on the frame it goes negative lets the held object +$4C go (+$7D = 5 on a type-1 body), clears +$7D and +$4C and returns to standing (action 2) or, carrying a weapon (+$60), to the armed walk $30"
 000023B4, player_throw_update, "95% - Player actions $62 and $7E (throw, counter throw): steps the animation and hands back to the ground control at frame 2"
 000023B8, player_throw_blaze_update, "95% - Player action $64 (Blaze's throw): as player_throw_update, ending at frame 3"
 000023D6, player_suplex_update, "95% - Player action $68 (suplex): steps the animation and at frame 4 switches to $70 to play it backwards"
