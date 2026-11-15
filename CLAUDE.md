@@ -796,10 +796,8 @@ Useful analysis views (addresses formatted as `$XXXXXX`):
 | `callsite_flow` | Exact source/callsite/target rows with labels |
 
 A source is the dynamic entry, so a tail jump shows the routine entered, not the one
-holding the callsite. The current map's log is gone and its grouped-owner sources were
-collapsed to the closest label (`resolve_player_death` calling `$3266`); the rows no entry
-could reach were repaired from the callsites' owners in `logCallFromReturn`, and metadata
-`repaired_source_events` counts them. Read the callsite in `output/sor.asm` before naming from a caller.
+holding the callsite (`player_death_update` calls `$9494`, whose callsite is in `player_spawn_or_respawn`).
+Read the callsite in `output/sor.asm` before naming from a caller.
 A type table's callees (`$AE30`) say nothing by their caller: name them from
 `$B236 (object_type_update_jt)`, as `object_typeNN_dispatcher` when only the type is known.
 A state handler has no caller in the log (`jmp` is not recorded): name it from its object's state table, as `<object>_stateN` when only the
@@ -809,11 +807,10 @@ binding is known; a label on a `loc_` changes the C++ `goto` name and `logCallFr
 static reachability weight. A routine present only via `labels.csv` is known
 but was not entered in the captured run.
 
-The generated `call-map.sqlite` artifact may be kept locally in this repository
-alongside the tool, but must remain ignored and unversioned. Regenerate it from
-the workspace-root `calls.csv` with the command documented in the root README.
-Do not stage call logs or the database unless the user explicitly requests
-versioning that exact artefact.
+`call-map.sqlite` is versioned here (user, 2026-11-15). The current one holds two autoplay sessions at
+`--turbo 6`, 201 million events: two players from round 1 to round 8, and one player from round 1 to the
+good ending. Label names are stored in it, so regenerate it when `labels.csv` changes; its logs were only
+ever counts, kept nowhere. Do not stage call logs.
 
 ## Manual subroutines
 
