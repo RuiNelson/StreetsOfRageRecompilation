@@ -1,7 +1,7 @@
 # Functions whose declarations/call sites remain generated, but whose bodies
 # are provided by hand-written C++ in SoRManualFunctions.cpp,
 # SoRControls.cpp, SoRInteractions.cpp, SoRMainMenus.cpp, SoRObjectRoutines.cpp,
-# SoRBossRoutines.cpp, SoRCheckpoint.cpp, SoRGameHUD.cpp, SoRRNG.cpp, or SoRSound.cpp.
+# SoRBossRoutines.cpp, SoRCheckpoint.cpp, SoRGameHUD.cpp, SoRRNG.cpp, SoRSound.cpp, or SoRSurvival.cpp.
 0003A2 # game_infinite_loop
 003028 # player_normal_attack_input (alt-controls pickup input hook)
 003084 # player_held_object_attack_input (alt-controls pickup input hook)
@@ -154,6 +154,7 @@
 00563E # hud_clear_p2_status_rows
 010CA8 # hud_tick_round_timer
 010CCC # hud_draw_round_timer_digits
+010DA6 # add_bcd_score_value
 010DCA # add_bcd_resource_value
 011090 # hud_write_plate_row
 0115CC # update_join_and_continue_hud
@@ -167,3 +168,6 @@
 # The round-clear tally's rows (SoRGameHUD.cpp): P2's "2UP" reads "COM" under AI ASSIST.
 01852C # round_clear_build_row_highlighted
 018532 # round_clear_build_row
+
+# EXTRA > SURVIVAL MODE (SoRSurvival.cpp): a defeated enemy is a point for the player who beat it.
+009E26 # ordinary_enemy_award_score

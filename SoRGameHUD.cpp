@@ -1,5 +1,6 @@
 #include "SoRCpuOps.hpp"
 #include "SoRRemoteInput.hpp"
+#include "SoRSurvival.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -381,6 +382,13 @@ void StreetsOfRage::update_score_hud_and_check_extra_life(m_long /*entry_*/) {
         cpu().a[1] = kLivesViaPointsP2;
     }
 
+    // SURVIVAL MODE: the score is the enemies beaten, one a point, and it gives no life.
+    if (SoRSurvival::active()) {
+        writeScoreTiles(cpu(), mem);
+        cpu().ssp += 4;
+        return;
+    }
+
     cpu().d[0] = 0;
     cpu().setDb(0, mem.readByte(cpu().a[1]));
     addWord(cpu(), 0, cpu().dw(0));
@@ -454,23 +462,18 @@ void StreetsOfRage::hud_clear_p2_status_rows(m_long /*entry_*/) {
 // X is cleared first; the result is in the BCD flags (C = X on a carry, Z cleared by a nonzero result).
 // Callers: a life or special added (a6 = a counter + 1), the life taken, the round timer (d7 = $0C, one a tick).
 // ---------------------------------------------------------------------------
-void StreetsOfRage::add_bcd_resource_value(m_long /*entry_*/) {
-    traceEnter(0x00010DCAu);
-    auto &mem = memory();
+namespace {
 
-    addWord(cpu(), 7, cpu().dw(7));
-    addWord(cpu(), 7, cpu().dw(7));
-    cpu().a[5] = kBcdTable + sext16(cpu().dw(7));
-    cpu().setCCR(0x04u);
-
-    cpu().a[5] -= 1;
-    const m_byte source = mem.readByte(cpu().a[5]);
-    cpu().a[6] -= 1;
-    const m_long target = cpu().a[6];
+// abcd -(a5), -(a6): the BCD sum of the two bytes and X, with the 68000's flags (Z only ever cleared).
+void abcdPredecrement(CPU68K &cpu, SystemMemory &mem) {
+    cpu.a[5] -= 1;
+    const m_byte source = mem.readByte(cpu.a[5]);
+    cpu.a[6] -= 1;
+    const m_long target = cpu.a[6];
     m_byte       dest   = mem.readByte(target);
 
-    int low  = (dest & 0x0F) + (source & 0x0F) + (cpu().flagX() ? 1 : 0);
-    int high = (dest >> 4) + (source >> 4);
+    int low   = (dest & 0x0F) + (source & 0x0F) + (cpu.flagX() ? 1 : 0);
+    int high  = (dest >> 4) + (source >> 4);
     int carry = 0;
     if (low > 9) {
         low -= 10;
@@ -481,12 +484,57 @@ void StreetsOfRage::add_bcd_resource_value(m_long /*entry_*/) {
         carry = 1;
     }
     dest = static_cast<m_byte>(((high & 0x0F) << 4) | (low & 0x0F));
-    cpu().setFlag(CPU68K::FlagC, carry != 0);
-    cpu().setFlag(CPU68K::FlagX, carry != 0);
+    cpu.setFlag(CPU68K::FlagC, carry != 0);
+    cpu.setFlag(CPU68K::FlagX, carry != 0);
     if (dest != 0)
-        cpu().setFlag(CPU68K::FlagZ, false);
-    cpu().setFlag(CPU68K::FlagN, (dest & 0x80u) != 0);
+        cpu.setFlag(CPU68K::FlagZ, false);
+    cpu.setFlag(CPU68K::FlagN, (dest & 0x80u) != 0);
     mem.writeByte(target, dest);
+}
+
+} // namespace
+
+void StreetsOfRage::add_bcd_resource_value(m_long /*entry_*/) {
+    traceEnter(0x00010DCAu);
+    auto &mem = memory();
+
+    addWord(cpu(), 7, cpu().dw(7));
+    addWord(cpu(), 7, cpu().dw(7));
+    cpu().a[5] = kBcdTable + sext16(cpu().dw(7));
+    cpu().setCCR(0x04u);
+    abcdPredecrement(cpu(), mem);
+    cpu().ssp += 4;
+}
+
+// ---------------------------------------------------------------------------
+// $010DA6 (add_bcd_score_value) — d7 (a table index, times 4) selects a long of the table at $10DDE; its three
+// low bytes are added in BCD to the three bytes before a6 (a score's end), from the last. On a carry out of
+// the top byte of a positive entry the score is held at 999900 (the long before a6's three bytes).
+// Callers: an enemy's score (ordinary_enemy_award_score), the score pickups, a boss's points, the round-clear tally.
+// ---------------------------------------------------------------------------
+void StreetsOfRage::add_bcd_score_value(m_long /*entry_*/) {
+    traceEnter(0x00010DA6u);
+    auto &mem = memory();
+
+    addWord(cpu(), 7, cpu().dw(7));
+    addWord(cpu(), 7, cpu().dw(7));
+    cpu().a[5] = kBcdTable + sext16(cpu().dw(7));
+    cpu().setCCR(0x04u);
+    abcdPredecrement(cpu(), mem);
+    abcdPredecrement(cpu(), mem);
+    abcdPredecrement(cpu(), mem);
+    if (cpu().flagC()) {
+        const m_byte top = mem.readByte(cpu().a[5] - 1u);
+        cpu().setFlag(CPU68K::FlagN, (top & 0x80u) != 0);
+        cpu().setFlag(CPU68K::FlagZ, top == 0);
+        cpu().setFlag(CPU68K::FlagV, false);
+        cpu().setFlag(CPU68K::FlagC, false);
+        if ((top & 0x80u) == 0) {
+            mem.writeLong(cpu().a[6] - 1u, 0x00999900u);
+            cpu().setFlag(CPU68K::FlagN, false);
+            cpu().setFlag(CPU68K::FlagZ, false);
+        }
+    }
     cpu().ssp += 4;
 }
 
@@ -663,6 +711,9 @@ void StreetsOfRage::update_join_and_continue_hud(m_long /*entry_*/) {
     if (mem.readByte(kP2OutOrContinueFlag) != 0)
         goto outP1;
     if (mem.readWord(kLevel) == 0x0007u)
+        goto outP1;
+    // SURVIVAL MODE: nobody joins a game under way (its record is for the players who started it).
+    if (SoRSurvival::active())
         goto outP1;
     if (mem.readByte(kDemoMode) == 0 && mem.readByte(kP2JoypadAbsent) != 0) {
         // A pad that is not there: only P2 already in (object type nonzero) leaves without drawing.

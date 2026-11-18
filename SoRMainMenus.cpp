@@ -1,12 +1,14 @@
 #include "SoRCheats.hpp"
 #include "SoRCheckpoint.hpp"
 #include "SoRControlsMenu.hpp"
+#include "SoRExtraMenu.hpp"
 #include "SoRInput.hpp"
 #include "SoRPause.hpp"
 #include "SoRPython.hpp"
 #include "SoRRemoteInput.hpp"
 #include "SoRQolConfig.hpp"
 #include "SoRQolMenu.hpp"
+#include "SoRSurvival.hpp"
 #include "SoRVideoMenu.hpp"
 #include "SoRWidescreenArena.hpp"
 #include "SoR.hpp"
@@ -85,8 +87,8 @@ constexpr m_long kBlazePreviewSelected = 0xFFFFBA5Cu;
 // OPTIONS: the third row keeps its place (VRAM $C7A0, column 16 of row 15) and
 // OPTIONS moves two cells down from it, as far as the ROM's rows are apart.
 // Without the AI, the rows are the ROM's: OPTIONS stays on the third.
-// QUIT, which the ROM does not have either, is always the last row. CONTINUE, between OPTIONS and QUIT, is
-// there only while a checkpoint is saved (SoRCheckpoint).
+// QUIT, which the ROM does not have either, is always the last row, and EXTRA (user) the one before it.
+// CONTINUE, between OPTIONS and EXTRA, is there only while a checkpoint is saved (SoRCheckpoint).
 // The whole menu then sits 5 tiles left and 2 up of the ROM's place (user), where
 // the wider list is centred better: VDP commands and cursor sprite alike.
 constexpr m_long kMenuShiftVdp      = (2u * 128u + 5u * 2u) << 16;
@@ -95,7 +97,8 @@ constexpr m_word kMenuCursorX       = 0x00F0 - 40;
 constexpr m_word kCursorAiAssist    = 2;
 constexpr m_word kCursorOptions     = 3;
 constexpr m_word kCursorContinue    = 4;
-constexpr m_word kCursorQuit        = 5;
+constexpr m_word kCursorExtra       = 5;
+constexpr m_word kCursorQuit        = 6;
 constexpr m_long kAiAssistRowVdp    = 0x47A00003u - kMenuShiftVdp;
 constexpr m_long kOptionsRowVdp     = 0x48A00003u - kMenuShiftVdp;
 constexpr m_word kOptionsCursorY    = 0x0108 - kMenuShiftY;
@@ -104,6 +107,7 @@ constexpr m_word kMenuRowCursorStep = 16;
 constexpr std::string_view kAiAssistText = "1 PLAYER AI ASSIST";
 constexpr std::string_view kQuitText     = "QUIT";
 constexpr std::string_view kContinueText = "CONTINUE";
+constexpr std::string_view kExtraText    = "EXTRA";
 
 // Whether this visit to the mode menu shows CONTINUE (decided when it is drawn).
 bool continueShown = false;
@@ -256,6 +260,10 @@ void StreetsOfRage::init_game_start_screen(m_long entry_) {
         rowAfterOptions += kMenuRowVdpStep;
     }
     memory().writeLong(kVdpControl, rowAfterOptions);
+    for (const char c : kExtraText)
+        memory().writeWord(kVdpData, menuGlyph(c));
+    rowAfterOptions += kMenuRowVdpStep;
+    memory().writeLong(kVdpControl, rowAfterOptions);
     for (const char c : kQuitText)
         memory().writeWord(kVdpData, menuGlyph(c));
 
@@ -267,6 +275,11 @@ void StreetsOfRage::init_game_start_screen(m_long entry_) {
     SOR_CALL_68K(load_palette_list_to_target(), 0x104Au, 0x010538u);
 
     memory().writeByte(kSelectMenuOptionCount, memory().readByte(kP2PadMissing) == 0 ? 3 : 1);
+    // After a survival game: straight to EXTRA, on the result, the way choosing EXTRA goes there.
+    if (SoRExtraMenu::resultPending()) {
+        memory().writeWord(kSelectMenuCursor, kCursorExtra);
+        memory().writeWord(kSelectScreenSubstate, 0x0A);
+    }
     cpu().ssp += 4;
 }
 
@@ -274,6 +287,14 @@ void StreetsOfRage::game_start_screen_update(m_long /*entry_*/) {
     traceEnter(0x108Eu);
 
     const m_word substate = memory().readWord(kSelectScreenSubstate);
+    // EXTRA: the OPTIONS screen's rows are its menu's, from the end of the fade-in to the start of the fade-out.
+    if (SoRExtraMenu::isOpen() && substate >= 0x10 && substate < 0x28) {
+        const auto remote = static_cast<SoRInput::ActionMask>(SoRRemoteInput::actions(0) | SoRRemoteInput::actions(1));
+        if (SoRExtraMenu::frame(memory(), remote) != SoRExtraMenu::Result::Open)
+            memory().writeWord(kSelectScreenSubstate, 0x28);
+        cpu().ssp += 4;
+        return;
+    }
     // Start leaves OPTIONS from any row, except inside the CONTROLS, VIDEO or
     // QUALITY-OF-LIFE menu, where it goes back one screen.
     const bool optionsRow = (substate >= 0x10 && substate < 0x28) || substate == kOptionsVideoHighlight ||
@@ -347,6 +368,13 @@ void StreetsOfRage::select_menu_resolve_choice(m_long /*entry_*/) {
         cpu().ssp += 4;
         return;
     }
+    if (cursor == kCursorExtra) {
+        // The OPTIONS screen, with the EXTRA menu in place of its rows.
+        SoRExtraMenu::request();
+        memory().writeWord(kSelectScreenSubstate, static_cast<m_word>(memory().readWord(kSelectScreenSubstate) + 2));
+        cpu().ssp += 4;
+        return;
+    }
     if (cursor == kCursorQuit) {
         SDL_Event event{};
         event.type = SDL_EVENT_QUIT;
@@ -386,6 +414,12 @@ void StreetsOfRage::options_menu_build(m_long /*entry_*/) {
 
     SOR_CALL_68K(clear_planes_window_and_sprites(), 0x1180u, 0x007F00u);
     memory().writeLong(0xFFFFDA00u, 0);
+
+    if (SoRExtraMenu::openIfRequested(memory())) {
+        memory().writeWord(kSelectScreenSubstate, static_cast<m_word>(memory().readWord(kSelectScreenSubstate) + 2));
+        cpu().ssp += 4;
+        return;
+    }
 
     // The ROM's CONTROL label (bundle $0D) and A/B/C layouts are replaced by
     // the CONTROLS row (SoRControlsMenu), drawn below.
@@ -606,8 +640,10 @@ void StreetsOfRage::options_input_exit(m_long /*entry_*/) {
 
 void StreetsOfRage::options_menu_return(m_long /*entry_*/) {
     traceEnter(0x14EAu);
-    memory().writeWord(kGameState, 0x10);
-    cpu().setNZClearVC(0x10u, 0x8000u);
+    // EXTRA's START has chosen a survival game: character select, as 1 PLAYER and 2 PLAYERS go.
+    const m_word next = SoRExtraMenu::takeStart(memory()) ? memory().readWord(kGameState) : 0x10;
+    memory().writeWord(kGameState, next);
+    cpu().setNZClearVC(next, 0x8000u);
     cpu().ssp += 4;
 }
 
@@ -723,13 +759,15 @@ void StreetsOfRage::select_menu_cursor_update(m_long /*entry_*/) {
     if (cursor == kCursorAiAssist && !ai)
         cursor = kCursorOptions;
     if (cursor == kCursorContinue && !continueShown)
-        cursor = previous == kCursorQuit ? kCursorOptions : kCursorQuit;
+        cursor = previous == kCursorExtra ? kCursorOptions : kCursorExtra;
     memory().writeWord(object + 0x40, cursor);
 
     // Without the AI, OPTIONS is on the ROM's third row, and QUIT follows it.
     const m_word optionsY = ai ? kOptionsCursorY : static_cast<m_word>(memory().readWord(kCursorYTable + 4u) - kMenuShiftY);
-    const m_word quitY    = static_cast<m_word>(optionsY + (continueShown ? 2 : 1) * kMenuRowCursorStep);
+    const m_word extraY   = static_cast<m_word>(optionsY + (continueShown ? 2 : 1) * kMenuRowCursorStep);
+    const m_word quitY    = static_cast<m_word>(extraY + kMenuRowCursorStep);
     const m_word y        = cursor == kCursorQuit       ? quitY
+                            : cursor == kCursorExtra    ? extraY
                             : cursor == kCursorContinue ? static_cast<m_word>(optionsY + kMenuRowCursorStep)
                             : cursor == kCursorOptions  ? optionsY
                                                        : static_cast<m_word>(memory().readWord(kCursorYTable + cursor * 2u) - kMenuShiftY);
@@ -911,6 +949,9 @@ void StreetsOfRage::initialize_player_continues(m_long /*entry_*/) {
     cpu().setDw(0, lives);
     memory().writeByte(kP1Lives, static_cast<m_byte>(lives));
     memory().writeByte(kP2Lives, static_cast<m_byte>(lives));
+    // SURVIVAL MODE: 3 lives and no continue, whatever OPTIONS says (user).
+    if (SoRSurvival::active())
+        SoRSurvival::setUpPlayers(memory());
     memory().writeByte(kP1AttackFlag, 0);
     memory().writeByte(kP2AttackFlag, 0);
     memory().writeByte(kP1Specials, 0);

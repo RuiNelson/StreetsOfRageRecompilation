@@ -2,6 +2,7 @@
 #include "SoRCheats.hpp"
 #include "SoRDamageCircles.hpp"
 #include "SoRCheckpoint.hpp"
+#include "SoRSurvival.hpp"
 #include "SoRHighScores.hpp"
 #include "SoRQolConfig.hpp"
 
@@ -269,6 +270,7 @@ void StreetsOfRage::wait_vblank_and_upload_graphics(m_long /*entry_*/) {
     // scored runs. See SoRCheats.hpp.
     applyPendingSoRCheats(memory());
     SoRCheckpoint::onFrame(memory()); // the last wave start, and a restore under way
+    SoRSurvival::onFrame(memory());   // a survival game: its enemies and its end
 
     memory().writeByte(kVBlankMailbox, 1);
     cpu().setStatus(kStatusIrqEnabled);
@@ -294,6 +296,7 @@ void StreetsOfRage::wait_vblank_without_graphics_upload(m_long /*entry_*/) {
     // would otherwise sit pending until the next.
     applyPendingSoRCheats(memory());
     SoRCheckpoint::onFrame(memory()); // the last wave start, and a restore under way
+    SoRSurvival::onFrame(memory());   // a survival game: its enemies and its end
 
     memory().writeByte(kVBlankMailbox, 2);
     cpu().setStatus(kStatusIrqEnabled);

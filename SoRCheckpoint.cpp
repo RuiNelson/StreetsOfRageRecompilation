@@ -3,6 +3,7 @@
 #include "SoRControlsConfig.hpp"
 #include "SoRPython.hpp"
 #include "SoRRemoteInput.hpp"
+#include "SoRSurvival.hpp"
 #include "SoR.hpp"
 
 #include "system/memory/SystemMemory.hpp"
@@ -463,7 +464,8 @@ void onFrame(SystemMemory &memory) {
 }
 
 bool saveAllowed() {
-    return last.has_value() && !inMrXRoom;
+    // No checkpoint in a survival game: there is no wave to come back to.
+    return last.has_value() && !inMrXRoom && !SoRSurvival::active();
 }
 
 bool save() {
@@ -576,6 +578,7 @@ void StreetsOfRage::spawn_round_players(m_long /*entry_*/) {
     traceEnter(0x000107F2u);
     auto &mem = memory();
 
+    SoRSurvival::setUpRound(mem); // a survival game: the first wave goes, the camera stays
     if (SoRCheckpoint::restoreInsideRound(mem)) {
         const CPU68K saved = cpu();
         const auto   draw  = [&](m_long camera, m_long blockmap, m_long queue) {

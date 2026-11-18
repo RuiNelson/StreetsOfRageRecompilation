@@ -47,6 +47,7 @@ Before changing files:
 | `SoRHighScores.*` | `--qol scores` (OPTIONS row SAVE HIGH SCORES, user): the ROM's ten 12-byte entries at `$FFFF4A (top10_score_table)` in `highscores.yaml`, as ten hex strings; the table stays in work RAM. Loaded inside `enigmadec`'s `$12832` wrapper, right after the default table is decoded (and when SAVE AND APPLY turns the option on). Saved by diff against the last load or save, once a frame in both vblank waits, without the "new entry" flag bits (+0 bits 7/6), and not while a player object (`+$4B` bit 7) is typing a name; forced once on exit. SAVE AND APPLY with the option off deletes the file (user). **Initials** (user; menu and `qol.yaml` only, no command line): `enterInitials`, called from `$56E6`, skips the ROM's name entry when the player has initials, or for P2 under AI Assist (always `AI `): it writes `$FF0D`/`$FF15` (a letter's number from 1, blank 0), does `$5846`'s ending and then `$12784` and `$127BA` in C++, so the continue prompt runs next frame as usual. Unset initials: the ROM's screen. The ROM keeps no name to reuse: `$56F6` clears it at each entry. The QoL menu has pages (a PAGE row where RESET was, Left/Right turn it) and an on-screen keyboard. `cheat` (user): turning it on in the menu takes a message box and Special+Punch+Jump+Right from one player (`heldActions`, no latch), or Start to give up; turning it off, `--qol cheat` and the file need nothing. Entering OPTIONS sets `$FFFA7B (cheat_flag)` without the ROM's chord (P2 A+B+C+Right, `$78`), which still works with it off. SAVE AND APPLY applies it at once, since the menu is inside OPTIONS; turning it off also puts back level 0 and `$FFFFCA (lives_setting)` 1 |
 | `SoRDamageCircles.*` | `--qol damage`: the circles over regular enemies, on `VDP::setFrameOverlay` under the pause menu. `capture` runs after `$10502`'s wait, when the frame's SAT has just gone up, so they show what the sprites show (RAM is ahead of the picture on the render thread, and `$10514`'s frames upload no SAT). Types `$20`-`$27`, `$2A`, with state and `+$38` nonzero. Full is `+$38`, plus 4 on the hardest difficulty ($93CE adds it only to `+$33`). **Only a negative health word kills, so 0 is alive** (a 0-to-full scale showed a finished gauge on a living enemy, user report): negative health alone fills the ring, which also covers the fall and the police sweep (`$FFFF`). Alive, the disc stops at a radius of 2.25 px at 0 health, so a gap inside the ring still shows (at 2.5 px it looked full); the edges are antialiased by coverage. `$9D16`'s death blink toggles the render flag, which the circle ignores in that state alone (user: no blinking); elsewhere that flag means hidden, as in `$A59C`. The top is the current mapping frame's highest piece, so it includes the piece's transparent rows: over a body on the floor the circle floats about 15 px up |
 | `SoRCheckpoint.*` | Checkpoint saves (see **Checkpoints**) and the manual `$107F2 (spawn_round_players)` |
+| `SoRExtraMenu.*`, `SoRSurvival.*` | The mode menu's EXTRA and SURVIVAL MODE (see **Survival mode**), and the manual `$9E26 (ordinary_enemy_award_score)` |
 | `SoRMenuCanvas.hpp` | What those two menus share: the OPTIONS font, drawing to plane A, held directions |
 | `SoRPlatform.hpp` | `consoleMenus()`: the PS5's menus, on with `__PROSPERO__` or `--console-menus` (workspace `CLAUDE.md`, **PS5 menus**) |
 | `SoRRNG.cpp` | The game's RNG draw, `$0104D8 (rng_draw)` (see **Manual subroutines**) |
@@ -343,6 +344,48 @@ The user's rules are in the workspace `CLAUDE.md`, **Checkpoint saves**.
   gate opening, the file gone; round 7 saved at wave 4, back on that floor, the elevator climbing on to wave 5; round 8
   saved at its first gate (camera `$1100`), the next gate opening. Not checked: rounds 2-6, 2P, AI Assist, widescreen, a
   boss gate.
+
+## Survival mode
+
+The user's rules are in the workspace `CLAUDE.md`, **EXTRA > SURVIVAL MODE**.
+
+- **EXTRA** is cursor 5 of the mode menu (QUIT is 6, CONTINUE stays 4). Choosing it goes the way OPTIONS goes
+  (sub-state + 2, the fade, `options_menu_build`), which then opens `SoRExtraMenu` on the cleared screen instead of
+  OPTIONS' rows; `game_start_screen_update` runs its frames from sub-state `$10` to `$28` and sends BACK and START to
+  the fade-out at `$28`. `options_menu_return` then goes to character select (`SoRSurvival::begin` wrote
+  `player_mode`, `level` and `game_state` `$20`) or back to the mode menu. After GAME OVER `ingame_finish_fade` writes
+  `game_state` `$0C`; `SoRSurvival::onFrame` turns it into `$10` with the result pending, and the mode menu's init
+  jumps to sub-state `$0A` with the cursor on EXTRA.
+- **The round.** `initialize_player_continues` writes 3 lives and no continue. `spawn_round_players` calls
+  `setUpRound`: `$E5C`'s first-wave objects go as for a checkpoint (round 3's palms and round 7's props `$50`-`$52`
+  stay; its `$53` goes, so the elevator never climbs), the open camera bound is set to the camera (`camera_x_max`;
+  `camera_x_min` on round 8), the residency counts are cleared and the pipeline parks at `$0C`. Each frame `onFrame`
+  sets `stop_clock`, blanks the timer digits, holds the bound, and zeroes the specials (and redraws them).
+- **The enemies come through the ROM's deferred spawn.** A section of six-byte records at `$FF6800` (the round's
+  stream is never read again), `current_spawn_section_ptr` on it, pipeline state `$08`: `$936` picks a record whose
+  family art and colour can be resident, `$B76` loads them and `$C60` places it at `cam_x + $148` or `cam_x - 8`.
+  `onFrame` tops the section up to six records in state `$08` (only appending, so `pending_spawn_record_ptr` stays
+  good in `$0A`), sends any other state back to `$08` (state `$00` would read the round's next wave), sets
+  `level_spawn_flow_flags` bit 2, so a death gives its residency back (`$9DC0`), clears bit 3, so the last death never
+  ends the section, and sets `deferred_spawn_credits` to the number wanted on screen minus
+  `active_progression_entity_count`. Within a ROM wave the residency never frees without bit 2; with it, families and
+  colours change as enemies die.
+- **What a record holds** is taken from the ROM's own edge records (timed and deferred, all eight ELC streams, decoded
+  offline): per type, the `+$40` behaviour and `+$41` approach pairs that bring it in from a screen edge, without a
+  camera-gated `+$40` (bit 7, never wakes at a locked camera) or round 7's drop `$43`; per round, the lanes. `$2A`
+  has no such record and its colours are `$25`'s, so it is left out. Round 8 places enemies on the right only: one at
+  its left edge stayed in state 0 for good (the round starts at the map's right end).
+- **The point** is `ordinary_enemy_award_score` (manual): in survival it adds 1 in BCD to the player bit 7 of `+$39`
+  names and maybe drops an item in a free slot at the enemy's X, lane and height; otherwise it tail-jumps to
+  `add_bcd_score_value`, manual too (`SoRGameHUD.cpp`) so the port calls only ports. `update_score_hud_and_check_extra_life`
+  draws the score without clearing its last digit and gives no life. `$9E3E (clear_object_128)` follows `$9E26` and
+  had to go into `aux_addresses.txt`: without it the generator handed it to the manual function, and every object
+  deletion scored a point (seen live: a point a frame and a frozen object table).
+- No join (`update_join_and_continue_hud`), no checkpoint (`saveAllowed`), OPTIONS' ROUND NO. put back afterwards.
+- Checked live at `--turbo 4` with autoplay's AI (`HOME` in a scratch folder): round 1 one player to GAME OVER (59
+  points, five at once, items dropped, the result and the file); across the runs every type and colour came but `$23` variant 1 (chance);
+  rounds 7 and 8; two players with an AI each (37 + 37, the 2P record); every round's enemies awake and fighting.
+  Not checked: the menus with a real pad or keyboard, widescreen, the PS5, items' look on every round, a top-10 score.
 
 ## ROM and regeneration
 
