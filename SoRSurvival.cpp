@@ -48,15 +48,7 @@ constexpr u32 kCamX      = 0xFFFFE002u;
 constexpr u32 kCamXMax   = 0xFFFFE01Au;
 constexpr u32 kCamXMin   = 0xFFFFE01Eu;
 constexpr u16 kRound8    = 7; // round 8 scrolls left: its open bound is the minimum
-constexpr int kRound7    = 6; // the elevator: past its right edge is the drop
-
-// Round 7: an enemy that would come in from the right falls from the sky onto the elevator instead (user: the
-// right is the drop, and they fell into it). Placed over the deck's right half, above the top of the screen, it
-// comes down under the ordinary enemies' own gravity ($973E, in every walk) and lands on the floor.
-constexpr u16 kDropFromX  = 0xA0; // screen X, from the camera
-constexpr u16 kDropToX    = 0x100;
-constexpr u16 kDropHeight = 0xFFF0; // +$18, as Haku-Ro's ambush drop ($E952)
-constexpr u16 kRightEdge  = 0x140; // $C60 places a right-side enemy at cam_x + $148 ($168 in widescreen)
+constexpr int kRound7    = 6; // the elevator: not offered (user, 2026-11-19: it gave trouble)
 
 // The level pipeline and the enemy residency allocator ($5F4-$C28, $9D8C).
 constexpr u32 kLevelIntroActive     = 0xFFFFFA1Fu;
@@ -339,24 +331,6 @@ void fillSection(SystemMemory &memory) {
     memory.writeByte(address + 1, 0);
 }
 
-void dropFromTheSky(SystemMemory &memory) {
-    State    &s     = state();
-    const u16 camX  = memory.readWord(kCamX);
-    for (int slot = 0; slot < kObjectSlots; ++slot) {
-        const u32 object = kObjectTable + static_cast<u32>(slot) * kObjectSize;
-        const u8  type   = memory.readByte(object);
-        // Only one $C60 has just placed: not yet awake (primary state 0), at the right edge.
-        const u16 fromCamera = static_cast<u16>(memory.readWord(object + 0x10) - camX); // the left edge is cam_x - 8
-        if (type < 0x20 || type > 0x27 || memory.readWord(object + 0x30) != 0 || fromCamera < kRightEdge ||
-            fromCamera >= kRightEdge + 0x40)
-            continue;
-        const u16 x = static_cast<u16>(camX + std::uniform_int_distribution<int>(kDropFromX, kDropToX)(s.random));
-        memory.writeWord(object + 0x10, x);
-        memory.writeWord(object + 0x18, kDropHeight);
-        memory.writeLong(object + 0x24, 0);
-    }
-}
-
 void lockCamera(SystemMemory &memory) {
     const State &s = state();
     memory.writeLong(memory.readWord(kLevel) == kRound8 ? kCamXMin : kCamXMax, static_cast<u32>(s.lockedX) << 16);
@@ -442,6 +416,8 @@ void begin(SystemMemory &memory, int players, int round) {
     s.started    = false;
     s.players    = players == 2 ? 2 : 1;
     s.round      = std::clamp(round, 0, 7);
+    if (s.round == kRound7)
+        s.round = 0;
     s.kills      = 0;
     s.savedLevel = memory.readWord(kLevel);
     clearScores(memory);
@@ -476,7 +452,7 @@ void setUpRound(SystemMemory &memory) {
         return;
 
     // start_round_setup has just created the first wave, none of which has run yet. The round's scenery stays
-    // (round 3's palms $4E, round 7's elevator props $50-$52); round 7's $53 goes, so the elevator never climbs.
+    // (round 3's palms $4E, and round 7's elevator props $50-$52, should that round come back).
     for (int slot = 0; slot < kObjectSlots; ++slot) {
         const u32 object = kObjectTable + static_cast<u32>(slot) * kObjectSize;
         const u8  type   = memory.readByte(object);
@@ -532,8 +508,6 @@ void onFrame(SystemMemory &memory) {
         memory.writeWord(kHudTimer + kHudRowBelow + 2u * cell, kHudBlankTile);
     }
     lockCamera(memory);
-    if (s.round == kRound7)
-        dropFromTheSky(memory);
     for (int player = 0; player < 2; ++player) {
         const u32 specials = kP1Lives + 3u * static_cast<u32>(player) + 1u;
         if (memory.readByte(specials) != 0) {

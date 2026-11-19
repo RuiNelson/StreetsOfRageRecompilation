@@ -22,6 +22,7 @@ constexpr int kLabelColumn = 4;
 constexpr int kValueColumn = 22;
 constexpr int kHelpRow     = 22;
 constexpr int kRounds      = 8;
+constexpr int kElevator    = 6; // round 7 is not offered (user, 2026-11-19: it gave trouble)
 
 constexpr m_long kP2PadMissing = 0xFFFFFC0Au;
 
@@ -242,7 +243,7 @@ bool openIfRequested(SystemMemory &memory) {
     m.isOpen          = true;
     m.swallow         = true;
     m.players         = players == 2 && twoPlayersPossible(memory) ? 2 : 1;
-    m.round           = round;
+    m.round           = round == kElevator ? 0 : round;
     Canvas canvas;
     draw(m, canvas);
     flush(memory, m.shown, canvas);
@@ -319,6 +320,8 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
             }
         } else if (row == Row::Round && (left || right || confirm)) {
             m.round = confirm ? (m.round + 1) % kRounds : step(m.round, kRounds);
+            if (m.round == kElevator)
+                m.round = confirm ? (m.round + 1) % kRounds : step(m.round, kRounds);
             playSound(memory, kSoundMove);
         } else if (confirm && row == Row::Survival) {
             playSound(memory, kSoundPick);

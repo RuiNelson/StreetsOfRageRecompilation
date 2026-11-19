@@ -359,8 +359,7 @@ The user's rules are in the workspace `CLAUDE.md`, **EXTRA > SURVIVAL MODE**.
   `game_state` `$0C`; `SoRSurvival::onFrame` turns it into `$10` with the result pending, and the mode menu's init
   jumps to sub-state `$0A` with the cursor on EXTRA.
 - **The round.** `initialize_player_continues` writes 3 lives and no continue. `spawn_round_players` calls
-  `setUpRound`: `$E5C`'s first-wave objects go as for a checkpoint (round 3's palms and round 7's props `$50`-`$52`
-  stay; its `$53` goes, so the elevator never climbs), the open camera bound is set to the camera (`camera_x_max`;
+  `setUpRound`: `$E5C`'s first-wave objects go as for a checkpoint (round 3's palms stay), the open camera bound is set to the camera (`camera_x_max`;
   `camera_x_min` on round 8), the residency counts are cleared and the pipeline parks at `$0C`. Each frame `onFrame`
   sets `stop_clock`, blanks the timer digits, holds the bound, and zeroes the specials (and redraws them).
 - **The enemies come through the ROM's deferred spawn.** A section of six-byte records at `$FF6800` (the round's
@@ -378,11 +377,10 @@ The user's rules are in the workspace `CLAUDE.md`, **EXTRA > SURVIVAL MODE**.
   offline): per type, the `+$40` behaviour and `+$41` approach pairs that bring it in from a screen edge, without a
   camera-gated `+$40` (bit 7, never wakes at a locked camera) or round 7's drop `$43`; per round, the lanes. `$2A`
   has no such record and its colours are `$25`'s, so it is left out. Round 8 places enemies on the right only: one at
-  its left edge stayed in state 0 for good (the round starts at the map's right end). Round 7 (the elevator, whose
-  right is the drop): `onFrame` moves an enemy `$C60` has just placed at the right edge (state 0, `cam_x + $140` to
-  `+$180`) over the deck's right half (`cam_x + $A0` to `+$100`) at `+$18 = $FFF0`, as Haku-Ro's ambush drop does;
-  it wakes on screen and its own walks' gravity (`$973E`) lands it on the floor (`$88`). Seen live: from `$FFF1` to
-  `$88`, then the walk.
+  its left edge stayed in state 0 for good (the round starts at the map's right end).
+- **Round 7 is not offered** (user, 2026-11-19: it gave trouble): the ROUND row skips it and `begin` turns it into round
+  1. What was tried there: the elevator held still (its `$53` removed), enemies from the right fell into the drop, and
+  moving them over the deck at `+$18 = $FFF0` (Haku-Ro's ambush height) let their walks' gravity (`$973E`) land them.
 - **The point** is `ordinary_enemy_award_score` (manual): in survival it adds 1 in BCD to the player bit 7 of `+$39`
   names and maybe drops an item in a free slot at the enemy's X, lane and height; otherwise it tail-jumps to
   `add_bcd_score_value`, manual too (`SoRGameHUD.cpp`) so the port calls only ports. `update_score_hud_and_check_extra_life`
@@ -398,7 +396,8 @@ The user's rules are in the workspace `CLAUDE.md`, **EXTRA > SURVIVAL MODE**.
 - Checked live at `--turbo 4` with autoplay's AI (`HOME` in a scratch folder): round 1 one player to GAME OVER (59
   points, five at once, items dropped, the result and the file); across the runs every type and colour came but `$23` variant 1 (chance);
   rounds 7 and 8; two players with an AI each (37 + 37, the 2P record); every round's enemies awake and fighting.
-  After the changes of 2026-11-19: round 7 with the AI (46 points, 11 at once, the scores 0 afterwards), two players
+  After the changes of 2026-11-19: round 7 with the AI (46 points, 11 at once, the scores 0 afterwards; the round has
+  since been taken out), two players
   with initials (the 2P table, the result screen), the QoL keyboard unchanged.
   Not checked: the menus with a real pad or keyboard, widescreen, the PS5, items' look on every round, 16 at once.
 
