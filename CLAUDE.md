@@ -298,9 +298,10 @@ The user's decisions are in the workspace `CLAUDE.md`, **OPTIONS > VIDEO and `vi
   both directions, SAVE AND APPLY writing `scaling_filter: metalfx` and the window changing at once. Each filter
   checked fullscreen with `MTL_DEBUG_LAYER=1` (no errors) and by eye; the SDL path's nearest and hybrid by eye on
   macOS with the Metal presenter turned off in a local build. Not checked: Windows, Linux, the PS5.
-- FRAME GENERATION is shown only when `VDP::frameGenerationSupported()`; with nine rows the list starts at row 5
-  instead of 7 (`screenRow`). Help says when VSYNC is not AUTO. Checked live: the row, ON, SAVE AND APPLY writing
-  `frame_generation: true`.
+- FRAME GENERATION (OFF, ON, ON, NO POSE BLEND; `frame_generation: off|on|no-pose-blend`) is shown only when
+  `VDP::frameGenerationSupported()`; with nine rows the list starts at row 5 instead of 7 (`screenRow`). Help says
+  when VSYNC is not AUTO. Checked live: the row, its three values, SAVE AND APPLY writing
+  `no-pose-blend`; the two ON states from the command line with GPU dumps.
 
 ## The pause menu
 

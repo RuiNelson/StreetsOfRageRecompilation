@@ -65,6 +65,25 @@ std::optional<VDP::ScalingFilter> scalingFilterFromKey(std::string_view key) {
     return std::nullopt;
 }
 
+std::string_view frameGenerationKey(VDP::FrameGeneration mode) {
+    switch (mode) {
+        case VDP::GenerateFrames:
+            return "on";
+        case VDP::GenerateHoldPoses:
+            return "no-pose-blend";
+        case VDP::NoFrameGeneration:
+            break;
+    }
+    return "off";
+}
+
+std::optional<VDP::FrameGeneration> frameGenerationFromKey(std::string_view key) {
+    for (const VDP::FrameGeneration mode : {VDP::NoFrameGeneration, VDP::GenerateFrames, VDP::GenerateHoldPoses})
+        if (frameGenerationKey(mode) == key)
+            return mode;
+    return std::nullopt;
+}
+
 std::filesystem::path defaultPath() {
     return SoRControlsConfig::defaultPath().parent_path() / "video.yaml";
 }
@@ -96,7 +115,10 @@ VideoConfig loadOrCreate(const std::filesystem::path &path) {
     readBool(root["widescreen"], config.widescreen);
     readBool(root["fullscreen"], config.fullscreen);
     readBool(root["integer_scaling"], config.integerScaling);
-    readBool(root["frame_generation"], config.frameGeneration);
+    if (const YAML::Node mode = root["frame_generation"]; mode && mode.IsScalar()) {
+        if (const auto value = frameGenerationFromKey(mode.Scalar()))
+            config.frameGeneration = *value;
+    }
     if (const YAML::Node filter = root["scaling_filter"]; filter && filter.IsScalar()) {
         if (const auto value = scalingFilterFromKey(filter.Scalar()))
             config.scalingFilter = *value;
@@ -114,7 +136,7 @@ bool save(const VideoConfig &config, const std::filesystem::path &path) {
     root["fullscreen"]      = config.fullscreen;
     root["integer_scaling"] = config.integerScaling;
     root["scaling_filter"]  = std::string(scalingFilterKey(config.scalingFilter));
-    root["frame_generation"] = config.frameGeneration;
+    root["frame_generation"] = std::string(frameGenerationKey(config.frameGeneration));
 
     YAML::Emitter emitter;
     emitter << root;

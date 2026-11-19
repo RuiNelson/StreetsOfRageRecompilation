@@ -95,7 +95,6 @@ int main(int argc, char *argv[]) {
     bool          fullscreenFlag     = false;
     bool          widescreenFlag     = false;
     bool          integerScalingFlag = false;
-    bool          frameGenerationFlag = false;
     bool          defaultVideoFlag   = false;
     bool          defaultQolFlag     = false;
     bool          aiAssistFlag       = false;
@@ -111,6 +110,7 @@ int main(int argc, char *argv[]) {
     std::string   sorCallLogFile;
     std::string   frameSync;
     std::string   scalingFilter;
+    std::string   frameGeneration;
     std::string   languagePin = "en";
     std::string   videoHz     = "60";
     std::string   soundMode   = "prerendered";
@@ -160,10 +160,12 @@ int main(int argc, char *argv[]) {
             ->check(CLI::IsMember({"nearest", "bilinear", "hybrid", "metalfx"}))
             ->group("Video");
     const auto *frameGenerationOption =
-        app.add_flag("--frame-generation,!--no-frame-generation",
-                     frameGenerationFlag,
-                     "MetalFX frame generation, or not: a frame between each two the game draws (macOS 26 and newer, "
-                     "--frame-sync auto without --turbo; elsewhere nothing)")
+        app.add_option("--frame-generation",
+                       frameGeneration,
+                       "MetalFX frame generation: a frame between each two the game draws (macOS 26 and newer, "
+                       "--frame-sync auto without --turbo; elsewhere nothing). on: a sprite changing pose shows both "
+                       "poses blended. no-pose-blend: it keeps its old pose until the real frame. Default: off")
+            ->check(CLI::IsMember({"off", "on", "no-pose-blend"}))
             ->group("Video");
     const auto *frameSyncOption = app.add_option("--frame-sync",
                                                  frameSync,
@@ -267,7 +269,7 @@ int main(int argc, char *argv[]) {
     if (integerScalingOption->count() > 0)
         video.integerScaling = integerScalingFlag;
     if (frameGenerationOption->count() > 0)
-        video.frameGeneration = frameGenerationFlag;
+        video.frameGeneration = *SoRVideoConfig::frameGenerationFromKey(frameGeneration);
     if (scalingFilterOption->count() > 0)
         video.scalingFilter = *SoRVideoConfig::scalingFilterFromKey(scalingFilter);
     if (frameSyncOption->count() > 0)

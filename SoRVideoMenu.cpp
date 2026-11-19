@@ -158,9 +158,12 @@ bool changeValue(VideoConfig &config, Row row, int step, bool metalFX) {
         case Row::ScalingFilter:
             changeScalingFilter(config, step, metalFX);
             return true;
-        case Row::FrameGeneration:
-            config.frameGeneration = !config.frameGeneration;
+        case Row::FrameGeneration: {
+            constexpr std::array kModes = {VDP::NoFrameGeneration, VDP::GenerateFrames, VDP::GenerateHoldPoses};
+            const auto index = static_cast<int>(std::ranges::find(kModes, config.frameGeneration) - kModes.begin());
+            config.frameGeneration = kModes[static_cast<std::size_t>((index + step + 3) % 3)];
             return true;
+        }
         case Row::Reset:
         case Row::Save:
         case Row::Cancel:
@@ -182,7 +185,9 @@ std::string value(const VideoConfig &config, Row row) {
         case Row::ScalingFilter:
             return std::string(scalingFilterName(config.scalingFilter));
         case Row::FrameGeneration:
-            return config.frameGeneration ? "ON" : "OFF";
+            return config.frameGeneration == VDP::GenerateFrames      ? "ON"
+                   : config.frameGeneration == VDP::GenerateHoldPoses ? "ON, NO POSE BLEND"
+                                                                       : "OFF";
         case Row::Reset:
         case Row::Save:
         case Row::Cancel:
@@ -237,11 +242,13 @@ std::array<std::string, 2> help(const Menu &m, Row row) {
             }
             return {"SHARP, EVEN PIXELS: WHOLE MULTIPLE,", "THEN SMOOTHED TO FIT."};
         case Row::FrameGeneration:
-            if (!m.pending.frameGeneration)
+            if (m.pending.frameGeneration == VDP::NoFrameGeneration)
                 return {"ONLY THE FRAMES THE GAME DRAWS.", ""};
             if (m.pending.frameSync != VDP::InternalTimer)
                 return {"ONLY WITH VSYNC AUTO: NO EFFECT", "WITH THIS VSYNC."};
-            return {"METALFX DRAWS A FRAME BETWEEN EACH", "TWO: SMOOTHER, A LITTLE LATER."};
+            if (m.pending.frameGeneration == VDP::GenerateHoldPoses)
+                return {"A FRAME BETWEEN EACH TWO. A NEW", "POSE WAITS FOR THE REAL FRAME."};
+            return {"A FRAME BETWEEN EACH TWO. A NEW", "POSE IS BLENDED WITH THE OLD ONE."};
         case Row::Reset:
             return {"PUTS BACK THE DEFAULTS ABOVE. THEY", "COUNT ONLY AFTER SAVE AND APPLY."};
         case Row::Save:

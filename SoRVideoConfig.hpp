@@ -26,7 +26,7 @@ struct VideoConfig {
     bool                 fullscreen     = false;
     bool                 integerScaling = kDefaultIntegerScaling;
     VDP::ScalingFilter   scalingFilter  = kDefaultScalingFilter;
-    bool                 frameGeneration = false; // MetalFX frame interpolation, macOS 26
+    VDP::FrameGeneration frameGeneration = VDP::NoFrameGeneration; // MetalFX frame interpolation, macOS 26
 
     bool operator==(const VideoConfig &) const = default;
 };
@@ -38,6 +38,10 @@ std::optional<VDP::Synchronization> frameSyncFromKey(std::string_view key);
 /// `nearest`, `bilinear`, `hybrid`, `metalfx`: the --scaling-filter names.
 std::string_view                  scalingFilterKey(VDP::ScalingFilter filter);
 std::optional<VDP::ScalingFilter> scalingFilterFromKey(std::string_view key);
+
+/// `off`, `on`, `no-pose-blend`: the --frame-generation names.
+std::string_view                    frameGenerationKey(VDP::FrameGeneration mode);
+std::optional<VDP::FrameGeneration> frameGenerationFromKey(std::string_view key);
 
 /// `video.yaml`, in controls.yaml's folder.
 std::filesystem::path defaultPath();
