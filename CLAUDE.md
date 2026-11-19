@@ -234,16 +234,19 @@ works, llvm-mingw with the NuGet package). Linux is written and not yet tried.
   stall was not traced, so its cause is unconfirmed).
 - **The mode's screens** (user: original look, the row after 2 PLAYERS, the player picks
   their character and then the computer's, "COMPUTER" for "2 PLAYER"). `select_menu_cursor`
-  is 0 1 PLAYER, 1 2 PLAYERS, 2 AI ASSIST, 3 OPTIONS (it was 2); the row takes the third row's
-  place and OPTIONS moves two cells down. Without the AI (`SoRPython::available()`: no
-  `sor_ai/embedded.py` in `--ai-path`, or the Windows stub) the screen is the ROM's: three rows,
-  index 2 skipped. Choosing the row sets `player_mode` to 3 and the flag and starts Python, so
+  is the row's place in the menu's order (user, 2026-11-19): 0 1 PLAYER, 1 2 PLAYERS, 2 AI ASSIST, 3 CONTINUE,
+  4 EXTRA, 5 OPTIONS (always the row before QUIT), 6 QUIT. Every row is on the ROM's 16 px grid from its first
+  row (`menuRowVdp`, `menuSlot`); without the AI (`SoRPython::available()`: no `sor_ai/embedded.py` in `--ai-path`,
+  or the Windows stub) its row is not drawn and the rows below move up one. The ROM's loop still draws its three
+  strings, OPTIONS at its new place. Choosing AI ASSIST sets `player_mode` to 3 and the flag and starts Python, so
   the mode screen's init clears the flag and each choice sets it; `--ai-assist` forces it through.
   The whole menu sits 5 tiles left and 2 up of the ROM's place (user), rows and cursor sprite.
-  **QUIT** (user, 2026-10-31) is the last row, with or without the AI: cursor 5, the wrap's
-  maximum. **CONTINUE** (cursor 4) sits between OPTIONS and QUIT only while `checkpoint.yaml` exists, and is
-  skipped like AI ASSIST otherwise (see **Checkpoints**). Choosing it pushes `SDL_EVENT_QUIT` in `select_menu_resolve_choice`, so it ends
-  the game the way closing the window does.
+  **CONTINUE** is always there (user): while no `checkpoint.yaml` exists it is drawn in palette line 3, black on
+  this screen, whose letter colour (1) the init sets to grey in the target palette, and the cursor passes over it,
+  as it does over AI ASSIST without the AI and 2 PLAYERS with one pad (the way it was going; a row that goes away
+  under it moves it down). An unusable save is deleted, the row dimmed, the cursor put on EXTRA and the menu faded
+  back in (sub-state `$00`); returning to `$06`, as before, left the screen black. **QUIT** (user, 2026-10-31) pushes
+  `SDL_EVENT_QUIT` in `select_menu_resolve_choice`, so it ends the game the way closing the window does.
   **Back or the touch pad** (`SDL_GAMEPAD_BUTTON_BACK`, `_TOUCHPAD`, any pad) on character select goes to the SEGA screen (user):
   `char_select_interactive` (sub-state `$04`, so not during the fades) does what the mode menu's init does to the AI,
   posts `$E1` and writes `game_state` 0, whose init resets the VDP. `SoRInput::takeExitPress` reads a latch of its own,
@@ -350,7 +353,7 @@ The user's rules are in the workspace `CLAUDE.md`, **Checkpoint saves**.
 
 The user's rules are in the workspace `CLAUDE.md`, **EXTRA > SURVIVAL MODE**.
 
-- **EXTRA** is cursor 5 of the mode menu (QUIT is 6, CONTINUE stays 4). Choosing it goes the way OPTIONS goes
+- **EXTRA** is cursor 4 of the mode menu, after CONTINUE and before OPTIONS. Choosing it goes the way OPTIONS goes
   (sub-state + 2, the fade, `options_menu_build`), which then opens `SoRExtraMenu` on the cleared screen instead of
   OPTIONS' rows; `game_start_screen_update` runs its frames from sub-state `$10` to `$28` and sends BACK and START to
   the fade-out at `$28`; START first runs the initials keyboard for each player (`SoRInitialsKeyboard`, the menu's
