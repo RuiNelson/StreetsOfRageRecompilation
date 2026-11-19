@@ -3,6 +3,7 @@
 #include "SoRInitialsKeyboard.hpp"
 #include "SoRInput.hpp"
 #include "SoRMenuCanvas.hpp"
+#include "SoRGta6.hpp"
 #include "SoRSurvival.hpp"
 
 #include <array>
@@ -27,11 +28,11 @@ constexpr int kElevator    = 6; // round 7 is not offered (user, 2026-11-19: it 
 constexpr m_long kP2PadMissing = 0xFFFFFC0Au;
 
 enum class Page { Extra, Survival, Initials, Result };
-enum class Row { Survival, Back, Players, Round, Start, Ok };
+enum class Row { Survival, Gta6, Back, Players, Round, Start, Ok };
 
 std::vector<Row> rows(Page page) {
     if (page == Page::Extra)
-        return {Row::Survival, Row::Back};
+        return {Row::Survival, Row::Gta6, Row::Back};
     if (page == Page::Result)
         return {Row::Ok};
     if (page == Page::Initials)
@@ -44,12 +45,13 @@ int screenRow(Page page, Row row) {
         case Row::Survival:
         case Row::Players:
             return 7;
+        case Row::Gta6:
         case Row::Round:
             return 9;
         case Row::Start:
             return 11;
         case Row::Back:
-            return page == Page::Extra ? 9 : 13;
+            return page == Page::Extra ? 11 : 13;
         case Row::Ok:
             return 20;
     }
@@ -60,6 +62,7 @@ struct Menu {
     bool requested = false;
     bool isOpen    = false;
     bool start     = false; // START was chosen: the game begins after the fade
+    bool gta6      = false; // GTA 6 was chosen: that game begins after the fade
     bool swallow   = false; // ignore what is held when the menu opens
     Page page      = Page::Extra;
     int  cursor    = 0;
@@ -120,6 +123,8 @@ std::array<std::string_view, 2> help(const Menu &m, Row row) {
     switch (row) {
         case Row::Survival:
             return {"ENEMIES KEEP COMING UNTIL YOU HAVE", "NO LIVES LEFT. HOW MANY WILL FALL?"};
+        case Row::Gta6:
+            return {"ONE PLAYER AS THE POLICE CAR: IT", "RUNS THEM OVER. NO HIGH SCORES."};
         case Row::Players:
             if (m.players == 2)
                 return {"TWO PLAYERS, 3 LIVES EACH. THE LAST", "BLOW ON AN ENEMY WINS THE POINT."};
@@ -172,6 +177,9 @@ void draw(const Menu &m, Canvas &canvas) {
         switch (row) {
             case Row::Survival:
                 canvas.text(kLabelColumn, y, "SURVIVAL MODE", selected);
+                break;
+            case Row::Gta6:
+                canvas.text(kLabelColumn, y, "GTA 6", selected);
                 break;
             case Row::Back:
                 canvas.text(kLabelColumn, y, "BACK", selected);
@@ -326,6 +334,10 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
         } else if (confirm && row == Row::Survival) {
             playSound(memory, kSoundPick);
             goTo(m, Page::Survival, Row::Start);
+        } else if (confirm && row == Row::Gta6) {
+            playSound(memory, kSoundPick);
+            m.gta6 = true;
+            result = Result::Start;
         } else if (confirm && row == Row::Start) {
             playSound(memory, kSoundPick);
             typeInitials(0);
@@ -345,6 +357,12 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
 
 bool takeStart(SystemMemory &memory) {
     Menu &m = menu();
+    if (m.gta6) {
+        m.gta6      = false;
+        m.requested = false;
+        SoRGta6::begin(memory);
+        return true;
+    }
     if (!m.start)
         return false;
     m.start     = false;

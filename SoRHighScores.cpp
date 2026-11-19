@@ -167,7 +167,25 @@ void insertAndSort(SystemMemory &memory, int player) {
             memory.writeByte(kTable + static_cast<std::uint32_t>(entry * kEntrySize + i), entries[entry][i]);
 }
 
+// $5846: what the name entry does when the last letter is in.
+void endNameEntry(SystemMemory &memory, std::uint32_t object, int player) {
+    if (memory.readWord(kGameState) == kGameStateEnding) {
+        memory.writeByte(object + kObjectState, 2);
+    } else {
+        memory.writeByte(kPlayerMode, static_cast<std::uint8_t>(memory.readByte(kPlayerMode) | (1u << player)));
+        memory.writeByte(object + 0x4Bu, static_cast<std::uint8_t>(memory.readByte(object + 0x4Bu) & 0x7Fu));
+        memory.writeByte(object + kObjectState, 0);
+    }
+}
+
 } // namespace
+
+bool skipNameEntry(SystemMemory &memory, std::uint32_t object) {
+    if (memory.readByte(object + kObjectState) != 0)
+        return false; // the name entry is already under way
+    endNameEntry(memory, object, object == kP1Object ? 0 : 1);
+    return true;
+}
 
 bool enterInitials(SystemMemory &memory, std::uint32_t object) {
     if (memory.readByte(object + kObjectState) != 0)
@@ -188,14 +206,7 @@ bool enterInitials(SystemMemory &memory, std::uint32_t object) {
         memory.writeByte(name + 1 + static_cast<std::uint32_t>(i), c == ' ' ? 0 : static_cast<std::uint8_t>(c - 'A' + 1));
     }
 
-    // $5846: what the name entry does when the last letter is in.
-    if (memory.readWord(kGameState) == kGameStateEnding) {
-        memory.writeByte(object + kObjectState, 2);
-    } else {
-        memory.writeByte(kPlayerMode, static_cast<std::uint8_t>(memory.readByte(kPlayerMode) | (1u << player)));
-        memory.writeByte(object + 0x4Bu, static_cast<std::uint8_t>(memory.readByte(object + 0x4Bu) & 0x7Fu));
-        memory.writeByte(object + kObjectState, 0);
-    }
+    endNameEntry(memory, object, player);
     insertAndSort(memory, player);
     return true;
 }

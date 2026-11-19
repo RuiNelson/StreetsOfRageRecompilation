@@ -1,6 +1,7 @@
 #include "SoRWidescreenArena.hpp"
 
 #include "SoRCpuOps.hpp"
+#include "SoRGta6.hpp" // cull_sprite_piece_x, resolve_enemy_player_contact
 
 #include <cstdint>
 
@@ -324,6 +325,10 @@ void StreetsOfRage::resolve_enemy_player_contact(m_long /*entry_*/) {
         unwound = (cpu().ssp & 0x00FFFFFFu) > (spBefore & 0x00FFFFFFu);
         return !cpu().flagZ();
     };
+
+    // GTA 6: the car on the road strikes with its whole body.
+    if (SoRGta6::carStrikes(mem, cpu().a[1]))
+        SoRGta6::writeStrikeBox(mem, cpu().a[1]);
 
     cpu().a[2] = cpu().a[1] + 0x64;
     const bool firstZero = mem.readWord(cpu().a[2]) == 0;
@@ -744,7 +749,9 @@ void StreetsOfRage::cull_sprite_piece_x(m_long /*entry_*/) {
     const m_word lower = vdp().widescreen() ? 0x0040u : 0x0060u;
     const m_word x     = cpu().dw(0);
 
-    if (x >= lower && x < 0x01E0u) {
+    // GTA 6: P1 and its shadow are mapped as usual (the screen position, the boxes and the art the ROM takes from
+    // that), but none of their pieces is shown: the car is drawn in their place.
+    if (x >= lower && x < 0x01E0u && !SoRGta6::hidesObject(memory(), cpu().a[0])) {
         cpu().d[5] = 0;
         cpu().setNZClearVC(0, 0x80000000u);
     } else {

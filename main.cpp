@@ -1,6 +1,7 @@
 #include "SoRCheats.hpp"
 #include "SoRControlsConfig.hpp"
 #include "SoRDamageCircles.hpp"
+#include "SoRGta6.hpp"
 #include "SoRInput.hpp"
 #include "SoRPause.hpp"
 #include "SoRPlatform.hpp"
@@ -329,6 +330,7 @@ int main(int argc, char *argv[]) {
             SoRPython::start(sor.memory());
         }
         sor.vdp().setFrameOverlay([&sor](Framebuffer &framebuffer, int width, int height) {
+            SoRGta6::draw(framebuffer, width, height);
             SoRDamageCircles::draw(framebuffer, width, height);
             SoRPause::drawOverlay(sor.memory(), framebuffer, width, height);
         });

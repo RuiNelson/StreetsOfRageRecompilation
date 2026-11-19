@@ -1,5 +1,6 @@
 #include "SoRCheats.hpp"
 #include "SoRControlsMenu.hpp"
+#include "SoRGta6.hpp"
 #include "SoRHighScores.hpp"
 #include "SoRInput.hpp"
 #include "SoRPython.hpp"
@@ -485,6 +486,9 @@ void StreetsOfRage::remap_player_gameplay_input(m_long /*entry_*/) {
 
     cpu().setDw(0, static_cast<m_word>(memory().readWord(cpu().a[0] + kPlayerInputWord) & 0xF0F0u));
     cpu().setDw(0, static_cast<m_word>(cpu().dw(0) | memory().readWord(cpu().a[1])));
+    // GTA 6: the car has no punch and no jump (so no attack and no pickup); Special still calls the police.
+    if (SoRGta6::isCar(memory(), cpu().a[0]))
+        cpu().setDw(0, static_cast<m_word>(cpu().dw(0) & ~SoRGta6::kMaskedButtons));
 
     // The ROM rotates A/B/C here by the OPTIONS button layout
     // ($FFFFC8 control_scheme). Players now bind actions instead
@@ -545,8 +549,10 @@ void StreetsOfRage::remap_player_gameplay_input(m_long /*entry_*/) {
 // ---------------------------------------------------------------------------
 void StreetsOfRage::high_score_name_entry_dispatcher(m_long /*entry_*/) {
     traceEnter(0x56E6u);
-    // QUALITY-OF-LIFE initials: the name goes in without the screen.
-    if (SoRHighScores::enterInitials(memory(), cpu().a[0])) {
+    // GTA 6 keeps no high score (user): no name, nothing in the table. QUALITY-OF-LIFE initials: the name goes
+    // in without the screen.
+    if ((SoRGta6::active() && SoRHighScores::skipNameEntry(memory(), cpu().a[0])) ||
+        SoRHighScores::enterInitials(memory(), cpu().a[0])) {
         return68k(cpu());
         return;
     }

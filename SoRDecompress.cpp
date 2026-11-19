@@ -1,4 +1,5 @@
 #include "SoR.hpp"
+#include "SoRDecompress.hpp"
 #include "SoRHighScores.hpp"
 #include "SoRQolConfig.hpp"
 
@@ -405,6 +406,10 @@ struct IncrementalNemesisState {
 thread_local std::unordered_map<StreetsOfRage *, IncrementalNemesisState> incrementalNemesis;
 
 } // namespace
+
+std::vector<m_byte> SoRDecompress::nemesis(SystemMemory &memory, m_long source) {
+    return decodeNemesis([&memory](m_long address) { return memory.readByte(address); }, source).data;
+}
 
 // ---------------------------------------------------------------------------
 // $8192/$81A4 — blocking Nemesis to VDP or 68000 work RAM.

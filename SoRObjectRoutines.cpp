@@ -1,4 +1,5 @@
 #include "SoRCpuOps.hpp"
+#include "SoRGta6.hpp"
 #include "SoRQolConfig.hpp"
 
 using namespace sorops;
@@ -543,12 +544,17 @@ void StreetsOfRage::player_load_action_velocity(m_long /*entry_*/) {
     auto &mem = memory();
 
     constexpr m_long kPlayerActionVelocityTablePtrs = 0x00003664u;
-    c.d[1] = static_cast<m_long>(mem.readByte(c.a[0] + 0x50u)) << 2;
-    c.a[1] = mem.readLong(kPlayerActionVelocityTablePtrs + c.d[1]);
     const m_byte action = mem.readByte(c.a[0] + 0x30u);
+    // GTA 6 (user): the car drives at three times Blaze's (character 2) walk, in each of the eight directions.
+    constexpr m_byte kBlaze    = 2;
+    constexpr int    kCarSpeed = 3;
+    const bool car = SoRGta6::isCar(mem, c.a[0]) && (action & 0xFEu) >= 0x06u && (action & 0xFEu) <= 0x0Eu;
+    c.d[1] = static_cast<m_long>(car ? kBlaze : mem.readByte(c.a[0] + 0x50u)) << 2;
+    c.a[1] = mem.readLong(kPlayerActionVelocityTablePtrs + c.d[1]);
     c.setDb(1, static_cast<m_byte>(action & 0xFEu));
     const auto loadVelocity = [&](m_long offset) {
-        return static_cast<m_long>(static_cast<std::int32_t>(sext8(mem.readByte(c.a[1] + sext16(c.dw(1)) + offset)) << 16) >> 4);
+        const auto speed = static_cast<std::int32_t>(sext8(mem.readByte(c.a[1] + sext16(c.dw(1)) + offset))) * (car ? kCarSpeed : 1);
+        return static_cast<m_long>(static_cast<std::int32_t>(static_cast<std::uint32_t>(speed) << 16) >> 4);
     };
     if (!clearBitMem(c, mem, c.a[0] + 0x58u, 2)) {
         c.d[2] = loadVelocity(0);

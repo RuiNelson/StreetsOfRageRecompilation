@@ -1,6 +1,7 @@
 #include "SoR.hpp"
 #include "SoRCheats.hpp"
 #include "SoRDamageCircles.hpp"
+#include "SoRGta6.hpp"
 #include "SoRCheckpoint.hpp"
 #include "SoRSurvival.hpp"
 #include "SoRHighScores.hpp"
@@ -243,10 +244,13 @@ void StreetsOfRage::compute_player_attack_descriptor(m_long /*entry_*/) {
     m_byte       damage         = static_cast<m_byte>(strength & 0x0Fu);
     damage = SoRCheats::adjustP1PunchDamage(object, damage, SoRCheats::p1PunchPowerEnabled());
 
-    memory().writeByte(object + kObjDamage, damage);
+    // GTA 6: the car on the road strikes with its whole body (resolve_enemy_player_contact), and its touch is
+    // more than any health.
+    const bool car = SoRGta6::carStrikes(memory(), object);
+    memory().writeByte(object + kObjDamage, car ? SoRGta6::kStrikeDamage : damage);
 
-    const m_byte hitFlags =
-        static_cast<m_byte>((memory().readByte(object + kObjHitFlags) & 0xFEu) | reactionNibble);
+    const m_byte hitFlags = static_cast<m_byte>((memory().readByte(object + kObjHitFlags) & 0xFEu) |
+                                                (car ? SoRGta6::kStrikeReaction : reactionNibble));
     memory().writeByte(object + kObjHitFlags, hitFlags);
 
     // Same as RETURN_68K() in generated code.
@@ -271,6 +275,7 @@ void StreetsOfRage::wait_vblank_and_upload_graphics(m_long /*entry_*/) {
     applyPendingSoRCheats(memory());
     SoRCheckpoint::onFrame(memory()); // the last wave start, and a restore under way
     SoRSurvival::onFrame(memory());   // a survival game: its enemies and its end
+    SoRGta6::onFrame(memory());       // a GTA 6 game: its end
 
     memory().writeByte(kVBlankMailbox, 1);
     cpu().setStatus(kStatusIrqEnabled);
@@ -283,6 +288,7 @@ void StreetsOfRage::wait_vblank_and_upload_graphics(m_long /*entry_*/) {
     });
 
     SoRDamageCircles::capture(memory()); // the handler has just uploaded this frame's SAT
+    SoRGta6::capture(memory());          // GTA 6: the car, on the same frame
     SoRHighScores::saveIfChanged(memory()); // --qol scores: once a name is in
 
     cpu().ssp += 4;
@@ -297,6 +303,7 @@ void StreetsOfRage::wait_vblank_without_graphics_upload(m_long /*entry_*/) {
     applyPendingSoRCheats(memory());
     SoRCheckpoint::onFrame(memory()); // the last wave start, and a restore under way
     SoRSurvival::onFrame(memory());   // a survival game: its enemies and its end
+    SoRGta6::onFrame(memory());       // a GTA 6 game: its end
 
     memory().writeByte(kVBlankMailbox, 2);
     cpu().setStatus(kStatusIrqEnabled);

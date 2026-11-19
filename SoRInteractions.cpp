@@ -1,4 +1,5 @@
 #include "SoRCheats.hpp"
+#include "SoRGta6.hpp"
 #include "SoR.hpp"
 
 #include <cstdint>
@@ -378,7 +379,8 @@ void StreetsOfRage::find_close_interaction_target(m_long entry_) {
     traceEnter(entry_);
 
     const m_long player = cpu().a[0];
-    const m_long target = findPickupTarget(memory(), player);
+    // GTA 6: the car picks up nothing.
+    const m_long target = SoRGta6::isCar(memory(), player) ? 0u : findPickupTarget(memory(), player);
     if (target == 0u) {
         setResultD7(cpu(), false);
         return68k(cpu());

@@ -2,6 +2,7 @@
 #include "SoRCheckpoint.hpp"
 #include "SoRControlsMenu.hpp"
 #include "SoRExtraMenu.hpp"
+#include "SoRGta6.hpp"
 #include "SoRInput.hpp"
 #include "SoRPause.hpp"
 #include "SoRPython.hpp"
@@ -1069,6 +1070,9 @@ void StreetsOfRage::update_objects_and_build_sprites(m_long entry_) {
         SOR_CALL_68K(wait_vblank_without_graphics_upload(), 0xADE8u, 0x010514u);
 
         memory().writeWord(kP1Object + 0x54, memory().readWord(kP1ButtonHeld));
+        if (SoRGta6::isCar(memory(), kP1Object)) // GTA 6: no punch, no jump
+            memory().writeWord(kP1Object + 0x54,
+                               static_cast<m_word>(memory().readWord(kP1Object + 0x54) & ~SoRGta6::kMaskedButtons));
         memory().writeWord(kP2Object + 0x54, memory().readWord(kP2ButtonHeld));
         memory().writeByte(0xFFFFFA47u, memory().readByte(kP1ButtonPress));
         memory().writeByte(0xFFFFFA48u, memory().readByte(kP2ButtonPress));

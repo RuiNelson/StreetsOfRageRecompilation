@@ -10,7 +10,7 @@ class SystemMemory;
 // menu is open game_start_screen_update runs it instead of the OPTIONS rows. Host UI like the CONTROLS menu,
 // drawn with the same font, with its state in C++.
 //
-// Screens: EXTRA (SURVIVAL MODE, BACK); SURVIVAL MODE (PLAYERS, ROUND, START, BACK, and the records); the
+// Screens: EXTRA (SURVIVAL MODE, GTA 6, BACK); SURVIVAL MODE (PLAYERS, ROUND, START, BACK, and the records); the
 // result of a survival game (OK), where the game comes back to after GAME OVER.
 namespace SoRExtraMenu {
 
@@ -33,8 +33,8 @@ enum class Result { Open, Back, Start };
 /// cleared plane A and closed; the caller fades the screen out.
 Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote);
 
-/// After Start, at the end of the fade (options_menu_return): starts the survival game chosen, once. False
-/// when the menu was left with BACK, and the caller goes back to the mode menu.
+/// After Start, at the end of the fade (options_menu_return): starts the survival or GTA 6 game chosen, once.
+/// False when the menu was left with BACK, and the caller goes back to the mode menu.
 bool takeStart(SystemMemory &memory);
 
 } // namespace SoRExtraMenu

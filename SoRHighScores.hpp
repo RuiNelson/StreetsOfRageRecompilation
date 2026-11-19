@@ -27,6 +27,10 @@ void saveIfChanged(SystemMemory &memory, bool force = false);
 /// screen never appears. False when the ROM's name entry should run.
 bool enterInitials(SystemMemory &memory, std::uint32_t object);
 
+/// As enterInitials, but nothing goes into the table: the name entry ends at once (GTA 6 keeps no high score).
+/// False once the ROM's name entry is under way.
+bool skipNameEntry(SystemMemory &memory, std::uint32_t object);
+
 /// Removes the file (OPTIONS > QUALITY-OF-LIFE saved with the option off).
 void erase();
 

@@ -1,6 +1,7 @@
 #include "SoRCheckpoint.hpp"
 
 #include "SoRControlsConfig.hpp"
+#include "SoRGta6.hpp"
 #include "SoRPython.hpp"
 #include "SoRRemoteInput.hpp"
 #include "SoRSurvival.hpp"
@@ -464,8 +465,9 @@ void onFrame(SystemMemory &memory) {
 }
 
 bool saveAllowed() {
-    // No checkpoint in a survival game: there is no wave to come back to.
-    return last.has_value() && !inMrXRoom && !SoRSurvival::active();
+    // No checkpoint in a survival game: there is no wave to come back to. Nor in GTA 6: CONTINUE would bring the
+    // round back without the car.
+    return last.has_value() && !inMrXRoom && !SoRSurvival::active() && !SoRGta6::active();
 }
 
 bool save() {

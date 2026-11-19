@@ -47,7 +47,8 @@ Before changing files:
 | `SoRHighScores.*` | `--qol scores` (OPTIONS row SAVE HIGH SCORES, user): the ROM's ten 12-byte entries at `$FFFF4A (top10_score_table)` in `highscores.yaml`, as ten hex strings; the table stays in work RAM. Loaded inside `enigmadec`'s `$12832` wrapper, right after the default table is decoded (and when SAVE AND APPLY turns the option on). Saved by diff against the last load or save, once a frame in both vblank waits, without the "new entry" flag bits (+0 bits 7/6), and not while a player object (`+$4B` bit 7) is typing a name; forced once on exit. SAVE AND APPLY with the option off deletes the file (user). **Initials** (user; menu and `qol.yaml` only, no command line): `enterInitials`, called from `$56E6`, skips the ROM's name entry when the player has initials, or for P2 under AI Assist (always `AI `): it writes `$FF0D`/`$FF15` (a letter's number from 1, blank 0), does `$5846`'s ending and then `$12784` and `$127BA` in C++, so the continue prompt runs next frame as usual. Unset initials: the ROM's screen. The ROM keeps no name to reuse: `$56F6` clears it at each entry. The QoL menu has pages (a PAGE row where RESET was, Left/Right turn it) and an on-screen keyboard. `cheat` (user): turning it on in the menu takes a message box and Special+Punch+Jump+Right from one player (`heldActions`, no latch), or Start to give up; turning it off, `--qol cheat` and the file need nothing. Entering OPTIONS sets `$FFFA7B (cheat_flag)` without the ROM's chord (P2 A+B+C+Right, `$78`), which still works with it off. SAVE AND APPLY applies it at once, since the menu is inside OPTIONS; turning it off also puts back level 0 and `$FFFFCA (lives_setting)` 1 |
 | `SoRDamageCircles.*` | `--qol damage`: the circles over regular enemies, on `VDP::setFrameOverlay` under the pause menu. `capture` runs after `$10502`'s wait, when the frame's SAT has just gone up, so they show what the sprites show (RAM is ahead of the picture on the render thread, and `$10514`'s frames upload no SAT). Types `$20`-`$27`, `$2A`, with state and `+$38` nonzero. Full is `+$38`, plus 4 on the hardest difficulty ($93CE adds it only to `+$33`). **Only a negative health word kills, so 0 is alive** (a 0-to-full scale showed a finished gauge on a living enemy, user report): negative health alone fills the ring, which also covers the fall and the police sweep (`$FFFF`). Alive, the disc stops at a radius of 2.25 px at 0 health, so a gap inside the ring still shows (at 2.5 px it looked full); the edges are antialiased by coverage. `$9D16`'s death blink toggles the render flag, which the circle ignores in that state alone (user: no blinking); elsewhere that flag means hidden, as in `$A59C`. The top is the current mapping frame's highest piece, so it includes the piece's transparent rows: over a body on the floor the circle floats about 15 px up |
 | `SoRCheckpoint.*` | Checkpoint saves (see **Checkpoints**) and the manual `$107F2 (spawn_round_players)` |
-| `SoRExtraMenu.*`, `SoRSurvival.*` | The mode menu's EXTRA and SURVIVAL MODE (see **Survival mode**), and the manual `$9E26 (ordinary_enemy_award_score)` |
+| `SoRExtraMenu.*`, `SoRSurvival.*` | The mode menu's EXTRA (SURVIVAL MODE, GTA 6) and SURVIVAL MODE (see **Survival mode**), and the manual `$9E26 (ordinary_enemy_award_score)` |
+| `SoRGta6.*` | EXTRA > GTA 6 (see **GTA 6**): the police car in P1's place, drawn in the host layer |
 | `SoRInitialsKeyboard.*` | The initials keyboard both QUALITY-OF-LIFE and SURVIVAL MODE use |
 | `SoRMenuCanvas.hpp` | What those two menus share: the OPTIONS font, drawing to plane A, held directions |
 | `SoRPlatform.hpp` | `consoleMenus()`: the PS5's menus, on with `__PROSPERO__` or `--console-menus` (workspace `CLAUDE.md`, **PS5 menus**) |
@@ -403,6 +404,33 @@ The user's rules are in the workspace `CLAUDE.md`, **EXTRA > SURVIVAL MODE**.
   since been taken out), two players
   with initials (the 2P table, the result screen), the QoL keyboard unchanged.
   Not checked: the menus with a real pad or keyboard, widescreen, the PS5, items' look on every round, 16 at once.
+
+## GTA 6
+
+The user's rules are in the workspace `CLAUDE.md`, **EXTRA > GTA 6**. EXTRA's second row; `takeStart` calls
+`SoRGta6::begin` (player mode 1, scores cleared, character select; the round is OPTIONS'), and the mode ends when
+`game_state` drops below `$10` (high scores, title, SAVE AND QUIT). P1 stays the ROM's player object.
+
+- **The car** is the special's type `$05`: Nemesis cue 0 (tile `$25C`), animation set `$70A78` (body 0; wheels 2, 2
+  lines lower, whose two frames swap the two wheel drawings), palette list `$5A78` (line 1), decoded once from the ROM
+  (`SoRDecompress::nemesis`) and drawn in `VDP::setFrameOverlay`, captured with the damage circles after `$10502`'s
+  wait; it follows P1's `+$01` bit 0 (the blink), its wheels turn while it moves. Animations 0 and 2 face right.
+  **It never turns round** (user): it faces right, and left on rounds 7 and 8 (user; mirrored here) and driving back
+  is reversing. Animation 3 mirrors only every other frame: drawn as the left-facing wheels, they jumped (user report). It is 160 px wide, and `$43AA` keeps the ROM's X window, so it can hang 48 px past an edge: keeping it whole on
+  screen (P1 80 px in) kept P1 from round 7's and round 8's exit doors at the screen's edge (user report).
+- **P1 is still mapped** (`$AF46` writes `+$28` for the camera follow and the box ids `+$02/+$03`): only its pieces and
+  its shadow's (`$4A` with `+$3E = $B800`) are refused in `cull_sprite_piece_x`. Skipping its render bucket froze the camera.
+- **The touch** is the ROM's strike: while P1 stands or drives (actions `$02`-`$0F`, health > 0), `$41EA` gives it `+$34
+  = $7F` and reaction 1, and `$AAA0` writes the car's box into `+$64` (X ±72, lane ±12, height -48..+4). Every enemy's
+  and boss's contact test goes through `$AAA0`, and their damage paths subtract the whole `+$34` byte, so one touch kills
+  and the score, waves and boss deaths are the ROM's.
+- **Speed**: `$3614` uses Blaze's table (character 2) times 3 for the walk actions `$06`-`$0F` (9.75 px/frame across).
+  **Input**: `$568A` and `$AD8E`'s copy of `+$54` clear punch and jump (`$3030`); `$3136` finds nothing.
+- **High scores**: `$56E6` calls `SoRHighScores::skipNameEntry`, `$5846`'s ending without the name or the table.
+- Checked live (`--turbo 2`/`4`, remote input, `HOME` in a scratch folder): the menu, round 1 to Antonio and on into
+  round 2 with no damage taken, a GAME OVER with a 500000 score (no name entry, table unchanged), every boss dying
+  at a touch (rounds 2-6, round 8's rush); the user played it through, round 8 included.
+  Not checked: widescreen, the PS5, a real pad on the menu.
 
 ## ROM and regeneration
 

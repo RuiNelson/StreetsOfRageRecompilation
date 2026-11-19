@@ -1,4 +1,5 @@
 #include "SoRCpuOps.hpp"
+#include "SoRGta6.hpp"
 #include "SoRRemoteInput.hpp"
 #include "SoRSurvival.hpp"
 
@@ -712,8 +713,9 @@ void StreetsOfRage::update_join_and_continue_hud(m_long /*entry_*/) {
         goto outP1;
     if (mem.readWord(kLevel) == 0x0007u)
         goto outP1;
-    // SURVIVAL MODE: nobody joins a game under way (its record is for the players who started it).
-    if (SoRSurvival::active())
+    // SURVIVAL MODE: nobody joins a game under way (its record is for the players who started it). GTA 6 is
+    // for one player.
+    if (SoRSurvival::active() || SoRGta6::active())
         goto outP1;
     if (mem.readByte(kDemoMode) == 0 && mem.readByte(kP2JoypadAbsent) != 0) {
         // A pad that is not there: only P2 already in (object type nonzero) leaves without drawing.
