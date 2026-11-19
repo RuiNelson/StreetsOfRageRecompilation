@@ -109,6 +109,7 @@ int main(int argc, char *argv[]) {
     std::string   sorAuxAddrFile; // if set, record unknown dispatch targets here
     std::string   sorCallLogFile;
     std::string   frameSync;
+    std::string   scalingFilter;
     std::string   languagePin = "en";
     std::string   videoHz     = "60";
     std::string   soundMode   = "prerendered";
@@ -148,6 +149,14 @@ int main(int argc, char *argv[]) {
             ->group("Video");
     const auto *integerScalingOption =
         app.add_flag("--integer-scaling,!--no-integer-scaling", integerScalingFlag, "Scale the picture by whole multiples only, or not")
+            ->group("Video");
+    const auto *scalingFilterOption =
+        app.add_option("--scaling-filter",
+                       scalingFilter,
+                       "How the picture is scaled to the window. nearest: sharp, uneven pixels. bilinear: smooth, a little "
+                       "blurred. hybrid: nearest to the next whole multiple, then bilinear down to the size. metalfx: "
+                       "Apple's MetalFX upscaler (macOS 13 and newer; elsewhere hybrid)")
+            ->check(CLI::IsMember({"nearest", "bilinear", "hybrid", "metalfx"}))
             ->group("Video");
     const auto *frameSyncOption = app.add_option("--frame-sync",
                                                  frameSync,
@@ -250,6 +259,8 @@ int main(int argc, char *argv[]) {
         video.widescreen = widescreenFlag;
     if (integerScalingOption->count() > 0)
         video.integerScaling = integerScalingFlag;
+    if (scalingFilterOption->count() > 0)
+        video.scalingFilter = *SoRVideoConfig::scalingFilterFromKey(scalingFilter);
     if (frameSyncOption->count() > 0)
         video.frameSync = *SoRVideoConfig::frameSyncFromKey(frameSync);
     else if (turboMultiplier > 0)
@@ -271,6 +282,7 @@ int main(int argc, char *argv[]) {
         env.setVDPTurboMultiplier(turboMultiplier);
         env.setWidescreen(video.widescreen);
         env.setIntegerScaling(video.integerScaling);
+        env.setScalingFilter(video.scalingFilter);
         if (silentFlag) {
             env.sound().disable();
         } else if (soundMode == "prerendered") {

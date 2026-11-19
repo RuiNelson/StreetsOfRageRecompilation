@@ -44,6 +44,27 @@ std::optional<VDP::Synchronization> frameSyncFromKey(std::string_view key) {
     return std::nullopt;
 }
 
+std::string_view scalingFilterKey(VDP::ScalingFilter filter) {
+    switch (filter) {
+        case VDP::Nearest:
+            return "nearest";
+        case VDP::Bilinear:
+            return "bilinear";
+        case VDP::MetalFX:
+            return "metalfx";
+        case VDP::Hybrid:
+            break;
+    }
+    return "hybrid";
+}
+
+std::optional<VDP::ScalingFilter> scalingFilterFromKey(std::string_view key) {
+    for (const VDP::ScalingFilter filter : {VDP::Nearest, VDP::Bilinear, VDP::Hybrid, VDP::MetalFX})
+        if (scalingFilterKey(filter) == key)
+            return filter;
+    return std::nullopt;
+}
+
 std::filesystem::path defaultPath() {
     return SoRControlsConfig::defaultPath().parent_path() / "video.yaml";
 }
@@ -75,6 +96,10 @@ VideoConfig loadOrCreate(const std::filesystem::path &path) {
     readBool(root["widescreen"], config.widescreen);
     readBool(root["fullscreen"], config.fullscreen);
     readBool(root["integer_scaling"], config.integerScaling);
+    if (const YAML::Node filter = root["scaling_filter"]; filter && filter.IsScalar()) {
+        if (const auto value = scalingFilterFromKey(filter.Scalar()))
+            config.scalingFilter = *value;
+    }
     return config;
 }
 
@@ -87,6 +112,7 @@ bool save(const VideoConfig &config, const std::filesystem::path &path) {
     root["widescreen"]      = config.widescreen;
     root["fullscreen"]      = config.fullscreen;
     root["integer_scaling"] = config.integerScaling;
+    root["scaling_filter"]  = std::string(scalingFilterKey(config.scalingFilter));
 
     YAML::Emitter emitter;
     emitter << root;

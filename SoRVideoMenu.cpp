@@ -22,13 +22,13 @@ using SoRVideoConfig::VideoConfig;
 constexpr int kTitleRow    = 3;
 constexpr int kLabelColumn = 4;
 constexpr int kValueColumn = 22;
-constexpr int kHelpRow     = 22;
+constexpr int kHelpRow     = 23;
 
-enum class Row { FrameSync, Picture, Display, IntegerScaling, Reset, Save, Cancel };
+enum class Row { FrameSync, Picture, Display, IntegerScaling, ScalingFilter, Reset, Save, Cancel };
 constexpr std::array kDesktopRows = {
-    Row::FrameSync, Row::Picture, Row::Display, Row::IntegerScaling, Row::Reset, Row::Save, Row::Cancel};
+    Row::FrameSync, Row::Picture, Row::Display, Row::IntegerScaling, Row::ScalingFilter, Row::Reset, Row::Save, Row::Cancel};
 constexpr std::array kConsoleRows = {
-    Row::FrameSync, Row::Picture, Row::IntegerScaling, Row::Reset, Row::Save, Row::Cancel};
+    Row::FrameSync, Row::Picture, Row::IntegerScaling, Row::ScalingFilter, Row::Reset, Row::Save, Row::Cancel};
 
 std::span<const Row> rowList() {
     if (SoRPlatform::consoleMenus())
@@ -48,12 +48,14 @@ int screenRow(Row row) {
             return 11;
         case Row::IntegerScaling:
             return 13 - shift;
+        case Row::ScalingFilter:
+            return 15 - shift;
         case Row::Reset:
-            return 16 - shift;
+            return 17 - shift;
         case Row::Save:
-            return 18 - shift;
+            return 19 - shift;
         case Row::Cancel:
-            return 20 - shift;
+            return 21 - shift;
     }
     return 0;
 }
@@ -68,6 +70,8 @@ std::string_view label(Row row) {
             return "DISPLAY";
         case Row::IntegerScaling:
             return "INTEGER SCALING";
+        case Row::ScalingFilter:
+            return "SCALING FILTER";
         case Row::Reset:
             return "RESET TO DEFAULTS";
         case Row::Save:
@@ -100,6 +104,20 @@ std::string_view displayName(bool fullscreen) {
     return fullscreen ? "FULLSCREEN" : "WINDOW";
 }
 
+std::string_view scalingFilterName(VDP::ScalingFilter filter) {
+    switch (filter) {
+        case VDP::Nearest:
+            return "NEAREST";
+        case VDP::Bilinear:
+            return "BILINEAR";
+        case VDP::MetalFX:
+            return "METALFX";
+        case VDP::Hybrid:
+            break;
+    }
+    return "HYBRID";
+}
+
 struct Menu {
     bool        isOpen = false;
     int         cursor = 0;
@@ -107,6 +125,7 @@ struct Menu {
     VideoConfig pending;
     int         refreshHz = 0;
     int         normalHz  = 60;
+    bool        metalFX   = false; // the window can draw VDP::MetalFX
 
     std::optional<VideoConfig> chosen;
 
@@ -126,8 +145,16 @@ void changeFrameSync(VideoConfig &config, int step) {
     config.frameSync            = kModes[static_cast<std::size_t>((index + step + count) % count)];
 }
 
+// The filters in menu order; METALFX only where the window can draw it.
+void changeScalingFilter(VideoConfig &config, int step, bool metalFX) {
+    constexpr std::array kFilters = {VDP::Nearest, VDP::Bilinear, VDP::Hybrid, VDP::MetalFX};
+    const int            count    = static_cast<int>(kFilters.size()) - (metalFX ? 0 : 1);
+    const auto           index    = static_cast<int>(std::ranges::find(kFilters, config.scalingFilter) - kFilters.begin());
+    config.scalingFilter          = kFilters[static_cast<std::size_t>((std::min(index, count - 1) + step + count) % count)];
+}
+
 // Left, Right or confirm on a row that holds a value. False on the others.
-bool changeValue(VideoConfig &config, Row row, int step) {
+bool changeValue(VideoConfig &config, Row row, int step, bool metalFX) {
     switch (row) {
         case Row::FrameSync:
             changeFrameSync(config, step);
@@ -140,6 +167,9 @@ bool changeValue(VideoConfig &config, Row row, int step) {
             return true;
         case Row::IntegerScaling:
             config.integerScaling = !config.integerScaling;
+            return true;
+        case Row::ScalingFilter:
+            changeScalingFilter(config, step, metalFX);
             return true;
         case Row::Reset:
         case Row::Save:
@@ -159,6 +189,8 @@ std::string value(const VideoConfig &config, Row row) {
             return std::string(displayName(config.fullscreen));
         case Row::IntegerScaling:
             return config.integerScaling ? "ON" : "OFF";
+        case Row::ScalingFilter:
+            return std::string(scalingFilterName(config.scalingFilter));
         case Row::Reset:
         case Row::Save:
         case Row::Cancel:
@@ -198,8 +230,20 @@ std::array<std::string, 2> help(const Menu &m, Row row) {
             return {"THE GAME RUNS IN A WINDOW.", "CTRL F SWITCHES WHILE PLAYING."};
         case Row::IntegerScaling:
             if (m.pending.integerScaling)
-                return {"SHARP, EVEN PIXELS, WITH BORDERS", "AROUND THE PICTURE."};
-            return {"THE PICTURE FILLS AS MUCH AS IT CAN,", "SOME PIXELS WIDER THAN OTHERS."};
+                return {"WHOLE MULTIPLES ONLY: EVEN PIXELS,", "WITH BORDERS AROUND THE PICTURE."};
+            return {"THE PICTURE FILLS AS MUCH AS IT CAN.", ""};
+        case Row::ScalingFilter:
+            switch (m.pending.scalingFilter) {
+                case VDP::Nearest:
+                    return {"SHARP PIXELS. OFF WHOLE MULTIPLES,", "SOME ARE WIDER THAN OTHERS."};
+                case VDP::Bilinear:
+                    return {"SMOOTH, EVEN PIXELS, A LITTLE", "BLURRED."};
+                case VDP::MetalFX:
+                    return {"APPLE'S METALFX UPSCALER: SMOOTHED", "AND SHARPENED EDGES."};
+                case VDP::Hybrid:
+                    break;
+            }
+            return {"SHARP, EVEN PIXELS: WHOLE MULTIPLE,", "THEN SMOOTHED TO FIT. RECOMMENDED."};
         case Row::Reset:
             return {"PUTS BACK THE DEFAULTS ABOVE. THEY", "COUNT ONLY AFTER SAVE AND APPLY."};
         case Row::Save:
@@ -238,7 +282,7 @@ void drawOptionsRow(SystemMemory &memory, const VideoConfig &current, bool highl
     drawText(memory, 18 + static_cast<int>(summary.size()), row, std::string(40 - 18 - summary.size(), ' '), highlighted);
 }
 
-void open(const VideoConfig &current, int refreshHz, int normalHz) {
+void open(const VideoConfig &current, int refreshHz, int normalHz, bool metalFX) {
     Menu &m     = menu();
     m           = Menu{};
     m.isOpen    = true;
@@ -246,6 +290,10 @@ void open(const VideoConfig &current, int refreshHz, int normalHz) {
     m.pending   = current;
     m.refreshHz = refreshHz;
     m.normalHz  = normalHz;
+    m.metalFX   = metalFX;
+    // What the window draws: a METALFX it cannot draw shows as HYBRID.
+    if (!metalFX && m.pending.scalingFilter == VDP::MetalFX)
+        m.pending.scalingFilter = VDP::Hybrid;
 }
 
 bool isOpen() {
@@ -278,7 +326,7 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
         playSound(memory, kSoundPick);
         close = true;
     } else if (left || right) {
-        if (changeValue(m.pending, row, right ? 1 : -1))
+        if (changeValue(m.pending, row, right ? 1 : -1, m.metalFX))
             playSound(memory, kSoundMove);
     } else if (confirm) {
         playSound(memory, kSoundPick);
@@ -297,7 +345,7 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
                 close = true;
                 break;
             default:
-                changeValue(m.pending, row, 1);
+                changeValue(m.pending, row, 1, m.metalFX);
                 break;
         }
     }

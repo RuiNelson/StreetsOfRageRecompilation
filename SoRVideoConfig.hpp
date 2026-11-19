@@ -15,6 +15,7 @@ struct VideoConfig {
     bool                 widescreen     = false;
     bool                 fullscreen     = false;
     bool                 integerScaling = false;
+    VDP::ScalingFilter   scalingFilter  = VDP::Hybrid;
 
     bool operator==(const VideoConfig &) const = default;
 };
@@ -22,6 +23,10 @@ struct VideoConfig {
 /// `auto`, `vsync`, `vsync-half`, `vsync-third`: the --frame-sync names.
 std::string_view                    frameSyncKey(VDP::Synchronization frameSync);
 std::optional<VDP::Synchronization> frameSyncFromKey(std::string_view key);
+
+/// `nearest`, `bilinear`, `hybrid`, `metalfx`: the --scaling-filter names.
+std::string_view                  scalingFilterKey(VDP::ScalingFilter filter);
+std::optional<VDP::ScalingFilter> scalingFilterFromKey(std::string_view key);
 
 /// `video.yaml`, in controls.yaml's folder.
 std::filesystem::path defaultPath();

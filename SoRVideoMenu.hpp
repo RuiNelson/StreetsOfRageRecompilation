@@ -19,8 +19,9 @@ namespace SoRVideoMenu {
 /// The OPTIONS screen's VIDEO row: its label and a summary of @p current.
 void drawOptionsRow(SystemMemory &memory, const SoRVideoConfig::VideoConfig &current, bool highlighted);
 
-/// @p refreshHz is the display's, 0 when unknown; @p normalHz the game's normal speed.
-void open(const SoRVideoConfig::VideoConfig &current, int refreshHz, int normalHz);
+/// @p refreshHz is the display's, 0 when unknown; @p normalHz the game's normal speed; @p metalFX whether the
+/// window can draw VDP::MetalFX (the SCALING FILTER row offers it only then).
+void open(const SoRVideoConfig::VideoConfig &current, int refreshHz, int normalHz, bool metalFX);
 bool isOpen();
 
 enum class Result { Open, Closed };

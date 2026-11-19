@@ -264,7 +264,7 @@ constexpr m_word kOptionsVideoRowInput = 0x30u; // sub-states: past the ROM's ta
 constexpr m_word kOptionsQolRowInput   = 0x34u;
 
 SoRVideoConfig::VideoConfig liveVideoConfig(const VDP &vdp) {
-    return {vdp.synchronization(), vdp.widescreen(), vdp.fullscreen(), vdp.integerScaling()};
+    return {vdp.synchronization(), vdp.widescreen(), vdp.fullscreen(), vdp.integerScaling(), vdp.scalingFilter()};
 }
 
 } // namespace
@@ -312,7 +312,8 @@ void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
         if (closed) {
             if (videoRow) {
                 if (const auto chosen = SoRVideoMenu::takeChosen()) {
-                    vdp().applyLive({chosen->frameSync, chosen->widescreen, chosen->integerScaling, chosen->fullscreen});
+                    vdp().applyLive(
+                        {chosen->frameSync, chosen->widescreen, chosen->integerScaling, chosen->fullscreen, chosen->scalingFilter});
                     SoRPython::setVideo(chosen->widescreen, chosen->frameSync == VDP::InternalTimer);
                     constexpr std::size_t kFlagWidescreen = 0; // main.cpp
                     remoteAccess().setFlag(kFlagWidescreen, chosen->widescreen);
@@ -353,7 +354,10 @@ void StreetsOfRage::options_input_controls(m_long /*entry_*/) {
     if ((memory().readByte(kP1ButtonPress) & 0x70u) != 0u) {
         memory().writeByte(kPlaySe, 0xBAu);
         if (videoRow)
-            SoRVideoMenu::open(liveVideoConfig(vdp()), vdp().displayRefreshHz(), isPal50Hz() ? 50 : 60);
+            SoRVideoMenu::open(liveVideoConfig(vdp()),
+                               vdp().displayRefreshHz(),
+                               isPal50Hz() ? 50 : 60,
+                               vdp().scalingFilterSupported(VDP::MetalFX));
         else if (qolRow)
             SoRQolMenu::open();
         else
