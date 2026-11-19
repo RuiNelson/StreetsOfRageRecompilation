@@ -1,6 +1,8 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
+#include <vector>
 
 class SystemMemory;
 
@@ -20,20 +22,32 @@ namespace SoRSurvival {
 /// `survival.yaml`, in controls.yaml's folder.
 std::filesystem::path defaultPath();
 
-/// The best results, read once from the file (0 when there is none).
-struct Records {
-    unsigned onePlayer  = 0;
-    unsigned twoPlayers = 0; // the two players' points added up
+/// One line of a top 3: who (one set of initials, or two for two players) and how many enemies fell (the two
+/// players' points added up).
+struct Entry {
+    std::string initials[2];
+    unsigned    points = 0;
 };
+/// The top 3 for one and for two players, best first, read once from the file.
+struct Records {
+    std::vector<Entry> onePlayer;
+    std::vector<Entry> twoPlayers;
+};
+inline constexpr std::size_t kTopEntries = 3;
 const Records &records();
+
+/// The initials @p player (0 or 1) last played with in this mode, or else the ones QUALITY-OF-LIFE has.
+std::string initials(int player);
+/// Keeps @p initials for @p player in `survival.yaml` (the EXTRA menu's keyboard, before the game).
+void setInitials(int player, const std::string &initials);
 
 /// How the last survival game ended, for the EXTRA menu.
 struct Result {
-    int      players  = 1;
-    unsigned points[2] = {0, 0};
-    unsigned total    = 0;
-    unsigned record   = 0; // the record now, this game's total if it beat it
-    bool     newRecord = false;
+    int         players  = 1;
+    std::string initials[2];
+    unsigned    points[2] = {0, 0};
+    unsigned    total    = 0;
+    int         place    = -1; // in the top 3 (0 is the record), -1 when not in it
 };
 
 /// The EXTRA menu's START: a survival game for @p players (1 or 2) with round @p round (0-7) behind it. Sets

@@ -48,6 +48,7 @@ Before changing files:
 | `SoRDamageCircles.*` | `--qol damage`: the circles over regular enemies, on `VDP::setFrameOverlay` under the pause menu. `capture` runs after `$10502`'s wait, when the frame's SAT has just gone up, so they show what the sprites show (RAM is ahead of the picture on the render thread, and `$10514`'s frames upload no SAT). Types `$20`-`$27`, `$2A`, with state and `+$38` nonzero. Full is `+$38`, plus 4 on the hardest difficulty ($93CE adds it only to `+$33`). **Only a negative health word kills, so 0 is alive** (a 0-to-full scale showed a finished gauge on a living enemy, user report): negative health alone fills the ring, which also covers the fall and the police sweep (`$FFFF`). Alive, the disc stops at a radius of 2.25 px at 0 health, so a gap inside the ring still shows (at 2.5 px it looked full); the edges are antialiased by coverage. `$9D16`'s death blink toggles the render flag, which the circle ignores in that state alone (user: no blinking); elsewhere that flag means hidden, as in `$A59C`. The top is the current mapping frame's highest piece, so it includes the piece's transparent rows: over a body on the floor the circle floats about 15 px up |
 | `SoRCheckpoint.*` | Checkpoint saves (see **Checkpoints**) and the manual `$107F2 (spawn_round_players)` |
 | `SoRExtraMenu.*`, `SoRSurvival.*` | The mode menu's EXTRA and SURVIVAL MODE (see **Survival mode**), and the manual `$9E26 (ordinary_enemy_award_score)` |
+| `SoRInitialsKeyboard.*` | The initials keyboard both QUALITY-OF-LIFE and SURVIVAL MODE use |
 | `SoRMenuCanvas.hpp` | What those two menus share: the OPTIONS font, drawing to plane A, held directions |
 | `SoRPlatform.hpp` | `consoleMenus()`: the PS5's menus, on with `__PROSPERO__` or `--console-menus` (workspace `CLAUDE.md`, **PS5 menus**) |
 | `SoRRNG.cpp` | The game's RNG draw, `$0104D8 (rng_draw)` (see **Manual subroutines**) |
@@ -352,7 +353,8 @@ The user's rules are in the workspace `CLAUDE.md`, **EXTRA > SURVIVAL MODE**.
 - **EXTRA** is cursor 5 of the mode menu (QUIT is 6, CONTINUE stays 4). Choosing it goes the way OPTIONS goes
   (sub-state + 2, the fade, `options_menu_build`), which then opens `SoRExtraMenu` on the cleared screen instead of
   OPTIONS' rows; `game_start_screen_update` runs its frames from sub-state `$10` to `$28` and sends BACK and START to
-  the fade-out at `$28`. `options_menu_return` then goes to character select (`SoRSurvival::begin` wrote
+  the fade-out at `$28`; START first runs the initials keyboard for each player (`SoRInitialsKeyboard`, the menu's
+  `Initials` page), which `setInitials` keeps. `options_menu_return` then goes to character select (`SoRSurvival::begin` wrote
   `player_mode`, `level` and `game_state` `$20`) or back to the mode menu. After GAME OVER `ingame_finish_fade` writes
   `game_state` `$0C`; `SoRSurvival::onFrame` turns it into `$10` with the result pending, and the mode menu's init
   jumps to sub-state `$0A` with the cursor on EXTRA.
@@ -368,13 +370,19 @@ The user's rules are in the workspace `CLAUDE.md`, **EXTRA > SURVIVAL MODE**.
   good in `$0A`), sends any other state back to `$08` (state `$00` would read the round's next wave), sets
   `level_spawn_flow_flags` bit 2, so a death gives its residency back (`$9DC0`), clears bit 3, so the last death never
   ends the section, and sets `deferred_spawn_credits` to the number wanted on screen minus
-  `active_progression_entity_count`. Within a ROM wave the residency never frees without bit 2; with it, families and
+  `active_progression_entity_count`, and never so many that fewer than 8 object slots would stay free (items, Jack's
+  axes and the scenery share the 32). Even so, 2-3 family slots and 3 colour slots are resident at once, so a crowd
+  of 16 is of a few kinds. Within a ROM wave the residency never frees without bit 2; with it, families and
   colours change as enemies die.
 - **What a record holds** is taken from the ROM's own edge records (timed and deferred, all eight ELC streams, decoded
   offline): per type, the `+$40` behaviour and `+$41` approach pairs that bring it in from a screen edge, without a
   camera-gated `+$40` (bit 7, never wakes at a locked camera) or round 7's drop `$43`; per round, the lanes. `$2A`
   has no such record and its colours are `$25`'s, so it is left out. Round 8 places enemies on the right only: one at
-  its left edge stayed in state 0 for good (the round starts at the map's right end).
+  its left edge stayed in state 0 for good (the round starts at the map's right end). Round 7 (the elevator, whose
+  right is the drop): `onFrame` moves an enemy `$C60` has just placed at the right edge (state 0, `cam_x + $140` to
+  `+$180`) over the deck's right half (`cam_x + $A0` to `+$100`) at `+$18 = $FFF0`, as Haku-Ro's ambush drop does;
+  it wakes on screen and its own walks' gravity (`$973E`) lands it on the floor (`$88`). Seen live: from `$FFF1` to
+  `$88`, then the walk.
 - **The point** is `ordinary_enemy_award_score` (manual): in survival it adds 1 in BCD to the player bit 7 of `+$39`
   names and maybe drops an item in a free slot at the enemy's X, lane and height; otherwise it tail-jumps to
   `add_bcd_score_value`, manual too (`SoRGameHUD.cpp`) so the port calls only ports. `update_score_hud_and_check_extra_life`
@@ -382,10 +390,17 @@ The user's rules are in the workspace `CLAUDE.md`, **EXTRA > SURVIVAL MODE**.
   had to go into `aux_addresses.txt`: without it the generator handed it to the manual function, and every object
   deletion scored a point (seen live: a point a frame and a frozen object table).
 - No join (`update_join_and_continue_hud`), no checkpoint (`saveAllowed`), OPTIONS' ROUND NO. put back afterwards.
+  The scores are cleared at the start and at the end: GAME OVER's way to the high-score table (state `$0C`), which
+  clears them, is not taken.
+- `survival.yaml`: `initials1`, `initials2`, `best_1p` (`{initials, points}`), `best_2p` (`{initials: [p1, p2],
+  points}`), best first, three each; a tie stays under the older line. The first version's single number reads as a
+  line without initials.
 - Checked live at `--turbo 4` with autoplay's AI (`HOME` in a scratch folder): round 1 one player to GAME OVER (59
   points, five at once, items dropped, the result and the file); across the runs every type and colour came but `$23` variant 1 (chance);
   rounds 7 and 8; two players with an AI each (37 + 37, the 2P record); every round's enemies awake and fighting.
-  Not checked: the menus with a real pad or keyboard, widescreen, the PS5, items' look on every round, a top-10 score.
+  After the changes of 2026-11-19: round 7 with the AI (46 points, 11 at once, the scores 0 afterwards), two players
+  with initials (the 2P table, the result screen), the QoL keyboard unchanged.
+  Not checked: the menus with a real pad or keyboard, widescreen, the PS5, items' look on every round, 16 at once.
 
 ## ROM and regeneration
 

@@ -2,6 +2,7 @@
 
 #include "SoRControlsConfig.hpp"
 #include "SoRExtraMenu.hpp"
+#include "SoRQolConfig.hpp"
 #include "SoR.hpp"
 
 #include "system/memory/SystemMemory.hpp"
@@ -29,6 +30,7 @@ constexpr u32 kGameState     = 0xFFFFFF00u;
 constexpr u32 kLevel         = 0xFFFFFF02u;
 constexpr u32 kWave          = 0xFFFFFF04u;
 constexpr u32 kScoreP1       = 0xFFFFFF09u; // three packed-BCD bytes, P2's 8 further on
+constexpr u32 kScoreLongP1   = 0xFFFFFF08u; // score_p1, the long holding them; score_p2 8 further on
 constexpr u32 kPlayerMode    = 0xFFFFFF18u;
 constexpr u32 kP1Continues   = 0xFFFFFF1Au; // word, P2 at +2
 constexpr u32 kP1Lives       = 0xFFFFFF20u; // lives, specials; P2's at +3
@@ -46,6 +48,15 @@ constexpr u32 kCamX      = 0xFFFFE002u;
 constexpr u32 kCamXMax   = 0xFFFFE01Au;
 constexpr u32 kCamXMin   = 0xFFFFE01Eu;
 constexpr u16 kRound8    = 7; // round 8 scrolls left: its open bound is the minimum
+constexpr int kRound7    = 6; // the elevator: past its right edge is the drop
+
+// Round 7: an enemy that would come in from the right falls from the sky onto the elevator instead (user: the
+// right is the drop, and they fell into it). Placed over the deck's right half, above the top of the screen, it
+// comes down under the ordinary enemies' own gravity ($973E, in every walk) and lands on the floor.
+constexpr u16 kDropFromX  = 0xA0; // screen X, from the camera
+constexpr u16 kDropToX    = 0x100;
+constexpr u16 kDropHeight = 0xFFF0; // +$18, as Haku-Ro's ambush drop ($E952)
+constexpr u16 kRightEdge  = 0x140; // $C60 places a right-side enemy at cam_x + $148 ($168 in widescreen)
 
 // The level pipeline and the enemy residency allocator ($5F4-$C28, $9D8C).
 constexpr u32 kLevelIntroActive     = 0xFFFFFA1Fu;
@@ -83,22 +94,26 @@ constexpr u32 kHudTimer      = 0xFFFF602Eu;
 constexpr u32 kHudRowBelow   = 0x50u;
 constexpr u16 kHudBlankTile  = 0x06D7u;
 
-// How many enemies at once: 2, one more for every 10 beaten, up to 5 (user's choice of values).
-constexpr unsigned kFirstOnScreen = 2;
-constexpr unsigned kMostOnScreen  = 5;
-constexpr unsigned kKillsPerStep  = 10;
+// How many enemies at once (user): 1, then 2 after the first one beaten, 3 after 3, and one more every 2 after
+// that (1, 3, 5, 7...), up to 16. The object table has 32 slots, which items, Jack's axes and the scenery share,
+// so the count also stops where fewer than 8 would be left free.
+constexpr unsigned kMostOnScreen = 16;
+constexpr unsigned kFreeSlotsKept = 8;
+unsigned enemiesAtOnce(unsigned kills) {
+    return std::min(kMostOnScreen, 1 + (kills + 1) / 2);
+}
 // One enemy in 6 leaves an item.
 constexpr unsigned kItemOneIn = 6;
 
 // What an enemy can be, from the records that bring each regular type in from a screen edge in the eight
 // ELC streams (object +$40 behaviour, +$41 approach offsets): a camera-gated +$40 (bit 7) never wakes at a
 // locked camera, and $43 is round 7's drop from above. Type $2A has none: its colours are $25's anyway.
-struct Entry {
+struct Spawn {
     u8 type;
     u8 behaviour; // +$40
     u8 approach;  // +$41
 };
-constexpr Entry kEntries[] = {
+constexpr Spawn kSpawns[] = {
     {0x20, 0x00, 0x19}, {0x20, 0x00, 0x2B}, {0x20, 0x00, 0x39}, {0x20, 0x00, 0x4C}, {0x20, 0x00, 0x5A},
     {0x20, 0x01, 0x28}, {0x20, 0x01, 0x5C}, {0x20, 0x01, 0x6D}, {0x20, 0x01, 0x78},
     {0x21, 0x00, 0x1C}, {0x21, 0x00, 0x2C}, {0x21, 0x00, 0x3A}, {0x21, 0x00, 0x4A}, {0x21, 0x00, 0x5D},
@@ -135,6 +150,7 @@ constexpr u8 kItems[] = {0x4B, 0x47, 0x08, 0x0B, 0x09};
 
 struct State {
     std::optional<Records> records;
+    std::string            initials[2]; // as kept in the file; empty: QUALITY-OF-LIFE's
     bool                   active   = false;
     bool                   started  = false; // the enemies have begun to come
     int                    players  = 1;
@@ -150,30 +166,88 @@ State &state() {
     return instance;
 }
 
-Records load(const std::filesystem::path &path) {
-    Records loaded;
-    std::error_code error;
-    if (!std::filesystem::exists(path, error))
-        return loaded;
-    try {
-        const YAML::Node root = YAML::LoadFile(path.string());
-        if (const YAML::Node value = root["best_1p"])
-            loaded.onePlayer = value.as<unsigned>();
-        if (const YAML::Node value = root["best_2p"])
-            loaded.twoPlayers = value.as<unsigned>();
-    } catch (const YAML::Exception &exception) {
-        std::fprintf(stderr, "Could not read %s: %s\n", path.string().c_str(), exception.what());
-        return Records{};
+std::vector<Entry> readTable(const YAML::Node &node, int players) {
+    std::vector<Entry> table;
+    if (!node)
+        return table;
+    if (node.IsScalar()) { // the first version kept one number, without initials
+        Entry entry;
+        entry.points = node.as<unsigned>();
+        if (entry.points > 0)
+            table.push_back(entry);
+        return table;
     }
-    return loaded;
+    for (const YAML::Node &item : node) {
+        Entry entry;
+        entry.points = item["points"].as<unsigned>(0);
+        if (const YAML::Node who = item["initials"]) {
+            if (who.IsSequence()) {
+                for (std::size_t i = 0; i < 2 && i < who.size(); ++i)
+                    entry.initials[i] = SoRQolConfig::normalizeInitials(who[i].as<std::string>(""));
+            } else {
+                entry.initials[0] = SoRQolConfig::normalizeInitials(who.as<std::string>(""));
+            }
+        }
+        if (players == 1)
+            entry.initials[1].clear();
+        table.push_back(entry);
+    }
+    std::stable_sort(table.begin(), table.end(), [](const Entry &a, const Entry &b) { return a.points > b.points; });
+    if (table.size() > kTopEntries)
+        table.resize(kTopEntries);
+    return table;
 }
 
-bool save(const Records &records, const std::filesystem::path &path) {
+void load(State &s, const std::filesystem::path &path) {
+    s.records = Records{};
+    std::error_code error;
+    if (!std::filesystem::exists(path, error))
+        return;
+    try {
+        const YAML::Node root = YAML::LoadFile(path.string());
+        s.records->onePlayer  = readTable(root["best_1p"], 1);
+        s.records->twoPlayers = readTable(root["best_2p"], 2);
+        s.initials[0]         = SoRQolConfig::normalizeInitials(root["initials1"].as<std::string>(""));
+        s.initials[1]         = SoRQolConfig::normalizeInitials(root["initials2"].as<std::string>(""));
+    } catch (const YAML::Exception &exception) {
+        std::fprintf(stderr, "Could not read %s: %s\n", path.string().c_str(), exception.what());
+        s.records = Records{};
+    }
+}
+
+void loadOnce(State &s) {
+    if (!s.records)
+        load(s, defaultPath());
+}
+
+YAML::Node writeTable(const std::vector<Entry> &table, int players) {
+    YAML::Node node(YAML::NodeType::Sequence);
+    for (const Entry &entry : table) {
+        YAML::Node item;
+        if (players == 2) {
+            YAML::Node who(YAML::NodeType::Sequence);
+            who.push_back(entry.initials[0]);
+            who.push_back(entry.initials[1]);
+            who.SetStyle(YAML::EmitterStyle::Flow);
+            item["initials"] = who;
+        } else {
+            item["initials"] = entry.initials[0];
+        }
+        item["points"] = entry.points;
+        item.SetStyle(YAML::EmitterStyle::Flow);
+        node.push_back(item);
+    }
+    return node;
+}
+
+bool save(const State &s, const std::filesystem::path &path) {
     std::error_code error;
     std::filesystem::create_directories(path.parent_path(), error);
     YAML::Node root;
-    root["best_1p"] = records.onePlayer;
-    root["best_2p"] = records.twoPlayers;
+    root["initials1"] = s.initials[0];
+    root["initials2"] = s.initials[1];
+    root["best_1p"]   = writeTable(s.records->onePlayer, 1);
+    root["best_2p"]   = writeTable(s.records->twoPlayers, 2);
     YAML::Emitter emitter;
     emitter << root;
     std::filesystem::path temporary = path;
@@ -188,6 +262,11 @@ bool save(const Records &records, const std::filesystem::path &path) {
     }
     std::filesystem::rename(temporary, path, error);
     return !error;
+}
+
+void saveOrReport(const State &s) {
+    if (!save(s, defaultPath()))
+        std::fprintf(stderr, "Could not write %s\n", defaultPath().string().c_str());
 }
 
 unsigned fromBcd(SystemMemory &memory, u32 address, int bytes) {
@@ -228,12 +307,12 @@ void drawLivesAndSpecials(SystemMemory &memory, int player) {
 void writeRecord(SystemMemory &memory, u32 address) {
     State &s = state();
     const u8 type = kTypes[std::uniform_int_distribution<std::size_t>(0, std::size(kTypes) - 1)(s.random)];
-    std::array<const Entry *, std::size(kEntries)> choices{};
+    std::array<const Spawn *, std::size(kSpawns)> choices{};
     std::size_t                                    count = 0;
-    for (const Entry &entry : kEntries)
+    for (const Spawn &entry : kSpawns)
         if (entry.type == type)
             choices[count++] = &entry;
-    const Entry &entry   = *choices[std::uniform_int_distribution<std::size_t>(0, count - 1)(s.random)];
+    const Spawn &entry   = *choices[std::uniform_int_distribution<std::size_t>(0, count - 1)(s.random)];
     const auto  &lanes   = kLanes[static_cast<std::size_t>(s.round)];
     memory.writeByte(address + 0, entry.type);
     memory.writeByte(address + 1, entry.behaviour);
@@ -260,9 +339,32 @@ void fillSection(SystemMemory &memory) {
     memory.writeByte(address + 1, 0);
 }
 
+void dropFromTheSky(SystemMemory &memory) {
+    State    &s     = state();
+    const u16 camX  = memory.readWord(kCamX);
+    for (int slot = 0; slot < kObjectSlots; ++slot) {
+        const u32 object = kObjectTable + static_cast<u32>(slot) * kObjectSize;
+        const u8  type   = memory.readByte(object);
+        // Only one $C60 has just placed: not yet awake (primary state 0), at the right edge.
+        const u16 fromCamera = static_cast<u16>(memory.readWord(object + 0x10) - camX); // the left edge is cam_x - 8
+        if (type < 0x20 || type > 0x27 || memory.readWord(object + 0x30) != 0 || fromCamera < kRightEdge ||
+            fromCamera >= kRightEdge + 0x40)
+            continue;
+        const u16 x = static_cast<u16>(camX + std::uniform_int_distribution<int>(kDropFromX, kDropToX)(s.random));
+        memory.writeWord(object + 0x10, x);
+        memory.writeWord(object + 0x18, kDropHeight);
+        memory.writeLong(object + 0x24, 0);
+    }
+}
+
 void lockCamera(SystemMemory &memory) {
     const State &s = state();
     memory.writeLong(memory.readWord(kLevel) == kRound8 ? kCamXMin : kCamXMax, static_cast<u32>(s.lockedX) << 16);
+}
+
+void clearScores(SystemMemory &memory) {
+    for (u32 player = 0; player < 2; ++player)
+        memory.writeLong(kScoreLongP1 + 8u * player, 0);
 }
 
 void finish(SystemMemory &memory, bool completed) {
@@ -272,24 +374,36 @@ void finish(SystemMemory &memory, bool completed) {
     memory.writeWord(kLevel, s.savedLevel);
     memory.writeWord(kWave, 0);
     memory.writeByte(kStopClock, 0);
-    if (!completed)
-        return;
-
     Result result;
     result.players   = s.players;
     result.points[0] = pointsOf(memory, 0);
     result.points[1] = s.players == 2 ? pointsOf(memory, 1) : 0;
     result.total     = result.points[0] + result.points[1];
-    Records records  = SoRSurvival::records();
-    unsigned &best   = s.players == 2 ? records.twoPlayers : records.onePlayer;
-    if (result.total > best) {
-        best             = result.total;
-        result.newRecord = true;
-        s.records        = records;
-        if (!save(records, defaultPath()))
-            std::fprintf(stderr, "Could not write %s\n", defaultPath().string().c_str());
+    // The game over screen's way to the high-score table, which clears the scores, is not taken (user report:
+    // the next game started with the survival points).
+    clearScores(memory);
+    if (!completed)
+        return;
+
+    for (int player = 0; player < s.players; ++player)
+        result.initials[player] = initials(player);
+    loadOnce(s);
+    std::vector<Entry> &table = s.players == 2 ? s.records->twoPlayers : s.records->onePlayer;
+    Entry entry;
+    entry.initials[0] = result.initials[0];
+    entry.initials[1] = result.initials[1];
+    entry.points      = result.total;
+    // A tie keeps the older entry above.
+    std::size_t place = 0;
+    while (place < table.size() && table[place].points >= result.total)
+        ++place;
+    if (result.total > 0 && place < kTopEntries) {
+        table.insert(table.begin() + static_cast<std::ptrdiff_t>(place), entry);
+        if (table.size() > kTopEntries)
+            table.resize(kTopEntries);
+        result.place = static_cast<int>(place);
+        saveOrReport(s);
     }
-    result.record = best;
     SoRExtraMenu::showResult(result);
 }
 
@@ -301,9 +415,25 @@ std::filesystem::path defaultPath() {
 
 const Records &records() {
     State &s = state();
-    if (!s.records)
-        s.records = load(defaultPath());
+    loadOnce(s);
     return *s.records;
+}
+
+std::string initials(int player) {
+    State &s = state();
+    loadOnce(s);
+    const std::string &own = s.initials[player == 1 ? 1 : 0];
+    if (!own.empty())
+        return own;
+    const SoRQolConfig::QolConfig &qol = SoRQolConfig::current();
+    return player == 1 ? qol.initialsP2 : qol.initialsP1;
+}
+
+void setInitials(int player, const std::string &initials) {
+    State &s = state();
+    loadOnce(s);
+    s.initials[player == 1 ? 1 : 0] = SoRQolConfig::normalizeInitials(initials);
+    saveOrReport(s);
 }
 
 void begin(SystemMemory &memory, int players, int round) {
@@ -314,6 +444,7 @@ void begin(SystemMemory &memory, int players, int round) {
     s.round      = std::clamp(round, 0, 7);
     s.kills      = 0;
     s.savedLevel = memory.readWord(kLevel);
+    clearScores(memory);
     memory.writeByte(kPlayerMode, s.players == 2 ? kModeTwoPlayers : kModeOnePlayer);
     memory.writeWord(kLevel, static_cast<u16>(s.round));
     memory.writeWord(kWave, 0);
@@ -401,6 +532,8 @@ void onFrame(SystemMemory &memory) {
         memory.writeWord(kHudTimer + kHudRowBelow + 2u * cell, kHudBlankTile);
     }
     lockCamera(memory);
+    if (s.round == kRound7)
+        dropFromTheSky(memory);
     for (int player = 0; player < 2; ++player) {
         const u32 specials = kP1Lives + 3u * static_cast<u32>(player) + 1u;
         if (memory.readByte(specials) != 0) {
@@ -428,9 +561,15 @@ void onFrame(SystemMemory &memory) {
     memory.writeByte(kLevelSpawnFlowFlags,
                      static_cast<u8>((memory.readByte(kLevelSpawnFlowFlags) | kFlowRelease) & ~kFlowSectionEmpty));
 
-    const unsigned onScreen = std::min(kMostOnScreen, kFirstOnScreen + s.kills / kKillsPerStep);
+    unsigned freeSlots = 0;
+    for (int slot = 0; slot < kObjectSlots; ++slot)
+        if (memory.readByte(kObjectTable + static_cast<u32>(slot) * kObjectSize) == 0)
+            ++freeSlots;
+    const unsigned onScreen = enemiesAtOnce(s.kills);
     const unsigned alive    = memory.readWord(kActiveProgression);
-    memory.writeByte(kDeferredSpawnCredits, static_cast<u8>(alive < onScreen ? onScreen - alive : 0));
+    unsigned       credits  = alive < onScreen ? onScreen - alive : 0;
+    credits                 = std::min(credits, freeSlots > kFreeSlotsKept ? freeSlots - kFreeSlotsKept : 0u);
+    memory.writeByte(kDeferredSpawnCredits, static_cast<u8>(credits));
 }
 
 void enemyDefeated(SystemMemory &memory, unsigned enemy, int player) {

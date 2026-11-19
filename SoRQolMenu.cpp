@@ -1,6 +1,7 @@
 #include "SoRQolMenu.hpp"
 
 #include "SoRHighScores.hpp"
+#include "SoRInitialsKeyboard.hpp"
 #include "SoRInput.hpp"
 #include "SoRMenuCanvas.hpp"
 #include "SoRPlatform.hpp"
@@ -90,50 +91,15 @@ std::string_view label(Row row) {
     return "";
 }
 
-// The on-screen keyboard that sets a player's initials.
-constexpr std::array<std::string_view, 3> kLetterRows = {"ABCDEFGHI", "JKLMNOPQR", "STUVWXYZ"};
-enum class Special { Space, Delete, Ok, Cancel };
-constexpr std::array<Special, 4> kSpecials    = {Special::Space, Special::Delete, Special::Ok, Special::Cancel};
-constexpr std::array<int, 4>     kSpecialCols = {8, 15, 21, 26};
-constexpr int                    kKeyRows     = 4;
-constexpr int                    kKeyColumn   = 8;
-constexpr int                    kKeyStride   = 3;
-constexpr int                    kFirstKeyRow = 9;
-constexpr int                    kInitials    = 3;
-
-std::string_view specialLabel(Special key) {
-    switch (key) {
-        case Special::Space:
-            return "SPACE";
-        case Special::Delete:
-            return "DEL";
-        case Special::Ok:
-            return "OK";
-        case Special::Cancel:
-            return "CANCEL";
-    }
-    return "";
-}
-
-struct Keyboard {
-    bool        isOpen = false;
-    int         player = 0; // 0 or 1
-    std::string text;
-    int         keyRow = 0;
-    int         keyCol = 0;
-};
-
-int keysInRow(int keyRow) {
-    return keyRow < 3 ? static_cast<int>(kLetterRows[static_cast<std::size_t>(keyRow)].size()) : static_cast<int>(kSpecials.size());
-}
-
 struct Menu {
     bool      isOpen  = false;
     int       page    = 0;
     int       cursor  = 0;
     bool      swallow = false; // ignore what is held when the menu opens
     QolConfig pending;
-    Keyboard  keyboard;
+    SoRInitialsKeyboard::Keyboard keyboard;
+    int       keyboardPlayer = 0;
+    bool      typing = false;
     bool      askingSecret = false; // the message box of CHEAT ENABLED
 
     Repeat up, down, left, right, confirm, back;
@@ -269,28 +235,6 @@ void drawPage(const Menu &m, Canvas &canvas) {
     canvas.text(kLabelColumn, kHelpRow + 1, lines[1], true);
 }
 
-void drawKeyboard(const Keyboard &k, Canvas &canvas) {
-    canvas.text(kLabelColumn, kTitleRow, std::string("PLAYER ") + (k.player == 0 ? "1" : "2") + " INITIALS", true);
-    std::string shown = k.text;
-    shown.resize(kInitials, '-');
-    canvas.text(kKeyColumn, 6, "INITIALS: " + shown, true);
-
-    for (int keyRow = 0; keyRow < kKeyRows; ++keyRow) {
-        const int y = kFirstKeyRow + keyRow * 2;
-        for (int col = 0; col < keysInRow(keyRow); ++col) {
-            const bool selected = keyRow == k.keyRow && col == k.keyCol;
-            if (keyRow < 3) {
-                const char letter = kLetterRows[static_cast<std::size_t>(keyRow)][static_cast<std::size_t>(col)];
-                canvas.text(kKeyColumn + col * kKeyStride, y, std::string(1, letter), selected);
-            } else {
-                canvas.text(kSpecialCols[static_cast<std::size_t>(col)], y, specialLabel(kSpecials[static_cast<std::size_t>(col)]), selected);
-            }
-        }
-    }
-    canvas.text(kLabelColumn, kHelpRow, "MOVE AND CONFIRM TO PICK A LETTER.", true);
-    canvas.text(kLabelColumn, kHelpRow + 1, "BACK LEAVES WITHOUT CHANGES.", true);
-}
-
 // Turning CHEAT ENABLED on takes the original game's kind of secret: Special+Punch+Jump+Right, all from one player.
 constexpr SoRInput::ActionMask kSecret = SoRControlsConfig::actionBit(SoRControlsConfig::Action::Special) |
                                          SoRControlsConfig::actionBit(SoRControlsConfig::Action::Punch) |
@@ -312,51 +256,10 @@ void drawSecretBox(Canvas &canvas) {
 }
 
 void openKeyboard(Menu &m, int player) {
-    m.keyboard        = Keyboard{};
-    m.keyboard.isOpen = true;
-    m.keyboard.player = player;
-    m.keyboard.text   = initialsOf(m.pending, player);
-}
-
-// One frame of the keyboard. True when it closes.
-bool keyboardFrame(Menu &m, SystemMemory &memory, bool up, bool down, bool left, bool right, bool confirm, bool back) {
-    Keyboard &k = m.keyboard;
-    if (back) {
-        playSound(memory, kSoundPick);
-        return true;
-    }
-    if (up || down) {
-        k.keyRow = (k.keyRow + (up ? -1 : 1) + kKeyRows) % kKeyRows;
-        k.keyCol = std::min(k.keyCol, keysInRow(k.keyRow) - 1);
-        playSound(memory, kSoundMove);
-    } else if (left || right) {
-        const int count = keysInRow(k.keyRow);
-        k.keyCol        = (k.keyCol + (left ? -1 : 1) + count) % count;
-        playSound(memory, kSoundMove);
-    } else if (confirm) {
-        playSound(memory, kSoundPick);
-        if (k.keyRow < 3) {
-            if (static_cast<int>(k.text.size()) < kInitials)
-                k.text += kLetterRows[static_cast<std::size_t>(k.keyRow)][static_cast<std::size_t>(k.keyCol)];
-            return false;
-        }
-        switch (kSpecials[static_cast<std::size_t>(k.keyCol)]) {
-            case Special::Space:
-                if (static_cast<int>(k.text.size()) < kInitials)
-                    k.text += ' ';
-                break;
-            case Special::Delete:
-                if (!k.text.empty())
-                    k.text.pop_back();
-                break;
-            case Special::Ok:
-                initialsOf(m.pending, k.player) = SoRQolConfig::normalizeInitials(k.text);
-                return true;
-            case Special::Cancel:
-                return true;
-        }
-    }
-    return false;
+    m.keyboard       = SoRInitialsKeyboard::open(std::string("PLAYER ") + (player == 0 ? "1" : "2") + " INITIALS",
+                                                 initialsOf(m.pending, player));
+    m.keyboardPlayer = player;
+    m.typing         = true;
 }
 
 } // namespace
@@ -408,7 +311,7 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
         return Result::Closed;
 
     const SoRInput::MenuButtons held = SoRInput::menuButtons(remote, true);
-    const bool typing  = m.keyboard.isOpen;
+    const bool typing  = m.typing;
     const bool up      = m.up.step(held.up, true);
     const bool down    = m.down.step(held.down, true);
     const bool left    = m.left.step(held.left, typing);
@@ -420,8 +323,11 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
     if (m.swallow) {
         m.swallow = false; // a key still held from opening is not a press
     } else if (typing) {
-        if (keyboardFrame(m, memory, up, down, left, right, confirm, back))
-            m.keyboard.isOpen = false;
+        const auto result = SoRInitialsKeyboard::step(m.keyboard, memory, up, down, left, right, confirm, back);
+        if (result == SoRInitialsKeyboard::Result::Ok)
+            initialsOf(m.pending, m.keyboardPlayer) = SoRQolConfig::normalizeInitials(m.keyboard.text);
+        if (result != SoRInitialsKeyboard::Result::Open)
+            m.typing = false;
     } else if (m.askingSecret) {
         if (secretHeld(remote)) {
             m.pending.cheatEnabled = true;
@@ -505,8 +411,8 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
         m.isOpen = false;
         return Result::Closed;
     }
-    if (m.keyboard.isOpen)
-        drawKeyboard(m.keyboard, canvas);
+    if (m.typing)
+        SoRInitialsKeyboard::draw(m.keyboard, canvas);
     else
         drawPage(m, canvas);
     if (m.askingSecret)

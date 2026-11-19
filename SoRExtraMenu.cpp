@@ -1,5 +1,6 @@
 #include "SoRExtraMenu.hpp"
 
+#include "SoRInitialsKeyboard.hpp"
 #include "SoRInput.hpp"
 #include "SoRMenuCanvas.hpp"
 #include "SoRSurvival.hpp"
@@ -24,7 +25,7 @@ constexpr int kRounds      = 8;
 
 constexpr m_long kP2PadMissing = 0xFFFFFC0Au;
 
-enum class Page { Extra, Survival, Result };
+enum class Page { Extra, Survival, Initials, Result };
 enum class Row { Survival, Back, Players, Round, Start, Ok };
 
 std::vector<Row> rows(Page page) {
@@ -32,6 +33,8 @@ std::vector<Row> rows(Page page) {
         return {Row::Survival, Row::Back};
     if (page == Page::Result)
         return {Row::Ok};
+    if (page == Page::Initials)
+        return {Row::Start}; // the keyboard has its own cursor
     return {Row::Players, Row::Round, Row::Start, Row::Back};
 }
 
@@ -47,7 +50,7 @@ int screenRow(Page page, Row row) {
         case Row::Back:
             return page == Page::Extra ? 9 : 13;
         case Row::Ok:
-            return 18;
+            return 20;
     }
     return 0;
 }
@@ -63,6 +66,8 @@ struct Menu {
     int  round     = 0;
 
     std::optional<SoRSurvival::Result> result; // shown once, when the game comes back here
+    SoRInitialsKeyboard::Keyboard      keyboard; // START asks each player's initials first
+    int                                typingPlayer = 0;
 
     Repeat up, down, left, right, confirm, back;
     Shown  shown;
@@ -83,6 +88,33 @@ std::string padded(unsigned value) {
     return text;
 }
 
+// Initials as the tables show them: three cells, "---" for none.
+std::string shownInitials(const std::string &initials) {
+    if (initials.empty())
+        return "---";
+    std::string text = initials;
+    text.resize(3, ' ');
+    return text;
+}
+
+void drawTable(Canvas &canvas, int row, const char *title, const std::vector<SoRSurvival::Entry> &table, int players,
+               int marked) {
+    canvas.text(kLabelColumn, row, title, true);
+    for (std::size_t i = 0; i < SoRSurvival::kTopEntries; ++i) {
+        const int y = row + 1 + static_cast<int>(i);
+        std::string line = (static_cast<int>(i) == marked ? ">" : " ") + std::to_string(i + 1) + ". ";
+        if (i < table.size()) {
+            line += shownInitials(table[i].initials[0]);
+            if (players == 2)
+                line += " " + shownInitials(table[i].initials[1]);
+            canvas.text(kValueColumn, y, padded(table[i].points), true);
+        } else {
+            line += players == 2 ? "--- ---" : "---";
+        }
+        canvas.text(kLabelColumn, y, line, true);
+    }
+}
+
 std::array<std::string_view, 2> help(const Menu &m, Row row) {
     switch (row) {
         case Row::Survival:
@@ -94,7 +126,7 @@ std::array<std::string_view, 2> help(const Menu &m, Row row) {
         case Row::Round:
             return {"THE PLACE YOU FIGHT IN. THE GAME IS", "THE SAME IN EVERY ROUND."};
         case Row::Start:
-            return {"CHOOSE YOUR CHARACTER AND FIGHT.", ""};
+            return {"ENTER YOUR INITIALS, CHOOSE YOUR", "CHARACTER AND FIGHT."};
         case Row::Ok:
             return {"BACK TO SURVIVAL MODE.", ""};
         case Row::Back:
@@ -108,23 +140,29 @@ std::array<std::string_view, 2> help(const Menu &m, Row row) {
 void draw(const Menu &m, Canvas &canvas) {
     const std::vector<Row> list = rows(m.page);
     canvas.text(kLabelColumn, kTitleRow, m.page == Page::Extra ? "EXTRA" : "SURVIVAL MODE", true);
+    if (m.page == Page::Initials) {
+        SoRInitialsKeyboard::draw(m.keyboard, canvas);
+        return;
+    }
     if (m.page == Page::Result && m.result) {
-        // In white like the records: nothing on it is a choice but OK.
+        // In white like the tables: nothing on it is a choice but OK.
         const SoRSurvival::Result &r = *m.result;
-        canvas.text(kLabelColumn, 6, "GAME OVER", true);
-        canvas.text(kLabelColumn, 8, "ENEMIES BEATEN", true);
-        if (r.players == 2) {
-            canvas.text(kLabelColumn + 2, 10, "PLAYER 1", true);
-            canvas.text(kValueColumn, 10, padded(r.points[0]), true);
-            canvas.text(kLabelColumn + 2, 11, "PLAYER 2", true);
-            canvas.text(kValueColumn, 11, padded(r.points[1]), true);
+        canvas.text(kLabelColumn, 5, "GAME OVER", true);
+        canvas.text(kLabelColumn, 7, "ENEMIES BEATEN", true);
+        for (int player = 0; player < r.players; ++player) {
+            canvas.text(kLabelColumn + 2, 8 + player, shownInitials(r.initials[player]), true);
+            canvas.text(kValueColumn, 8 + player, padded(r.points[player]), true);
         }
-        canvas.text(kLabelColumn + 2, 12, "TOTAL", true);
-        canvas.text(kValueColumn, 12, padded(r.total), true);
-        canvas.text(kLabelColumn, 14, r.players == 2 ? "RECORD, 2 PLAYERS" : "RECORD, 1 PLAYER", true);
-        canvas.text(kValueColumn, 14, padded(r.record), true);
-        if (r.newRecord)
-            canvas.text(kLabelColumn, 16, "NEW RECORD", true);
+        if (r.players == 2) {
+            canvas.text(kLabelColumn + 2, 10, "TOTAL", true);
+            canvas.text(kValueColumn, 10, padded(r.total), true);
+        }
+        const SoRSurvival::Records &best = SoRSurvival::records();
+        drawTable(canvas, 12, r.players == 2 ? "RECORDS, 2 PLAYERS" : "RECORDS, 1 PLAYER",
+                  r.players == 2 ? best.twoPlayers : best.onePlayer, r.players, r.place);
+        static constexpr const char *kPlaces[] = {"NEW RECORD", "SECOND PLACE", "THIRD PLACE"};
+        if (r.place >= 0 && r.place < 3)
+            canvas.text(kLabelColumn, 17, kPlaces[r.place], true);
     }
     for (std::size_t i = 0; i < list.size(); ++i) {
         const Row  row      = list[i];
@@ -154,13 +192,10 @@ void draw(const Menu &m, Canvas &canvas) {
         }
     }
     if (m.page == Page::Survival) {
-        const SoRSurvival::Records &best = SoRSurvival::records();
         // In white, like the help lines: nothing to select, and the screen's grey is too dark to read.
-        canvas.text(kLabelColumn, 16, "RECORD", true);
-        canvas.text(kLabelColumn, 18, "1 PLAYER", true);
-        canvas.text(kValueColumn, 18, padded(best.onePlayer), true);
-        canvas.text(kLabelColumn, 20, "2 PLAYERS", true);
-        canvas.text(kValueColumn, 20, padded(best.twoPlayers), true);
+        const SoRSurvival::Records &best = SoRSurvival::records();
+        drawTable(canvas, 15, "RECORDS, 1 PLAYER", best.onePlayer, 1, -1);
+        drawTable(canvas, 19, "RECORDS, 2 PLAYERS", best.twoPlayers, 2, -1);
     }
     const auto lines = help(m, rows(m.page)[static_cast<std::size_t>(m.cursor)]);
     // Two lines in white, as in the other menus: this screen's grey is too dark for a sentence.
@@ -232,8 +267,33 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
     const bool back    = m.back.step(held.back, false);
 
     Result result = Result::Open;
+    const auto typeInitials = [&](int player) {
+        m.page         = Page::Initials;
+        m.cursor       = 0;
+        m.typingPlayer = player;
+        m.keyboard     = SoRInitialsKeyboard::open(std::string("PLAYER ") + (player == 0 ? "1" : "2") + " INITIALS",
+                                                   SoRSurvival::initials(player));
+    };
     if (m.swallow) {
         m.swallow = false; // a key still held from opening is not a press
+    } else if (m.page == Page::Initials) {
+        // Before the game, each player's initials for the records, the ones kept last already typed (user).
+        switch (SoRInitialsKeyboard::step(m.keyboard, memory, up, down, left, right, confirm, back)) {
+            case SoRInitialsKeyboard::Result::Open:
+                break;
+            case SoRInitialsKeyboard::Result::Cancel:
+                goTo(m, Page::Survival, Row::Start);
+                break;
+            case SoRInitialsKeyboard::Result::Ok:
+                SoRSurvival::setInitials(m.typingPlayer, m.keyboard.text);
+                if (m.typingPlayer == 0 && m.players == 2) {
+                    typeInitials(1);
+                } else {
+                    m.start = true;
+                    result  = Result::Start;
+                }
+                break;
+        }
     } else {
         const std::vector<Row> list  = rows(m.page);
         const auto             count = static_cast<int>(list.size());
@@ -265,8 +325,7 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
             goTo(m, Page::Survival, Row::Start);
         } else if (confirm && row == Row::Start) {
             playSound(memory, kSoundPick);
-            m.start = true;
-            result  = Result::Start;
+            typeInitials(0);
         }
     }
 
