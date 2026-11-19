@@ -8,10 +8,10 @@
 #include <array>
 #include <cstdio>
 #include <cstdlib>
-#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace SoRVideoMenu {
 namespace {
@@ -24,40 +24,24 @@ constexpr int kLabelColumn = 4;
 constexpr int kValueColumn = 22;
 constexpr int kHelpRow     = 23;
 
-enum class Row { FrameSync, Picture, Display, IntegerScaling, ScalingFilter, Reset, Save, Cancel };
-constexpr std::array kDesktopRows = {
-    Row::FrameSync, Row::Picture, Row::Display, Row::IntegerScaling, Row::ScalingFilter, Row::Reset, Row::Save, Row::Cancel};
-constexpr std::array kConsoleRows = {
-    Row::FrameSync, Row::Picture, Row::IntegerScaling, Row::ScalingFilter, Row::Reset, Row::Save, Row::Cancel};
+enum class Row { FrameSync, Picture, Display, IntegerScaling, ScalingFilter, FrameGeneration, Reset, Save, Cancel };
 
-std::span<const Row> rowList() {
-    if (SoRPlatform::consoleMenus())
-        return kConsoleRows;
-    return kDesktopRows;
+// The rows this screen shows: no DISPLAY on a console, FRAME GENERATION only where the window can generate frames.
+std::vector<Row> rowList(bool frameGeneration) {
+    std::vector<Row> rows{Row::FrameSync, Row::Picture};
+    if (!SoRPlatform::consoleMenus())
+        rows.push_back(Row::Display);
+    rows.insert(rows.end(), {Row::IntegerScaling, Row::ScalingFilter});
+    if (frameGeneration)
+        rows.push_back(Row::FrameGeneration);
+    rows.insert(rows.end(), {Row::Reset, Row::Save, Row::Cancel});
+    return rows;
 }
 
-int screenRow(Row row) {
-    // The rows below DISPLAY close its gap where it is left out.
-    const int shift = SoRPlatform::consoleMenus() ? 2 : 0;
-    switch (row) {
-        case Row::FrameSync:
-            return 7;
-        case Row::Picture:
-            return 9;
-        case Row::Display:
-            return 11;
-        case Row::IntegerScaling:
-            return 13 - shift;
-        case Row::ScalingFilter:
-            return 15 - shift;
-        case Row::Reset:
-            return 17 - shift;
-        case Row::Save:
-            return 19 - shift;
-        case Row::Cancel:
-            return 21 - shift;
-    }
-    return 0;
+// Every other screen row from 7, or from 5 when nine rows would reach the help lines.
+int screenRow(const std::vector<Row> &rows, std::size_t index) {
+    const int first = rows.size() > 8 ? 5 : 7;
+    return first + 2 * static_cast<int>(index);
 }
 
 std::string_view label(Row row) {
@@ -72,6 +56,8 @@ std::string_view label(Row row) {
             return "INTEGER SCALING";
         case Row::ScalingFilter:
             return "SCALING FILTER";
+        case Row::FrameGeneration:
+            return "FRAME GENERATION";
         case Row::Reset:
             return "RESET TO DEFAULTS";
         case Row::Save:
@@ -126,6 +112,7 @@ struct Menu {
     int         refreshHz = 0;
     int         normalHz  = 60;
     bool        metalFX   = false; // the window can draw VDP::MetalFX
+    std::vector<Row> rows;         // see rowList()
 
     std::optional<VideoConfig> chosen;
 
@@ -171,6 +158,9 @@ bool changeValue(VideoConfig &config, Row row, int step, bool metalFX) {
         case Row::ScalingFilter:
             changeScalingFilter(config, step, metalFX);
             return true;
+        case Row::FrameGeneration:
+            config.frameGeneration = !config.frameGeneration;
+            return true;
         case Row::Reset:
         case Row::Save:
         case Row::Cancel:
@@ -191,6 +181,8 @@ std::string value(const VideoConfig &config, Row row) {
             return config.integerScaling ? "ON" : "OFF";
         case Row::ScalingFilter:
             return std::string(scalingFilterName(config.scalingFilter));
+        case Row::FrameGeneration:
+            return config.frameGeneration ? "ON" : "OFF";
         case Row::Reset:
         case Row::Save:
         case Row::Cancel:
@@ -243,7 +235,13 @@ std::array<std::string, 2> help(const Menu &m, Row row) {
                 case VDP::Hybrid:
                     break;
             }
-            return {"SHARP, EVEN PIXELS: WHOLE MULTIPLE,", "THEN SMOOTHED TO FIT. RECOMMENDED."};
+            return {"SHARP, EVEN PIXELS: WHOLE MULTIPLE,", "THEN SMOOTHED TO FIT."};
+        case Row::FrameGeneration:
+            if (!m.pending.frameGeneration)
+                return {"ONLY THE FRAMES THE GAME DRAWS.", ""};
+            if (m.pending.frameSync != VDP::InternalTimer)
+                return {"ONLY WITH VSYNC AUTO: NO EFFECT", "WITH THIS VSYNC."};
+            return {"METALFX DRAWS A FRAME BETWEEN EACH", "TWO: SMOOTHER, A LITTLE LATER."};
         case Row::Reset:
             return {"PUTS BACK THE DEFAULTS ABOVE. THEY", "COUNT ONLY AFTER SAVE AND APPLY."};
         case Row::Save:
@@ -256,12 +254,12 @@ std::array<std::string, 2> help(const Menu &m, Row row) {
 
 void draw(const Menu &m, Canvas &canvas) {
     canvas.text(kLabelColumn, kTitleRow, "VIDEO", true);
-    const std::span<const Row> rows = rowList();
+    const std::vector<Row> &rows = m.rows;
     for (std::size_t i = 0; i < rows.size(); ++i) {
         const Row  row      = rows[i];
         const bool selected = static_cast<int>(i) == m.cursor;
-        canvas.text(kLabelColumn, screenRow(row), label(row), selected);
-        canvas.text(kValueColumn, screenRow(row), value(m.pending, row), selected);
+        canvas.text(kLabelColumn, screenRow(rows, i), label(row), selected);
+        canvas.text(kValueColumn, screenRow(rows, i), value(m.pending, row), selected);
     }
     const auto lines = help(m, rows[static_cast<std::size_t>(m.cursor)]);
     // White: this screen's grey is palette line 1's darkest text, too dark to read a sentence in.
@@ -282,7 +280,7 @@ void drawOptionsRow(SystemMemory &memory, const VideoConfig &current, bool highl
     drawText(memory, 18 + static_cast<int>(summary.size()), row, std::string(40 - 18 - summary.size(), ' '), highlighted);
 }
 
-void open(const VideoConfig &current, int refreshHz, int normalHz, bool metalFX) {
+void open(const VideoConfig &current, int refreshHz, int normalHz, bool metalFX, bool frameGeneration) {
     Menu &m     = menu();
     m           = Menu{};
     m.isOpen    = true;
@@ -291,6 +289,7 @@ void open(const VideoConfig &current, int refreshHz, int normalHz, bool metalFX)
     m.refreshHz = refreshHz;
     m.normalHz  = normalHz;
     m.metalFX   = metalFX;
+    m.rows      = rowList(frameGeneration);
     // What the window draws: a METALFX it cannot draw shows as HYBRID.
     if (!metalFX && m.pending.scalingFilter == VDP::MetalFX)
         m.pending.scalingFilter = VDP::Hybrid;
@@ -313,7 +312,7 @@ Result frame(SystemMemory &memory, SoRControlsConfig::ActionMask remote) {
     const bool confirm = m.confirm.step(held.confirm, false);
     const bool back    = m.back.step(held.back, false);
 
-    const std::span<const Row> rows  = rowList();
+    const std::vector<Row>    &rows  = m.rows;
     const auto                 count = static_cast<int>(rows.size());
     const Row                  row   = rows[static_cast<std::size_t>(m.cursor)];
     bool       close = false;

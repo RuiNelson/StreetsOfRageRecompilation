@@ -95,6 +95,7 @@ int main(int argc, char *argv[]) {
     bool          fullscreenFlag     = false;
     bool          widescreenFlag     = false;
     bool          integerScalingFlag = false;
+    bool          frameGenerationFlag = false;
     bool          defaultVideoFlag   = false;
     bool          defaultQolFlag     = false;
     bool          aiAssistFlag       = false;
@@ -155,8 +156,14 @@ int main(int argc, char *argv[]) {
                        scalingFilter,
                        "How the picture is scaled to the window. nearest: sharp, uneven pixels. bilinear: smooth, a little "
                        "blurred. hybrid: nearest to the next whole multiple, then bilinear down to the size. metalfx: "
-                       "Apple's MetalFX upscaler (macOS 13 and newer; elsewhere hybrid)")
+                       "Apple's MetalFX upscaler (macOS 13 and newer; elsewhere hybrid). Default: hybrid on macOS, nearest elsewhere")
             ->check(CLI::IsMember({"nearest", "bilinear", "hybrid", "metalfx"}))
+            ->group("Video");
+    const auto *frameGenerationOption =
+        app.add_flag("--frame-generation,!--no-frame-generation",
+                     frameGenerationFlag,
+                     "MetalFX frame generation, or not: a frame between each two the game draws (macOS 26 and newer, "
+                     "--frame-sync auto without --turbo; elsewhere nothing)")
             ->group("Video");
     const auto *frameSyncOption = app.add_option("--frame-sync",
                                                  frameSync,
@@ -259,6 +266,8 @@ int main(int argc, char *argv[]) {
         video.widescreen = widescreenFlag;
     if (integerScalingOption->count() > 0)
         video.integerScaling = integerScalingFlag;
+    if (frameGenerationOption->count() > 0)
+        video.frameGeneration = frameGenerationFlag;
     if (scalingFilterOption->count() > 0)
         video.scalingFilter = *SoRVideoConfig::scalingFilterFromKey(scalingFilter);
     if (frameSyncOption->count() > 0)
@@ -283,6 +292,7 @@ int main(int argc, char *argv[]) {
         env.setWidescreen(video.widescreen);
         env.setIntegerScaling(video.integerScaling);
         env.setScalingFilter(video.scalingFilter);
+        env.setFrameGeneration(video.frameGeneration);
         if (silentFlag) {
             env.sound().disable();
         } else if (soundMode == "prerendered") {

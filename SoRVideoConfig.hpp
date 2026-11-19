@@ -10,12 +10,23 @@
 // The command line's options win over the file for the run they are given on.
 namespace SoRVideoConfig {
 
+// Defaults (user, 2026-11-19): on macOS the picture fills the window with HYBRID; on Windows, Linux and
+// the PS5, whole multiples with NEAREST.
+#ifdef __APPLE__
+inline constexpr bool               kDefaultIntegerScaling = false;
+inline constexpr VDP::ScalingFilter kDefaultScalingFilter  = VDP::Hybrid;
+#else
+inline constexpr bool               kDefaultIntegerScaling = true;
+inline constexpr VDP::ScalingFilter kDefaultScalingFilter  = VDP::Nearest;
+#endif
+
 struct VideoConfig {
     VDP::Synchronization frameSync      = VDP::InternalTimer;
     bool                 widescreen     = false;
     bool                 fullscreen     = false;
-    bool                 integerScaling = false;
-    VDP::ScalingFilter   scalingFilter  = VDP::Hybrid;
+    bool                 integerScaling = kDefaultIntegerScaling;
+    VDP::ScalingFilter   scalingFilter  = kDefaultScalingFilter;
+    bool                 frameGeneration = false; // MetalFX frame interpolation, macOS 26
 
     bool operator==(const VideoConfig &) const = default;
 };

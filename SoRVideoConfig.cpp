@@ -96,6 +96,7 @@ VideoConfig loadOrCreate(const std::filesystem::path &path) {
     readBool(root["widescreen"], config.widescreen);
     readBool(root["fullscreen"], config.fullscreen);
     readBool(root["integer_scaling"], config.integerScaling);
+    readBool(root["frame_generation"], config.frameGeneration);
     if (const YAML::Node filter = root["scaling_filter"]; filter && filter.IsScalar()) {
         if (const auto value = scalingFilterFromKey(filter.Scalar()))
             config.scalingFilter = *value;
@@ -113,6 +114,7 @@ bool save(const VideoConfig &config, const std::filesystem::path &path) {
     root["fullscreen"]      = config.fullscreen;
     root["integer_scaling"] = config.integerScaling;
     root["scaling_filter"]  = std::string(scalingFilterKey(config.scalingFilter));
+    root["frame_generation"] = config.frameGeneration;
 
     YAML::Emitter emitter;
     emitter << root;

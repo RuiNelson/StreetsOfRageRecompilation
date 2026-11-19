@@ -439,7 +439,7 @@ void StreetsOfRage::options_menu_build(m_long /*entry_*/) {
     SOR_CALL_68K(options_draw_difficulty(), 0x11A4u, 0x0012E4u);
     SoRControlsMenu::drawOptionsRow(memory(), false);
     SoRVideoMenu::drawOptionsRow(memory(),
-                                 {vdp().synchronization(), vdp().widescreen(), vdp().fullscreen(), vdp().integerScaling(), vdp().scalingFilter()},
+                                 {vdp().synchronization(), vdp().widescreen(), vdp().fullscreen(), vdp().integerScaling(), vdp().scalingFilter(), vdp().frameGeneration()},
                                  false);
     SoRQolMenu::drawOptionsRow(memory(), false);
 
