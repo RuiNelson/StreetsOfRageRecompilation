@@ -162,7 +162,8 @@ int main(int argc, char *argv[]) {
     const auto *frameGenerationOption =
         app.add_option("--frame-generation",
                        frameGeneration,
-                       "MetalFX frame generation: a frame between each two the game draws (macOS 26 and newer, "
+                       "MetalFX frame generation: frames between those the game draws, one on a 60 Hz screen, three on 120 Hz "
+                       "(macOS 26 and newer, "
                        "--frame-sync auto without --turbo; elsewhere nothing). on: a sprite changing pose shows both "
                        "poses blended. no-pose-blend: it keeps its old pose until the real frame. Default: off")
             ->check(CLI::IsMember({"off", "on", "no-pose-blend"}))

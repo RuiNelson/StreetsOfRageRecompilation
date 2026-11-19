@@ -247,8 +247,8 @@ std::array<std::string, 2> help(const Menu &m, Row row) {
             if (m.pending.frameSync != VDP::InternalTimer)
                 return {"ONLY WITH VSYNC AUTO: NO EFFECT", "WITH THIS VSYNC."};
             if (m.pending.frameGeneration == VDP::GenerateHoldPoses)
-                return {"A FRAME BETWEEN EACH TWO. A NEW", "POSE WAITS FOR THE REAL FRAME."};
-            return {"A FRAME BETWEEN EACH TWO. A NEW", "POSE IS BLENDED WITH THE OLD ONE."};
+                return {"METALFX ADDS FRAMES BETWEEN THE", "GAME'S OWN, NOT BLENDING POSES."};
+            return {"METALFX ADDS FRAMES BETWEEN THE", "GAME'S OWN, BLENDING NEW POSES."};
         case Row::Reset:
             return {"PUTS BACK THE DEFAULTS ABOVE. THEY", "COUNT ONLY AFTER SAVE AND APPLY."};
         case Row::Save:
